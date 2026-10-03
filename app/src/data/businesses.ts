@@ -1,0 +1,93 @@
+import { requireSupabase } from '../lib/supabase';
+import type { Business, Workspace } from '../db/types';
+
+export async function ensureWorkspace(): Promise<Workspace> {
+  const sb = requireSupabase();
+  const { data: userData } = await sb.auth.getUser();
+  const user = userData.user;
+  if (!user) throw new Error('Not signed in.');
+
+  const { data: memberships, error: mErr } = await sb
+    .from('workspace_members')
+    .select('workspace_id, workspaces(id, name, created_at)')
+    .eq('user_id', user.id)
+    .limit(1);
+  if (mErr) throw mErr;
+  if (memberships && memberships.length > 0) {
+    return (memberships[0] as unknown as { workspaces: Workspace }).workspaces;
+  }
+
+  const { data: ws, error: wErr } = await sb
+    .from('workspaces')
+    .insert({ name: 'My Workspace' })
+    .select()
+    .single();
+  if (wErr) throw wErr;
+  const { error: mmErr } = await sb
+    .from('workspace_members')
+    .insert({ workspace_id: ws.id, user_id: user.id, role: 'owner' });
+  if (mmErr) throw mmErr;
+  return ws as Workspace;
+}
+
+export async function listBusinesses(workspaceId: string): Promise<Business[]> {
+  const sb = requireSupabase();
+  const { data, error } = await sb
+    .from('businesses')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .is('archived_at', null)
+    .order('display_name');
+  if (error) throw error;
+  return data as Business[];
+}
+
+export type BusinessInput = Partial<Business> & { display_name: string; workspace_id: string };
+
+export async function createBusiness(input: BusinessInput): Promise<Business> {
+  const sb = requireSupabase();
+  const { data, error } = await sb.from('businesses').insert(input).select().single();
+  if (error) throw error;
+  return data as Business;
+}
+
+export async function updateBusiness(id: string, patch: Partial<Business>): Promise<Business> {
+  const sb = requireSupabase();
+  const { data, error } = await sb.from('businesses').update(patch).eq('id', id).select().single();
+  if (error) throw error;
+  return data as Business;
+}
+
+/** Businesses with history are archived, never hard-deleted (spec §1). */
+export async function archiveBusiness(id: string): Promise<void> {
+  const sb = requireSupabase();
+  const { error } = await sb
+    .from('businesses')
+    .update({ archived_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+/** Signed URL for a private logo file (short-lived). */
+export async function getLogoUrl(logoPath: string): Promise<string | null> {
+  const sb = requireSupabase();
+  const { data, error } = await sb.storage.from('business-logos').createSignedUrl(logoPath, 3600);
+  if (error) return null;
+  return data.signedUrl;
+}
+
+/** Upload a logo under <workspace_id>/<business_id>/ — matches the storage RLS policy. */
+export async function uploadLogo(
+  workspaceId: string,
+  businessId: string,
+  file: File,
+): Promise<string> {
+  const sb = requireSupabase();
+  if (file.size > 2 * 1024 * 1024) throw new Error('Logo must be under 2 MB.');
+  if (!file.type.startsWith('image/')) throw new Error('Logo must be an image file.');
+  const ext = file.name.split('.').pop() ?? 'png';
+  const path = `${workspaceId}/${businessId}/logo.${ext}`;
+  const { error } = await sb.storage.from('business-logos').upload(path, file, { upsert: true });
+  if (error) throw error;
+  return path;
+}
