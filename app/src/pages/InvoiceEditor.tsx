@@ -1191,16 +1191,16 @@ function InvoicePreview({
   return (
     <div className="invoice-preview" aria-label="Invoice preview">
       <div className="inv-head">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 10 }}>
           {logoUrl && (
             <img
               src={logoUrl}
               alt={`${business.display_name} logo`}
-              style={{ height: 64, width: 'auto', maxWidth: 200, objectFit: 'contain', flexShrink: 0 }}
+              style={{ height: 72, width: 'auto', maxWidth: 260, objectFit: 'contain' }}
             />
           )}
           <div>
-            <h2>{business.display_name}</h2>
+            <h2 style={{ margin: 0 }}>{business.display_name}</h2>
             {business.header_line && (
               <div style={{ fontSize: 15, fontWeight: 700, margin: '2px 0 4px' }}>
                 {business.header_line}
@@ -1276,10 +1276,10 @@ function InvoicePreview({
         <StandardPreviewBody lines={lines} totals={totals} discountMode={discountMode} />
       )}
 
-      {notes !== '' && (
+      {notes.trim() !== '' && (
         <div className="inv-section" style={{ marginTop: 20 }}>
           <strong>Notes</strong>
-          <div style={{ whiteSpace: 'pre-wrap' }}>{notes}</div>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{notes.trim()}</div>
         </div>
       )}
       {!isCommission && terms !== '' && (
