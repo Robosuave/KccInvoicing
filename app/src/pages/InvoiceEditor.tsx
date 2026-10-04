@@ -129,10 +129,6 @@ export default function InvoiceEditor() {
   const [quickContact, setQuickContact] = useState('');
   const [quickPhone, setQuickPhone] = useState('');
   const [quickEmail, setQuickEmail] = useState('');
-  const [quickStreet, setQuickStreet] = useState('');
-  const [quickCity, setQuickCity] = useState('');
-  const [quickState, setQuickState] = useState('');
-  const [quickZip, setQuickZip] = useState('');
   const [quickError, setQuickError] = useState<string | null>(null);
   const [quickSaving, setQuickSaving] = useState(false);
   // Tracks arrow-key navigation in the Company picker so auto-advance only
@@ -731,10 +727,6 @@ export default function InvoiceEditor() {
         contact_person: quickContact.trim() || null,
         phone: quickPhone.trim() || null,
         email: quickEmail.trim() || null,
-        billing_line1: quickStreet.trim() || null,
-        billing_city: quickCity.trim() || null,
-        billing_state: quickState.trim() || null,
-        billing_zip: quickZip.trim() || null,
       });
       setCustomers((prev) => [...prev, created].sort((a, b) => (a.company || a.name).localeCompare(b.company || b.name)));
       setCustomerId(created.id);
@@ -744,10 +736,6 @@ export default function InvoiceEditor() {
       setQuickContact('');
       setQuickPhone('');
       setQuickEmail('');
-      setQuickStreet('');
-      setQuickCity('');
-      setQuickState('');
-      setQuickZip('');
     } catch (e) {
       setQuickError(e instanceof Error ? e.message : 'Could not create the company.');
     } finally {
@@ -860,10 +848,6 @@ export default function InvoiceEditor() {
                         setQuickContact('');
                         setQuickPhone('');
                         setQuickEmail('');
-                        setQuickStreet('');
-                        setQuickCity('');
-                        setQuickState('');
-                        setQuickZip('');
                         setQuickError(null);
                         setQuickAddOpen(true);
                       }}
@@ -1149,53 +1133,6 @@ export default function InvoiceEditor() {
                     type="email"
                     value={quickEmail}
                     onChange={(e) => setQuickEmail(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') quickAddCompany();
-                    }}
-                  />
-                </Field>
-              </div>
-              <Field label="Street address" htmlFor="qc-street">
-                <TextField
-                  id="qc-street"
-                  value={quickStreet}
-                  onChange={(e) => setQuickStreet(e.target.value)}
-                  autoComplete="street-address"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') quickAddCompany();
-                  }}
-                />
-              </Field>
-              <div className="form-row">
-                <Field label="City" htmlFor="qc-city">
-                  <TextField
-                    id="qc-city"
-                    value={quickCity}
-                    onChange={(e) => setQuickCity(e.target.value)}
-                    autoComplete="address-level2"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') quickAddCompany();
-                    }}
-                  />
-                </Field>
-                <Field label="State" htmlFor="qc-state">
-                  <TextField
-                    id="qc-state"
-                    value={quickState}
-                    onChange={(e) => setQuickState(e.target.value)}
-                    autoComplete="address-level1"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') quickAddCompany();
-                    }}
-                  />
-                </Field>
-                <Field label="Zip" htmlFor="qc-zip">
-                  <TextField
-                    id="qc-zip"
-                    inputMode="numeric"
-                    value={quickZip}
-                    onChange={(e) => setQuickZip(e.target.value)}
-                    autoComplete="postal-code"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') quickAddCompany();
                     }}
