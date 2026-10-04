@@ -41,6 +41,7 @@ export interface Customer {
   id: string;
   business_id: string;
   name: string;
+  company: string | null;
   contact_person: string | null;
   billing_line1: string | null;
   billing_line2: string | null;

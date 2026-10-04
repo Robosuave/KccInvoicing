@@ -23,6 +23,7 @@ import {
 
 const EMPTY: Record<string, string> = {
   name: '',
+  company: '',
   contact_person: '',
   billing_line1: '',
   billing_line2: '',
@@ -45,6 +46,7 @@ function toForm(c?: Customer): Record<string, string> {
   if (!c) return { ...EMPTY };
   return {
     name: c.name,
+    company: c.company ?? '',
     contact_person: c.contact_person ?? '',
     billing_line1: c.billing_line1 ?? '',
     billing_line2: c.billing_line2 ?? '',
@@ -132,6 +134,7 @@ export default function Customers() {
       const payload = {
         business_id: activeBusiness.id,
         name: form.name.trim(),
+        company: orNull(form.company),
         contact_person: orNull(form.contact_person),
         billing_line1: orNull(form.billing_line1),
         billing_line2: orNull(form.billing_line2),
@@ -222,6 +225,7 @@ export default function Customers() {
                 <tr key={c.id}>
                   <td>
                     <strong>{c.name}</strong>
+                    {c.company && <div>{c.company}</div>}
                     {c.tax_exempt && <div style={{ fontSize: 13, color: 'var(--muted)' }}>Tax-exempt</div>}
                   </td>
                   <td style={{ fontSize: 14 }}>
@@ -261,6 +265,9 @@ export default function Customers() {
           {formError && <Alert kind="error">{formError}</Alert>}
           <Field label="Customer full name *" htmlFor="c-name">
             <TextField id="c-name" value={form.name} onChange={set('name')} required />
+          </Field>
+          <Field label="Company name" htmlFor="c-company">
+            <TextField id="c-company" value={form.company} onChange={set('company')} autoComplete="organization" />
           </Field>
           <div className="form-row">
             <Field label="Contact person" htmlFor="c-contact">
