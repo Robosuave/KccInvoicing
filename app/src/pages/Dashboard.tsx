@@ -2,46 +2,42 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
 import { Alert, Button, EmptyState, SetupRequired, Stat } from '../components/ui';
-import { listInvoices } from '../data/drafts';
+import { listDrafts } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listItems } from '../data/items';
 import { centsToDollars } from '../lib/money';
 
 export default function Dashboard() {
-  const { activeBusiness, notConfigured, loadError, loading: businessesLoading } = useBusiness();
-  const [stats, setStats] = useState({ drafts: 0, draftTotal: 0, issued: 0, issuedTotal: 0, customers: 0, items: 0 });
-  const [statsLoading, setStatsLoading] = useState(true);
+  const { activeBusiness, notConfigured, loadError } = useBusiness();
+  const [stats, setStats] = useState({ drafts: 0, draftTotal: 0, customers: 0, items: 0 });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!activeBusiness) {
-      setStatsLoading(false);
+      setLoading(false);
       return;
     }
-    setStatsLoading(true);
+    setLoading(true);
     Promise.all([
-      listInvoices(activeBusiness.id, 'draft'),
-      listInvoices(activeBusiness.id, 'issued'),
+      listDrafts(activeBusiness.id),
       listCustomers(activeBusiness.id),
       listItems(activeBusiness.id),
     ])
-      .then(([drafts, issued, customers, items]) => {
+      .then(([drafts, customers, items]) => {
         setStats({
           drafts: drafts.length,
           draftTotal: drafts.reduce((a, d) => a + d.total_cents, 0),
-          issued: issued.length,
-          issuedTotal: issued.reduce((a, d) => a + d.total_cents, 0),
           customers: customers.length,
           items: items.length,
         });
       })
       .catch(() => {})
-      .finally(() => setStatsLoading(false));
+      .finally(() => setLoading(false));
   }, [activeBusiness]);
 
   if (notConfigured) return <SetupRequired what="The dashboard" />;
   if (loadError) return <Alert kind="error">{loadError}</Alert>;
-  if (businessesLoading) return <p>Loading…</p>;
-  if (!activeBusiness) {
+  if (!activeBusiness && !loading) {
     return (
       <EmptyState
         title="No business yet"
@@ -69,6 +65,12 @@ export default function Dashboard() {
         )}
       </p>
 
+      <div className="stats">
+        <Stat label="Draft invoices" value={String(stats.drafts)} note={`Draft total ${centsToDollars(stats.draftTotal)}`} />
+        <Stat label="Customers" value={String(stats.customers)} />
+        <Stat label="Catalog items" value={String(stats.items)} />
+      </div>
+
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Quick actions</h2>
         <div className="btn-row">
@@ -78,36 +80,27 @@ export default function Dashboard() {
           <Link className="btn btn-secondary" to="/customers">
             Manage customers
           </Link>
-          {activeBusiness?.default_template !== 'commission' && (
-            <Link className="btn btn-secondary" to="/items">
-              Manage items
-            </Link>
-          )}
+          <Link className="btn btn-secondary" to="/items">
+            Manage items
+          </Link>
         </div>
-      </div>
-
-      <h2>At a glance</h2>
-      <div className="stats stats-compact">
-        <Stat label="Draft invoices" value={String(stats.drafts)} note={`Draft total ${centsToDollars(stats.draftTotal)}`} />
-        <Stat label="Issued invoices" value={String(stats.issued)} note={`Billed total ${centsToDollars(stats.issuedTotal)}`} />
-        <Stat label="Customers" value={String(stats.customers)} />
-        <Stat label="Catalog items" value={String(stats.items)} />
       </div>
 
       <div className="card">
         <h2 style={{ marginTop: 0 }}>What each number means</h2>
         <ul style={{ margin: 0, paddingLeft: 20, color: 'var(--muted)', fontSize: 14 }}>
-          <li>Draft invoices are works in progress — they are not finalized yet.</li>
+          <li>Draft invoices are works in progress — they are not issued and have no invoice number yet.</li>
           <li>Draft total is the sum of draft amounts. It is not revenue.</li>
-          <li>Issued invoices are finalized (printing / saving a PDF issues the invoice). Billed total is the sum of issued amounts.</li>
+          <li>Issued invoices carry their number permanently; later edits to the business, customer, or catalog never change them.</li>
+          <li>Email delivery and advanced reports arrive in Phases 4–5.</li>
         </ul>
       </div>
 
-      {!statsLoading && (
+      {!loading && (
         <div className="no-print" style={{ marginTop: 8 }}>
           <Link to="/invoices">
             <Button variant="ghost" size="sm">
-              View all invoices →
+              View all drafts →
             </Button>
           </Link>
         </div>

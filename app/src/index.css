@@ -226,10 +226,6 @@ textarea.input { min-height: 96px; resize: vertical; }
 .setup-panel ol { text-align: left; display: inline-block; }
 
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
-.stats-compact { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.stats-compact .stat { padding: 12px 14px; }
-.stats-compact .stat .value { font-size: 22px; }
-.stats-compact .stat .label { font-size: 11px; }
 .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
 .stat .label { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
 .stat .value { font-size: 30px; font-weight: 700; margin-top: 4px; }
@@ -259,7 +255,7 @@ textarea.input { min-height: 96px; resize: vertical; }
   position: sticky; top: 88px;
 }
 .invoice-preview h2 { margin: 0; font-size: 22px; }
-.inv-head { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 20px; background: #e7f3e7; padding: 14px 16px; border-radius: 8px; }
+.inv-head { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
 .inv-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
 .inv-table th { text-align: left; border-bottom: 2px solid var(--text); padding: 8px 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; }
 .inv-table td { border-bottom: 1px solid var(--border); padding: 8px 6px; vertical-align: top; }
@@ -286,12 +282,6 @@ textarea.input { min-height: 96px; resize: vertical; }
   .scrim { position: fixed; inset: 0; background: rgba(15,23,42,0.4); z-index: 40; }
 }
 
-@media (max-width: 640px) {
-  /* Make room in the top bar for the Log off button on phones. */
-  .topbar { padding: 10px 12px; gap: 8px; }
-  .topbar-email { display: none; }
-}
-
 /* ---------- accessibility ---------- */
 
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
@@ -302,24 +292,74 @@ textarea.input { min-height: 96px; resize: vertical; }
 }
 
 @media print {
-  .sidebar, .topbar, .no-print, .alert, .scrim, .badge-draft { display: none !important; }
-  .app-shell { display: block !important; min-height: 0 !important; }
-  .main { display: block !important; }
+  .sidebar, .topbar, .no-print { display: none !important; }
   .content { padding: 0; max-width: none; }
-  .editor-layout { display: block !important; }
-  .invoice-preview {
-    position: static; box-shadow: none; border: none; padding: 0;
-    font-size: 12.5px;
-  }
-  .invoice-preview h2 { font-size: 20px !important; }
-  .inv-head { margin-bottom: 10px !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .inv-wirebox { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .inv-wirebox > div { font-size: 15px !important; font-weight: 700 !important; }
-  .inv-table { margin: 8px 0 !important; }
-  .inv-table th, .inv-table td { padding: 5px 6px !important; }
-  .inv-totals { width: 220px !important; }
-  .inv-section { margin-top: 8px !important; }
-  .inv-wirebox { margin-top: 10px !important; padding: 8px !important; }
-  .inv-footer { margin-top: 10px !important; font-size: 11px !important; }
-  @page { size: Letter; margin: 11mm; }
+}
+
+/* ---------- issued invoice document (detail + print), three templates ---------- */
+
+.invoice-doc {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 40px;
+  font-size: 14.5px;
+  position: relative;
+  overflow: hidden;
+}
+.doc-watermark {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 120px; font-weight: 800; letter-spacing: 12px;
+  color: rgba(180, 35, 24, 0.08);
+  transform: rotate(-24deg);
+  pointer-events: none;
+}
+.doc-accent-bar { height: 8px; background: var(--primary); border-radius: 4px; margin: -8px -8px 20px; }
+.doc-header { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.doc-business-name { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+.doc-logo { max-height: 72px; max-width: 220px; margin-bottom: 8px; display: block; }
+.doc-title-block { text-align: right; }
+.doc-title { font-size: 30px; font-weight: 800; letter-spacing: 3px; margin-bottom: 8px; }
+.doc-meta { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.doc-billto { margin-bottom: 20px; }
+.doc-section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 4px; }
+.doc-billto-name { font-size: 16px; font-weight: 700; }
+.doc-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+.doc-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); border-bottom: 2px solid var(--text); padding: 8px 6px; }
+.doc-table td { border-bottom: 1px solid var(--border); padding: 9px 6px; vertical-align: top; }
+.doc-table td.desc { white-space: pre-wrap; }
+.doc-table .n { width: 36px; }
+.doc-table .r { text-align: right; white-space: nowrap; }
+.doc-totals { margin-left: auto; width: 280px; margin-top: 8px; }
+.doc-total-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
+.doc-total-row.grand { font-size: 18px; font-weight: 800; border-top: 2px solid var(--text); margin-top: 6px; padding-top: 8px; }
+.doc-notes { margin-top: 24px; font-size: 13.5px; }
+.doc-note-block { margin-bottom: 10px; }
+.doc-note-text { white-space: pre-wrap; }
+.doc-footer { margin-top: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+
+/* Classic: centered business block, traditional bordered table */
+.tpl-classic .doc-business { text-align: left; }
+.tpl-classic .doc-table th { background: var(--surface-2); }
+
+/* Modern: accent bar (above), airy table */
+.tpl-modern .doc-business-name { color: var(--primary-dark); }
+.tpl-modern .doc-table td { border-bottom: 1px solid #e8ecf1; }
+.tpl-modern .doc-table th { border-bottom: 1px solid var(--primary); color: var(--primary-dark); }
+
+/* Compact: tighter everything */
+.tpl-compact { padding: 28px; font-size: 12.5px; }
+.tpl-compact .doc-title { font-size: 22px; }
+.tpl-compact .doc-business-name { font-size: 17px; }
+.tpl-compact .doc-table td, .tpl-compact .doc-table th { padding: 5px 4px; }
+.tpl-compact .doc-total-row { font-size: 12.5px; padding: 2px 0; }
+.tpl-compact .doc-total-row.grand { font-size: 15px; }
+
+@media print {
+  .invoice-doc { border: none; box-shadow: none; border-radius: 0; padding: 0; }
+  .doc-table thead { display: table-header-group; }
+  .doc-table tr { break-inside: avoid; }
+  .doc-totals { break-inside: avoid; }
 }
