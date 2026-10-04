@@ -690,7 +690,8 @@ export default function InvoiceEditor() {
         | HTMLSelectElement
         | null;
       if (el && !el.disabled && el.offsetParent !== null) {
-        el.focus();
+        el.focus({ preventScroll: true });
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         try {
           if (el instanceof HTMLInputElement && el.type === 'text') el.select();
         } catch {
@@ -883,38 +884,38 @@ export default function InvoiceEditor() {
             <div className="card">
               <h2 style={{ marginTop: 0 }}>Commission &amp; fees</h2>
               <Field label="Property address *" htmlFor="com-prop" hint="From the HUD / closing statement">
-                <TextField id="com-prop" value={propertyAddress} onChange={touch((e) => setPropertyAddress(e.target.value))} placeholder="123 Main St, Hollywood, FL 33021" />
+                <TextField id="com-prop" enterKeyHint="next" value={propertyAddress} onChange={touch((e) => setPropertyAddress(e.target.value))} placeholder="123 Main St, Hollywood, FL 33021" />
               </Field>
               <div className="form-row">
                 <Field label="Agent name *" htmlFor="com-agent">
-                  <TextField id="com-agent" value={agentName} onChange={touch((e) => setAgentName(e.target.value))} placeholder="Listing / selling agent" />
+                  <TextField id="com-agent" enterKeyHint="next" value={agentName} onChange={touch((e) => setAgentName(e.target.value))} placeholder="Listing / selling agent" />
                 </Field>
                 <Field label="Second sales person" htmlFor="com-agent2" hint="If applicable">
-                  <TextField id="com-agent2" value={secondAgentName} onChange={touch((e) => setSecondAgentName(e.target.value))} />
+                  <TextField id="com-agent2" enterKeyHint="next" value={secondAgentName} onChange={touch((e) => setSecondAgentName(e.target.value))} />
                 </Field>
               </div>
               <div className="form-row">
                 <Field label="Sale price $ *" htmlFor="com-sale">
-                  <TextField id="com-sale" inputMode="decimal" value={salePrice} onChange={touch((e) => { commissionAmtManual.current = false; setSalePrice(e.target.value); })} placeholder="0.00" />
+                  <TextField id="com-sale" inputMode="decimal" enterKeyHint="next" value={salePrice} onChange={touch((e) => { commissionAmtManual.current = false; setSalePrice(e.target.value); })} placeholder="0.00" />
                 </Field>
                 <Field label="Real estate commission %" htmlFor="com-pct" hint="e.g. 3 for 3%">
-                  <TextField id="com-pct" inputMode="decimal" value={commissionPct} onChange={touch((e) => { commissionAmtManual.current = false; setCommissionPct(e.target.value); })} />
+                  <TextField id="com-pct" inputMode="decimal" enterKeyHint="next" value={commissionPct} onChange={touch((e) => { commissionAmtManual.current = false; setCommissionPct(e.target.value); })} />
                 </Field>
               </div>
               <div className="form-row">
                 <Field label="Commission amount $ *" htmlFor="com-amt" hint="Auto-filled from % — edit to override">
-                  <TextField id="com-amt" inputMode="decimal" value={commissionAmt} onChange={touch((e) => { commissionAmtManual.current = true; setCommissionAmt(e.target.value); })} placeholder="0.00" />
+                  <TextField id="com-amt" inputMode="decimal" tabIndex={-1} value={commissionAmt} onChange={touch((e) => { commissionAmtManual.current = true; setCommissionAmt(e.target.value); })} placeholder="0.00" />
                 </Field>
                 <Field label="Processing fee $" htmlFor="com-fee">
-                  <TextField id="com-fee" inputMode="decimal" value={processingFee} onChange={touch((e) => setProcessingFee(e.target.value))} placeholder="295.00" />
+                  <TextField id="com-fee" inputMode="decimal" tabIndex={-1} value={processingFee} onChange={touch((e) => setProcessingFee(e.target.value))} placeholder="295.00" />
                 </Field>
               </div>
               <div className="form-row">
                 <Field label="Other charge $" htmlFor="com-other">
-                  <TextField id="com-other" inputMode="decimal" value={otherCharge} onChange={touch((e) => setOtherCharge(e.target.value))} placeholder="0.00" />
+                  <TextField id="com-other" inputMode="decimal" enterKeyHint="next" value={otherCharge} onChange={touch((e) => setOtherCharge(e.target.value))} placeholder="0.00" />
                 </Field>
                 <Field label="Other charge description" htmlFor="com-otherdesc">
-                  <TextField id="com-otherdesc" value={otherChargeDesc} onChange={touch((e) => setOtherChargeDesc(e.target.value))} placeholder="What the other charge is for" />
+                  <TextField id="com-otherdesc" enterKeyHint="done" value={otherChargeDesc} onChange={touch((e) => setOtherChargeDesc(e.target.value))} placeholder="What the other charge is for" />
                 </Field>
               </div>
               {commissionPreview && (
