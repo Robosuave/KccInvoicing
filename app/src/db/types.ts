@@ -76,6 +76,8 @@ export interface Item {
 
 export type InvoiceStatus = 'draft' | 'issued' | 'void';
 
+export type InvoiceTemplate = 'standard' | 'commission';
+
 export interface Invoice {
   id: string;
   business_id: string;
@@ -95,6 +97,14 @@ export interface Invoice {
   shipping_cents: number;
   total_cents: number;
   amount_paid_cents: number;
+  template: InvoiceTemplate;
+  sale_price_cents: number;
+  commission_pct: string; // numeric from Postgres, e.g. "3.000"
+  processing_fee_cents: number;
+  other_charge_desc: string | null;
+  other_charge_cents: number;
+  agent_name: string | null;
+  second_agent_name: string | null;
   notes: string | null;
   terms: string | null;
   payment_instructions: string | null;
