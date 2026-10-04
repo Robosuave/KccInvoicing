@@ -101,11 +101,13 @@ export interface Invoice {
   template: InvoiceTemplate;
   sale_price_cents: number;
   commission_pct: string; // numeric from Postgres, e.g. "3.000"
+  commission_amount_cents: number | null; // manual $ override; null = compute from %
   processing_fee_cents: number;
   other_charge_desc: string | null;
   other_charge_cents: number;
   agent_name: string | null;
   second_agent_name: string | null;
+  property_address: string | null;
   notes: string | null;
   terms: string | null;
   payment_instructions: string | null;

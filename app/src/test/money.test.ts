@@ -173,4 +173,19 @@ describe('calculateCommissionTotals', () => {
     expect(() => calculateCommissionTotals(0, '3', 0, -5)).toThrow();
     expect(() => calculateCommissionTotals(0, 'abc', 0, 0)).toThrow();
   });
+  it('uses the $ override when given, and it flows into the total', () => {
+    // 3% of $500,000 would be $15,000, but the $ box says $14,500
+    const t = calculateCommissionTotals(50000000, '3', 29500, 0, 1450000);
+    expect(t.commissionCents).toBe(1450000);
+    expect(t.totalCents).toBe(1450000 + 29500);
+  });
+  it('accepts an override of 0', () => {
+    const t = calculateCommissionTotals(50000000, '3', 29500, 10000, 0);
+    expect(t.commissionCents).toBe(0);
+    expect(t.totalCents).toBe(29500 + 10000);
+  });
+  it('rejects a bad override', () => {
+    expect(() => calculateCommissionTotals(0, '3', 0, 0, -1)).toThrow();
+    expect(() => calculateCommissionTotals(0, '3', 0, 0, 10.5)).toThrow();
+  });
 });

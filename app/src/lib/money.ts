@@ -178,7 +178,8 @@ export interface CommissionTotals {
 
 /**
  * Commission invoice math (Dania Realty template):
- *   commission = round(sale_price * pct / 100), half-up
+ *   commission = commissionOverrideCents when given,
+ *                else round(sale_price * pct / 100), half-up
  *   total = commission + processing_fee + other_charge
  * All inputs and outputs are integer cents.
  */
@@ -187,6 +188,7 @@ export function calculateCommissionTotals(
   commissionPct: string,
   processingFeeCents: number,
   otherChargeCents: number,
+  commissionOverrideCents?: number | null,
 ): CommissionTotals {
   if (!Number.isInteger(salePriceCents) || salePriceCents < 0)
     throw new Error('salePriceCents must be a non-negative integer');
@@ -194,7 +196,14 @@ export function calculateCommissionTotals(
     throw new Error('processingFeeCents must be a non-negative integer');
   if (!Number.isInteger(otherChargeCents) || otherChargeCents < 0)
     throw new Error('otherChargeCents must be a non-negative integer');
-  const commissionCents = percentOf(salePriceCents, pctToRate(commissionPct));
+  let commissionCents: number;
+  if (commissionOverrideCents != null) {
+    if (!Number.isInteger(commissionOverrideCents) || commissionOverrideCents < 0)
+      throw new Error('commissionOverrideCents must be a non-negative integer');
+    commissionCents = commissionOverrideCents;
+  } else {
+    commissionCents = percentOf(salePriceCents, pctToRate(commissionPct));
+  }
   return {
     commissionCents,
     processingFeeCents,

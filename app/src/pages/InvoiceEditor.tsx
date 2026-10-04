@@ -5,7 +5,7 @@ import type { Business, Customer, Item, InvoiceTemplate } from '../db/types';
 import { createDraft, getDraft, previewTotals, saveDraft, type DraftInput } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listItems } from '../data/items';
-import { centsToDollars, dollarsToCents, multiplyQuantity, calculateCommissionTotals } from '../lib/money';
+import { centsToDollars, dollarsToCents, multiplyQuantity, calculateCommissionTotals, percentOf } from '../lib/money';
 import {
   Alert,
   Button,
@@ -54,6 +54,13 @@ function money(n: number): string {
   return `$${centsToDollars(n)}`;
 }
 
+/** Integer cents -> "15000.00" (no thousands separators — safe to parse back). */
+function plainDollars(cents: number): string {
+  const sign = cents < 0 ? '-' : '';
+  const abs = Math.abs(Math.round(cents));
+  return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`;
+}
+
 export default function InvoiceEditor() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
@@ -73,8 +80,6 @@ export default function InvoiceEditor() {
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState('');
   const [poNumber, setPoNumber] = useState('');
-  const [serviceDate, setServiceDate] = useState('');
-  const [servicePeriod, setServicePeriod] = useState('');
   const [lines, setLines] = useState<LineState[]>([newLine()]);
   const [discountMode, setDiscountMode] = useState<DiscountMode>('none');
   const [invoiceDiscountPct, setInvoiceDiscountPct] = useState('');
@@ -90,11 +95,15 @@ export default function InvoiceEditor() {
   const templateTouched = useRef(false);
   const [salePrice, setSalePrice] = useState('');
   const [commissionPct, setCommissionPct] = useState('');
+  const [commissionAmt, setCommissionAmt] = useState('');
+  /* true once the user types a $ directly — % changes clear it and resume auto-fill */
+  const commissionAmtManual = useRef(false);
   const [processingFee, setProcessingFee] = useState('295.00');
   const [otherChargeDesc, setOtherChargeDesc] = useState('');
   const [otherCharge, setOtherCharge] = useState('');
   const [agentName, setAgentName] = useState('');
   const [secondAgentName, setSecondAgentName] = useState('');
+  const [propertyAddress, setPropertyAddress] = useState('');
 
   const [dirty, setDirty] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -137,8 +146,6 @@ export default function InvoiceEditor() {
         setInvoiceDate(invoice.invoice_date);
         setDueDate(invoice.due_date ?? '');
         setPoNumber(invoice.po_number ?? '');
-        setServiceDate(invoice.service_date ?? '');
-        setServicePeriod(invoice.service_period ?? '');
         setLines(
           dbLines.map((l) => ({
             key: l.id,
@@ -157,6 +164,9 @@ export default function InvoiceEditor() {
         setTemplate(invoice.template ?? 'standard');
         setSalePrice(invoice.sale_price_cents ? centsToDollars(invoice.sale_price_cents) : '');
         setCommissionPct(invoice.commission_pct && Number(invoice.commission_pct) !== 0 ? String(Number(invoice.commission_pct)) : '');
+        setCommissionAmt(invoice.commission_amount_cents ? plainDollars(invoice.commission_amount_cents) : '');
+        commissionAmtManual.current = !!invoice.commission_amount_cents;
+        setPropertyAddress(invoice.property_address ?? '');
         setProcessingFee(centsToDollars(invoice.processing_fee_cents));
         setOtherChargeDesc(invoice.other_charge_desc ?? '');
         setOtherCharge(invoice.other_charge_cents ? centsToDollars(invoice.other_charge_cents) : '');
@@ -172,9 +182,9 @@ export default function InvoiceEditor() {
   /* defaults for a new draft */
   useEffect(() => {
     if (!isNew || !activeBusiness) return;
-    if (!templateTouched.current && activeBusiness.default_template === 'commission') {
-      setTemplate('commission');
-    }
+    // A business switch is a new context: re-apply that business's default template.
+    templateTouched.current = false;
+    setTemplate(activeBusiness.default_template === 'commission' ? 'commission' : 'standard');
     setNotes((v) => v || activeBusiness.invoice_notes || '');
     setTerms((v) => v || activeBusiness.payment_terms || '');
     setPaymentInstructions((v) => v || activeBusiness.payment_instructions || '');
@@ -183,6 +193,19 @@ export default function InvoiceEditor() {
     if (pre) setCustomerId(pre);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNew, activeBusiness?.id]);
+
+  /* auto-fill the commission $ box from % x sale price, until the user types a $ */
+  useEffect(() => {
+    if (template !== 'commission' || commissionAmtManual.current) return;
+    try {
+      const price = salePrice.trim();
+      const pct = commissionPct.trim();
+      if (!price || !pct) return;
+      setCommissionAmt(plainDollars(percentOf(dollarsToCents(price), pctToRate(pct))));
+    } catch {
+      /* leave the $ box alone while inputs are incomplete or invalid */
+    }
+  }, [template, salePrice, commissionPct]);
 
   /* customer default terms */
   useEffect(() => {
@@ -203,17 +226,17 @@ export default function InvoiceEditor() {
       invoice_date: invoiceDate,
       due_date: dueDate || null,
       po_number: poNumber || null,
-      service_date: serviceDate || null,
-      service_period: servicePeriod || null,
       currency: 'USD',
       template,
       sale_price_cents: isCommission && salePrice.trim() ? dollarsToCents(salePrice.trim()) : 0,
       commission_pct: isCommission && commissionPct.trim() ? commissionPct.trim() : '0',
+      commission_amount_cents: isCommission && commissionAmt.trim() ? dollarsToCents(commissionAmt.trim()) : null,
       processing_fee_cents: isCommission && processingFee.trim() ? dollarsToCents(processingFee.trim()) : 0,
       other_charge_desc: isCommission && otherChargeDesc.trim() ? otherChargeDesc.trim() : null,
       other_charge_cents: isCommission && otherCharge.trim() ? dollarsToCents(otherCharge.trim()) : 0,
       agent_name: isCommission && agentName.trim() ? agentName.trim() : null,
       second_agent_name: isCommission && secondAgentName.trim() ? secondAgentName.trim() : null,
+      property_address: isCommission && propertyAddress.trim() ? propertyAddress.trim() : null,
       invoice_discount_rate: discountMode === 'invoice' && invoiceDiscountPct.trim() ? pctToRate(invoiceDiscountPct) : undefined,
       invoice_tax_rate: useTax && invoiceTaxPct.trim() ? pctToRate(invoiceTaxPct) : undefined,
       shipping_cents: shipping.trim() ? dollarsToCents(shipping.trim()) : 0,
@@ -230,7 +253,7 @@ export default function InvoiceEditor() {
         tax_rate: l.taxRate.trim() ? pctToRate(l.taxRate) : undefined,
       })),
     };
-  }, [activeBusiness, customerId, invoiceDate, dueDate, poNumber, serviceDate, servicePeriod, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, paymentInstructions, template, salePrice, commissionPct, processingFee, otherChargeDesc, otherCharge, agentName, secondAgentName]);
+  }, [activeBusiness, customerId, invoiceDate, dueDate, poNumber, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, paymentInstructions, template, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge, agentName, secondAgentName, propertyAddress]);
 
   const validate = useCallback((): string[] => {
     const errs: string[] = [];
@@ -251,10 +274,13 @@ export default function InvoiceEditor() {
         }
       };
       amt('Sale price', salePrice, { required: true, positive: true });
-      if (!commissionPct.trim()) {
-        errs.push('Commission % is required.');
-      } else if (!/^\d+(\.\d+)?$/.test(commissionPct.trim()) || Number(commissionPct) < 0) {
+      const pctT = commissionPct.trim();
+      if (pctT && (!/^\d+(\.\d+)?$/.test(pctT) || Number(pctT) < 0)) {
         errs.push('Commission % must be a valid percent.');
+      }
+      amt('Commission amount', commissionAmt);
+      if (!pctT && !commissionAmt.trim()) {
+        errs.push('Enter a commission % or a commission amount.');
       }
       amt('Processing fee', processingFee);
       amt('Other charge', otherCharge);
@@ -305,7 +331,7 @@ export default function InvoiceEditor() {
       errs.push(e instanceof Error ? e.message : 'Totals could not be calculated.');
     }
     return errs;
-  }, [customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, toDraftInput, template, salePrice, commissionPct, processingFee, otherChargeDesc, otherCharge]);
+  }, [customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, toDraftInput, template, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge]);
 
   const totals = useMemo(() => {
     try {
@@ -323,11 +349,12 @@ export default function InvoiceEditor() {
         commissionPct.trim() || '0',
         processingFee.trim() ? dollarsToCents(processingFee.trim()) : 0,
         otherCharge.trim() ? dollarsToCents(otherCharge.trim()) : 0,
+        commissionAmt.trim() ? dollarsToCents(commissionAmt.trim()) : null,
       );
     } catch {
       return null;
     }
-  }, [template, salePrice, commissionPct, processingFee, otherCharge]);
+  }, [template, salePrice, commissionPct, commissionAmt, processingFee, otherCharge]);
 
   /* ---------- save ---------- */
 
@@ -509,17 +536,9 @@ export default function InvoiceEditor() {
                 <TextField id="inv-due" type="date" value={dueDate} onChange={touch((e) => setDueDate(e.target.value))} />
               </Field>
             </div>
-            <div className="form-row">
-              <Field label="P.O. / reference #" htmlFor="inv-po">
-                <TextField id="inv-po" value={poNumber} onChange={touch((e) => setPoNumber(e.target.value))} />
-              </Field>
-              <Field label="Service date" htmlFor="inv-sd">
-                <TextField id="inv-sd" type="date" value={serviceDate} onChange={touch((e) => setServiceDate(e.target.value))} />
-              </Field>
-              <Field label="Service period" htmlFor="inv-sp" hint="e.g. October 2026">
-                <TextField id="inv-sp" value={servicePeriod} onChange={touch((e) => setServicePeriod(e.target.value))} />
-              </Field>
-            </div>
+            <Field label="P.O. / reference #" htmlFor="inv-po">
+              <TextField id="inv-po" value={poNumber} onChange={touch((e) => setPoNumber(e.target.value))} />
+            </Field>
           </div>
 
           <div className="card">
@@ -553,20 +572,28 @@ export default function InvoiceEditor() {
                 <Field label="Sale price $ *" htmlFor="com-sale">
                   <TextField id="com-sale" inputMode="decimal" value={salePrice} onChange={touch((e) => setSalePrice(e.target.value))} placeholder="0.00" />
                 </Field>
-                <Field label="Real estate commission % *" htmlFor="com-pct" hint="e.g. 3 for 3%">
-                  <TextField id="com-pct" inputMode="decimal" value={commissionPct} onChange={touch((e) => setCommissionPct(e.target.value))} placeholder="3" />
+                <Field label="Real estate commission %" htmlFor="com-pct" hint="e.g. 3 for 3%">
+                  <TextField id="com-pct" inputMode="decimal" value={commissionPct} onChange={touch((e) => { commissionAmtManual.current = false; setCommissionPct(e.target.value); })} placeholder="3" />
                 </Field>
               </div>
               <div className="form-row">
+                <Field label="Commission amount $ *" htmlFor="com-amt" hint="Auto-filled from % — edit to override">
+                  <TextField id="com-amt" inputMode="decimal" value={commissionAmt} onChange={touch((e) => { commissionAmtManual.current = true; setCommissionAmt(e.target.value); })} placeholder="0.00" />
+                </Field>
                 <Field label="Processing fee $" htmlFor="com-fee">
                   <TextField id="com-fee" inputMode="decimal" value={processingFee} onChange={touch((e) => setProcessingFee(e.target.value))} placeholder="295.00" />
                 </Field>
+              </div>
+              <div className="form-row">
                 <Field label="Other charge $" htmlFor="com-other">
                   <TextField id="com-other" inputMode="decimal" value={otherCharge} onChange={touch((e) => setOtherCharge(e.target.value))} placeholder="0.00" />
                 </Field>
+                <Field label="Other charge description" htmlFor="com-otherdesc">
+                  <TextField id="com-otherdesc" value={otherChargeDesc} onChange={touch((e) => setOtherChargeDesc(e.target.value))} placeholder="What the other charge is for" />
+                </Field>
               </div>
-              <Field label="Other charge description" htmlFor="com-otherdesc">
-                <TextField id="com-otherdesc" value={otherChargeDesc} onChange={touch((e) => setOtherChargeDesc(e.target.value))} placeholder="What the other charge is for" />
+              <Field label="Property address" htmlFor="com-prop" hint="From the HUD / closing statement">
+                <TextField id="com-prop" value={propertyAddress} onChange={touch((e) => setPropertyAddress(e.target.value))} placeholder="123 Main St, Hollywood, FL 33021" />
               </Field>
               {commissionPreview && (
                 <div className="totals-box" aria-live="polite">
@@ -736,6 +763,7 @@ export default function InvoiceEditor() {
           notes={notes} terms={terms} paymentInstructions={paymentInstructions}
           discountMode={discountMode} template={template}
           agentName={agentName} secondAgentName={secondAgentName}
+          propertyAddress={propertyAddress}
           salePrice={salePrice} commissionPct={commissionPct}
           otherChargeDesc={otherChargeDesc} commissionTotals={commissionPreview} />
       </div>
@@ -751,6 +779,7 @@ export default function InvoiceEditor() {
 function CommissionPreviewBody({
   agentName,
   secondAgentName,
+  propertyAddress,
   salePrice,
   commissionPct,
   otherChargeDesc,
@@ -759,6 +788,7 @@ function CommissionPreviewBody({
 }: {
   agentName: string;
   secondAgentName: string;
+  propertyAddress: string;
   salePrice: string;
   commissionPct: string;
   otherChargeDesc: string;
@@ -789,6 +819,11 @@ function CommissionPreviewBody({
               <strong>Second sales person:</strong> {secondAgentName.trim()}
             </div>
           )}
+        </div>
+      )}
+      {propertyAddress.trim() !== '' && (
+        <div style={{ marginBottom: 12, fontSize: 14 }}>
+          <strong>Property:</strong> {propertyAddress.trim()}
         </div>
       )}
       <div style={{ marginBottom: 4 }}>
@@ -959,6 +994,7 @@ function InvoicePreview({
   template,
   agentName,
   secondAgentName,
+  propertyAddress,
   salePrice,
   commissionPct,
   otherChargeDesc,
@@ -978,6 +1014,7 @@ function InvoicePreview({
   template: InvoiceTemplate;
   agentName: string;
   secondAgentName: string;
+  propertyAddress: string;
   salePrice: string;
   commissionPct: string;
   otherChargeDesc: string;
@@ -1051,6 +1088,7 @@ function InvoicePreview({
         <CommissionPreviewBody
           agentName={agentName}
           secondAgentName={secondAgentName}
+          propertyAddress={propertyAddress}
           salePrice={salePrice}
           commissionPct={commissionPct}
           otherChargeDesc={otherChargeDesc}

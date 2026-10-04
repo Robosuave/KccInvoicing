@@ -1,5 +1,7 @@
 -- Set Dania Realty's defaults: commission invoice type + wire instructions.
 -- Run AFTER migration 0004 (which adds the default_template column).
+-- NOTE: this copy keeps placeholders. The real wire details were given to the
+-- user directly and must NOT be committed here — this repo is PUBLIC.
 
 update public.businesses
 set

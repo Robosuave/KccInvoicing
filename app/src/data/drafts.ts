@@ -37,11 +37,13 @@ export interface DraftInput {
   template?: InvoiceTemplate;
   sale_price_cents?: number;
   commission_pct?: string;
+  commission_amount_cents?: number | null;
   processing_fee_cents?: number;
   other_charge_desc?: string | null;
   other_charge_cents?: number;
   agent_name?: string | null;
   second_agent_name?: string | null;
+  property_address?: string | null;
   lines: DraftLineInput[];
 }
 
@@ -52,6 +54,7 @@ function totalsFor(input: DraftInput): CalcResult {
       input.commission_pct ?? '0',
       input.processing_fee_cents ?? 0,
       input.other_charge_cents ?? 0,
+      input.commission_amount_cents ?? null,
     );
     // Commission invoices have no line items, discounts, tax, or shipping.
     return {
@@ -85,11 +88,13 @@ function commissionColumns(input: DraftInput) {
     template: input.template ?? 'standard',
     sale_price_cents: input.sale_price_cents ?? 0,
     commission_pct: input.commission_pct ?? '0',
+    commission_amount_cents: input.commission_amount_cents ?? null,
     processing_fee_cents: input.processing_fee_cents ?? 0,
     other_charge_desc: input.other_charge_desc ?? null,
     other_charge_cents: input.other_charge_cents ?? 0,
     agent_name: input.agent_name ?? null,
     second_agent_name: input.second_agent_name ?? null,
+    property_address: input.property_address ?? null,
   };
 }
 
