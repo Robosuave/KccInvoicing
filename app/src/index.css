@@ -301,24 +301,19 @@ textarea.input { min-height: 96px; resize: vertical; }
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 
-/* Commission invoice bottom: wire/Zelle left, address + company right */
-.inv-bottomcols {
+/* Commission invoice: agent info left, property address right */
+.inv-agentcols {
   display: flex;
   gap: 16px;
-  margin-top: 16px;
+  margin-bottom: 12px;
   align-items: flex-start;
 }
-.inv-bottomcols .inv-wirebox {
-  flex: 1.5;
-  min-width: 0;
-}
-.inv-contactbox {
+.inv-agentcols > div {
   flex: 1;
   min-width: 0;
-  font-size: 14px;
 }
 @media (max-width: 640px) {
-  .inv-bottomcols { flex-direction: column; }
+  .inv-agentcols { flex-direction: column; }
 }
 
 @media print {
@@ -340,9 +335,7 @@ textarea.input { min-height: 96px; resize: vertical; }
   .inv-totals { width: 220px !important; }
   .inv-section { margin-top: 8px !important; }
   .inv-wirebox { margin-top: 10px !important; padding: 8px !important; }
-  .inv-bottomcols { gap: 12px; margin-top: 10px !important; }
-  .inv-bottomcols .inv-wirebox { margin-top: 0 !important; }
-  .inv-contactbox { font-size: 12px !important; }
+  .inv-agentcols { gap: 12px; margin-bottom: 8px !important; }
   .inv-footer { margin-top: 10px !important; font-size: 11px !important; }
   @page { size: Letter; margin: 11mm; }
 }

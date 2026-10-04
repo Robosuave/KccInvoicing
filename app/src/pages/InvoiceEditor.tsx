@@ -650,24 +650,61 @@ export default function InvoiceEditor() {
 
   /* Commission invoices: Enter jumps to the next text field for fast keyboard flow.
      Selects, textareas, and buttons keep their native behavior. */
+  /* Commission invoices: Enter advances through a fixed field order.
+     Skips the auto-calculated Commission $ and the fixed Processing fee.
+     From the last field it scrolls to the Save / Preview / Print buttons. */
+  const COMMISSION_ENTER_FLOW = [
+    'inv-company', // select
+    'inv-date',
+    'com-prop',
+    'com-agent',
+    'com-agent2',
+    'com-sale',
+    'com-pct',
+    // com-amt (auto-filled) and com-fee (fixed $295) are skipped
+    'com-other',
+    'com-otherdesc',
+  ];
+  const COMMISSION_SKIP_REDIRECT: Record<string, string> = {
+    'com-amt': 'com-other',
+    'com-fee': 'com-other',
+  };
+
   const commissionEnterToNext = (e: React.KeyboardEvent<HTMLElement>) => {
     if (e.key !== 'Enter') return;
     const target = e.target as HTMLElement;
-    if (!(target instanceof HTMLInputElement)) return;
-    if (target.type !== 'text' && target.type !== 'date' && target.type !== 'number') return;
-    const fields = Array.from(e.currentTarget.querySelectorAll<HTMLInputElement>('input')).filter(
-      (el) => !el.disabled && el.type !== 'hidden' && el.offsetParent !== null,
-    );
-    const idx = fields.indexOf(target);
-    if (idx >= 0 && idx < fields.length - 1) {
-      e.preventDefault();
-      const next = fields[idx + 1];
-      next.focus();
-      try {
-        if (next.type === 'text') next.select();
-      } catch {
-        /* select() unsupported for this input type — focus is enough */
+    if (target.tagName !== 'INPUT' && target.tagName !== 'SELECT') return;
+    const id = (target as HTMLInputElement).id;
+    let idx = COMMISSION_ENTER_FLOW.indexOf(id);
+    if (idx === -1) {
+      // Skipped field (Commission $ / Processing fee): jump to Other Charge.
+      const redirect = COMMISSION_SKIP_REDIRECT[id];
+      if (!redirect) return;
+      idx = COMMISSION_ENTER_FLOW.indexOf(redirect) - 1;
+    }
+    e.preventDefault();
+    // Focus the next enabled, visible field in the flow.
+    for (let i = idx + 1; i < COMMISSION_ENTER_FLOW.length; i++) {
+      const el = document.getElementById(COMMISSION_ENTER_FLOW[i]) as
+        | HTMLInputElement
+        | HTMLSelectElement
+        | null;
+      if (el && !el.disabled && el.offsetParent !== null) {
+        el.focus();
+        try {
+          if (el instanceof HTMLInputElement && el.type === 'text') el.select();
+        } catch {
+          /* select() unsupported for this input type — focus is enough */
+        }
+        return;
       }
+    }
+    // Last field in the flow: scroll to the action buttons and focus Print.
+    const actions = document.getElementById('invoice-actions');
+    if (actions) {
+      actions.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const printBtn = actions.querySelector<HTMLElement>('[data-action="print"]');
+      printBtn?.focus({ preventScroll: true });
     }
   };
 
@@ -1095,7 +1132,7 @@ export default function InvoiceEditor() {
             </Modal>
           )}
 
-          <div className="btn-row no-print" style={{ marginBottom: 24 }}>
+          <div id="invoice-actions" className="btn-row no-print" style={{ marginBottom: 24 }}>
             {!isIssued && (
               <Button onClick={() => doSave(true)} disabled={saveStatus === 'saving'}>
                 {saveStatus === 'saving' ? 'Saving…' : draftId ? 'Save draft' : 'Create draft'}
@@ -1104,7 +1141,7 @@ export default function InvoiceEditor() {
             <Button variant="secondary" onClick={() => setShowPreview(true)}>
               Preview
             </Button>
-            <Button variant="secondary" onClick={doPrint}>
+            <Button variant="secondary" onClick={doPrint} data-action="print">
               Print / Save PDF
             </Button>
             {!isIssued && (
@@ -1203,21 +1240,24 @@ function CommissionPreviewBody({
           {commissionTotals.badFields.join(', ')}: it doesn't look like a valid amount. Fix it in
           the form and the numbers will appear.
         </div>
-      )}      {propertyAddress.trim() !== '' && customer == null && (
-        <div style={{ marginBottom: 12, fontSize: 15 }}>
-          <strong>Property:</strong> {propertyAddress.trim()}
-        </div>
-      )}
-      {(agentName.trim() !== '' || secondAgentName.trim() !== '') && (
-        <div style={{ marginBottom: 12, fontSize: 14 }}>
-          {agentName.trim() !== '' && (
-            <div>
-              <strong>Agent:</strong> {agentName.trim()}
-            </div>
-          )}
-          {secondAgentName.trim() !== '' && (
-            <div>
-              <strong>Second sales person:</strong> {secondAgentName.trim()}
+      )}      {(propertyAddress.trim() !== '' || agentName.trim() !== '' || secondAgentName.trim() !== '') && (
+        <div className="inv-agentcols">
+          <div style={{ fontSize: 14 }}>
+            {agentName.trim() !== '' && (
+              <div>
+                <strong>Agent:</strong> {agentName.trim()}
+              </div>
+            )}
+            {secondAgentName.trim() !== '' && (
+              <div>
+                <strong>Second sales person:</strong> {secondAgentName.trim()}
+              </div>
+            )}
+          </div>
+          {propertyAddress.trim() !== '' && (
+            <div style={{ fontSize: 14 }}>
+              <strong>Property address</strong>
+              <div>{propertyAddress.trim()}</div>
             </div>
           )}
         </div>
@@ -1266,41 +1306,19 @@ function CommissionPreviewBody({
           <div style={{ whiteSpace: 'pre-wrap', marginTop: 4, fontSize: 14 }}>{notes.trim()}</div>
         </div>
       )}
-      {(paymentInstructions !== '' || customer) && (
-        <div className="inv-bottomcols">
-          {paymentInstructions !== '' && (
-            <div
-              className="inv-wirebox"
-              style={{
-                background: '#e7f3e7',
-                border: '1px solid var(--border)',
-                borderRadius: 8,
-                padding: 12,
-              }}
-            >
-              {!/^wire instructions/im.test(paymentInstructions) && <strong>WIRE INSTRUCTIONS</strong>}
-              <div style={{ whiteSpace: 'pre-wrap', marginTop: 6, fontSize: 14 }}>{paymentInstructions}</div>
-            </div>
-          )}
-          {customer && (
-            <div className="inv-contactbox">
-              {propertyAddress.trim() !== '' && (
-                <div style={{ marginBottom: 8 }}>
-                  <strong>Property address</strong>
-                  <div>{propertyAddress.trim()}</div>
-                </div>
-              )}
-              {(customer.company || customer.name) && (
-                <div style={{ marginBottom: 8 }}>
-                  <strong>Company</strong>
-                  <div style={{ fontWeight: 600 }}>{customer.company || customer.name}</div>
-                  {customer.contact_person && <div>{customer.contact_person}</div>}
-                  {customer.phone && <div>{customer.phone}</div>}
-                  {customer.email && <div>{customer.email}</div>}
-                </div>
-              )}
-            </div>
-          )}
+      {paymentInstructions !== '' && (
+        <div
+          className="inv-wirebox"
+          style={{
+            marginTop: 16,
+            background: '#e7f3e7',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: 12,
+          }}
+        >
+          {!/^wire instructions/im.test(paymentInstructions) && <strong>WIRE INSTRUCTIONS</strong>}
+          <div style={{ whiteSpace: 'pre-wrap', marginTop: 6, fontSize: 14 }}>{paymentInstructions}</div>
         </div>
       )}
     </>
@@ -1489,6 +1507,16 @@ function InvoicePreview({
           {invoiceNumber && <div style={{ fontSize: 15, fontWeight: 700 }}>#{invoiceNumber}</div>}
           {invoiceStatus === 'draft' && <span className="badge badge-draft">DRAFT</span>}
           <div style={{ fontSize: 20, fontWeight: 700, marginTop: 8 }}>Date: {invoiceDate || '—'}</div>
+          {isCommission && customer && (
+            <div style={{ marginTop: 4 }}>
+              {(customer.company || customer.name) && (
+                <div style={{ fontSize: 16, fontWeight: 600 }}>{customer.company || customer.name}</div>
+              )}
+              {customer.contact_person && <div style={{ fontSize: 14 }}>{customer.contact_person}</div>}
+              {customer.phone && <div style={{ fontSize: 14 }}>{customer.phone}</div>}
+              {customer.email && <div style={{ fontSize: 14 }}>{customer.email}</div>}
+            </div>
+          )}
         </div>
       </div>
 
