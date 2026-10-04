@@ -30,6 +30,7 @@ export interface Business {
   next_number: number;
   default_tax_rate: string; // numeric from Postgres
   default_template: InvoiceTemplate;
+  invoice_style: string;
   default_email_subject: string | null;
   default_email_message: string | null;
   archived_at: string | null;
@@ -117,6 +118,12 @@ export interface Invoice {
   payment_instructions_snapshot: string | null;
   snapshot: Record<string, unknown> | null;
   issued_at: string | null;
+  voided_at: string | null;
+  void_reason: string | null;
+  revision_of: string | null;
+  revision_no: number;
+  issued_pdf_path: string | null;
+  tax_breakdown: { rate: string; cents: number }[];
   created_at: string;
   updated_at: string;
 }
@@ -134,4 +141,40 @@ export interface InvoiceLine {
   tax_rate: string;
   line_total_cents: number;
   created_at: string;
+}
+
+export type PaymentMethod = 'cash' | 'check' | 'bank_transfer' | 'other';
+
+export interface Payment {
+  id: string;
+  invoice_id: string;
+  business_id: string;
+  created_by: string | null;
+  amount_cents: number;
+  method: PaymentMethod;
+  reference: string | null;
+  note: string | null;
+  payment_date: string;
+  idempotency_key: string;
+  receipt_path: string | null;
+  reversed_at: string | null;
+  reversed_reason: string | null;
+  created_at: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  business_id: string;
+  invoice_id: string | null;
+  actor: string | null;
+  action: string;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+/** Unpaid / partially paid / paid, derived from totals and amount paid. */
+export function paymentStatusOf(totalCents: number, paidCents: number): 'unpaid' | 'partial' | 'paid' {
+  if (paidCents <= 0) return 'unpaid';
+  if (paidCents < totalCents) return 'partial';
+  return 'paid';
 }

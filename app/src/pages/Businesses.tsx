@@ -43,6 +43,7 @@ const EMPTY: Record<string, string> = {
   default_email_subject: '',
   default_email_message: '',
   default_template: 'standard',
+  invoice_style: 'classic',
 };
 
 function toForm(b?: Business): Record<string, string> {
@@ -70,6 +71,7 @@ function toForm(b?: Business): Record<string, string> {
     default_email_subject: b.default_email_subject ?? '',
     default_email_message: b.default_email_message ?? '',
     default_template: (b as { default_template?: string }).default_template ?? 'standard',
+    invoice_style: (b as { invoice_style?: string }).invoice_style ?? 'classic',
   };
 }
 
@@ -146,6 +148,7 @@ export default function Businesses() {
         default_email_subject: form.default_email_subject.trim() || null,
         default_email_message: form.default_email_message.trim() || null,
         default_template: (form.default_template === 'commission' ? 'commission' : 'standard') as InvoiceTemplate,
+        invoice_style: ['classic', 'modern', 'compact'].includes(form.invoice_style) ? form.invoice_style : 'classic',
       };
       let business: Business;
       if (editing === 'new') {
@@ -315,6 +318,13 @@ export default function Businesses() {
               <SelectField id="b-template" value={form.default_template} onChange={set('default_template')}>
                 <option value="standard">Standard invoice (line items)</option>
                 <option value="commission">Commission / wire instructions</option>
+              </SelectField>
+            </Field>
+            <Field label="Invoice visual style" htmlFor="b-style" hint="Used for generated PDFs.">
+              <SelectField id="b-style" value={form.invoice_style} onChange={set('invoice_style')}>
+                <option value="classic">Classic</option>
+                <option value="modern">Modern</option>
+                <option value="compact">Compact</option>
               </SelectField>
             </Field>
           </div>
