@@ -971,7 +971,12 @@ function CommissionPreviewBody({
           {commissionTotals.badFields.join(', ')}: it doesn't look like a valid amount. Fix it in
           the form and the numbers will appear.
         </div>
-      )}      {(agentName.trim() !== '' || secondAgentName.trim() !== '') && (
+      )}      {propertyAddress.trim() !== '' && (
+        <div style={{ marginBottom: 12, fontSize: 15 }}>
+          <strong>Property:</strong> {propertyAddress.trim()}
+        </div>
+      )}
+      {(agentName.trim() !== '' || secondAgentName.trim() !== '') && (
         <div style={{ marginBottom: 12, fontSize: 14 }}>
           {agentName.trim() !== '' && (
             <div>
@@ -983,11 +988,6 @@ function CommissionPreviewBody({
               <strong>Second sales person:</strong> {secondAgentName.trim()}
             </div>
           )}
-        </div>
-      )}
-      {propertyAddress.trim() !== '' && (
-        <div style={{ marginBottom: 12, fontSize: 14 }}>
-          <strong>Property:</strong> {propertyAddress.trim()}
         </div>
       )}
       <div style={{ marginBottom: 4 }}>
@@ -1231,7 +1231,7 @@ function InvoicePreview({
           </div>
           {invoiceNumber && <div style={{ fontSize: 15, fontWeight: 700 }}>#{invoiceNumber}</div>}
           {invoiceStatus === 'draft' && <span className="badge badge-draft">DRAFT</span>}
-          <div style={{ fontSize: 13, marginTop: 8 }}>Date: {invoiceDate || '—'}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, marginTop: 8 }}>Date: {invoiceDate || '—'}</div>
         </div>
       </div>
 
