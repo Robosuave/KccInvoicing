@@ -7,6 +7,24 @@ import { listCustomers } from '../data/customers';
 import { listItems } from '../data/items';
 import { centsToDollars, dollarsToCents, multiplyQuantity, percentOf, pctToRate as strictPctToRate } from '../lib/money';
 import { getLogoUrl } from '../data/businesses';
+
+/** Extract a human-readable message from anything thrown — Supabase/PostgREST
+ *  errors are plain objects ({message, details, hint, code}), not Error instances. */
+function formatSaveError(e: unknown): string {
+  if (e instanceof Error && e.message) return e.message;
+  if (e && typeof e === 'object') {
+    const o = e as Record<string, unknown>;
+    const msg = [o.message, o.details, o.hint].filter(
+      (v): v is string => typeof v === 'string' && v.length > 0,
+    );
+    if (msg.length > 0) {
+      const code = typeof o.code === 'string' && o.code ? ` [${o.code}]` : '';
+      return msg.join(' — ') + code;
+    }
+  }
+  if (typeof e === 'string' && e) return e;
+  return 'Save failed.';
+}
 import {
   Alert,
   Button,
@@ -471,8 +489,8 @@ export default function InvoiceEditor() {
         return savedId;
       } catch (e) {
         setSaveStatus('failed');
-        setSaveMessage(e instanceof Error ? e.message : 'Save failed.');
-        if (manual) setErrors([e instanceof Error ? e.message : 'Save failed.']);
+        setSaveMessage(formatSaveError(e));
+        if (manual) setErrors([formatSaveError(e)]);
         return null;
       }
     },
