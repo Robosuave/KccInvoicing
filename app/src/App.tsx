@@ -154,6 +154,7 @@ function Shell() {
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
             {user?.email && (
               <span
+                className="topbar-email"
                 title="Signed in as"
                 style={{ fontSize: 12, color: '#5b6b85', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
               >
@@ -161,6 +162,14 @@ function Shell() {
               </span>
             )}
             <BusinessSwitcher />
+            <button
+              className="btn btn-secondary btn-sm"
+              style={{ whiteSpace: 'nowrap' }}
+              onClick={() => signOut()}
+              aria-label="Log off"
+            >
+              Log off
+            </button>
           </div>
         </div>
         <main className="content" key={location.pathname}>

@@ -286,6 +286,12 @@ textarea.input { min-height: 96px; resize: vertical; }
   .scrim { position: fixed; inset: 0; background: rgba(15,23,42,0.4); z-index: 40; }
 }
 
+@media (max-width: 640px) {
+  /* Make room in the top bar for the Log off button on phones. */
+  .topbar { padding: 10px 12px; gap: 8px; }
+  .topbar-email { display: none; }
+}
+
 /* ---------- accessibility ---------- */
 
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
