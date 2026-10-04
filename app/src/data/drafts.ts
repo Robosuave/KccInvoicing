@@ -1,12 +1,6 @@
 import { requireSupabase } from '../lib/supabase';
-import {
-  calculateInvoiceTotals,
-  calculateCommissionTotals,
-  multiplyQuantity,
-  type CalcLine,
-  type CalcResult,
-} from '../lib/money';
-import type { Invoice, InvoiceLine, InvoiceTemplate } from '../db/types';
+import { calculateInvoiceTotals, multiplyQuantity, type CalcLine } from '../lib/money';
+import type { Invoice, InvoiceLine } from '../db/types';
 
 export interface DraftLineInput {
   id?: string;
@@ -23,50 +17,21 @@ export interface DraftInput {
   business_id: string;
   customer_id?: string | null;
   invoice_date?: string;
+  due_date?: string | null;
+  po_number?: string | null;
+  service_date?: string | null;
+  service_period?: string | null;
   currency?: string;
   invoice_discount_rate?: string;
   invoice_tax_rate?: string;
   shipping_cents?: number;
   notes?: string | null;
   terms?: string | null;
-  // payment_instructions is owner-controlled server-side (migration 0016):
-  // the database trigger loads it from the business record and ignores any
-  // client-supplied value, so it is intentionally absent from DraftInput.
-  template?: InvoiceTemplate;
-  sale_price_cents?: number;
-  commission_pct?: string;
-  commission_amount_cents?: number | null;
-  processing_fee_cents?: number;
-  other_charge_desc?: string | null;
-  other_charge_cents?: number;
-  agent_name?: string | null;
-  second_agent_name?: string | null;
-  property_address?: string | null;
+  payment_instructions?: string | null;
   lines: DraftLineInput[];
 }
 
-function totalsFor(input: DraftInput): CalcResult {
-  if (input.template === 'commission') {
-    const c = calculateCommissionTotals(
-      input.sale_price_cents ?? 0,
-      input.commission_pct ?? '0',
-      input.processing_fee_cents ?? 0,
-      input.other_charge_cents ?? 0,
-      input.commission_amount_cents ?? null,
-    );
-    // Commission invoices have no line items, discounts, tax, or shipping.
-    return {
-      subtotalCents: c.commissionCents,
-      lineDiscountCents: 0,
-      invoiceDiscountCents: 0,
-      discountCents: 0,
-      taxableCents: c.commissionCents,
-      taxByRate: [],
-      taxCents: 0,
-      shippingCents: 0,
-      totalCents: c.totalCents,
-    };
-  }
+function totalsFor(input: DraftInput) {
   const calcLines: CalcLine[] = input.lines.map((l) => ({
     quantity: l.quantity,
     unitPriceCents: l.unit_price_cents,
@@ -80,36 +45,14 @@ function totalsFor(input: DraftInput): CalcResult {
   });
 }
 
-/** Columns written for the commission template. */
-function commissionColumns(input: DraftInput) {
-  return {
-    template: input.template ?? 'standard',
-    sale_price_cents: input.sale_price_cents ?? 0,
-    commission_pct: input.commission_pct ?? '0',
-    commission_amount_cents: input.commission_amount_cents ?? null,
-    processing_fee_cents: input.processing_fee_cents ?? 0,
-    other_charge_desc: input.other_charge_desc ?? null,
-    other_charge_cents: input.other_charge_cents ?? 0,
-    agent_name: input.agent_name ?? null,
-    second_agent_name: input.second_agent_name ?? null,
-    property_address: input.property_address ?? null,
-  };
-}
-
 export async function listDrafts(businessId: string): Promise<Invoice[]> {
-  return listInvoices(businessId, 'draft');
-}
-
-/** List invoices for a business, optionally filtered by status. */
-export async function listInvoices(businessId: string, status?: 'draft' | 'issued' | 'void'): Promise<Invoice[]> {
   const sb = requireSupabase();
-  let q = sb
+  const { data, error } = await sb
     .from('invoices')
     .select('*')
     .eq('business_id', businessId)
+    .eq('status', 'draft')
     .order('updated_at', { ascending: false });
-  if (status) q = q.eq('status', status);
-  const { data, error } = await q;
   if (error) throw error;
   return data as Invoice[];
 }
@@ -127,71 +70,23 @@ export async function getDraft(id: string): Promise<{ invoice: Invoice; lines: I
   return { invoice: invoice as Invoice, lines: (lines ?? []) as InvoiceLine[] };
 }
 
-/** Rejects if the promise doesn't settle within ms — a hanging request
- *  must never leave the UI stuck on "Saving…" forever. */
-function withTimeout<T>(p: PromiseLike<T>, ms: number, label: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`${label} timed out — please check your connection and try again.`)),
-      ms,
-    );
-  });
-  return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
-}
-
 /** Create a draft invoice with its lines and computed totals. */
 export async function createDraft(input: DraftInput): Promise<Invoice> {
   const sb = requireSupabase();
-  const isCommission = input.template === 'commission';
-  if (!isCommission && input.lines.length === 0) throw new Error('Add at least one line item.');
+  if (input.lines.length === 0) throw new Error('Add at least one line item.');
   const t = totalsFor(input);
 
-  // Assign the business's next invoice number atomically (e.g. Dania Realty starts at 501).
-  // The security-definer function both reads and increments, so agents (who cannot
-  // update businesses directly) can still create invoices, and concurrent creates
-  // can never grab the same number.
-  let invoiceNumber: string;
-  try {
-    const { data, error } = await withTimeout(
-      sb.rpc('assign_invoice_number', { b_id: input.business_id }),
-      15000,
-      'Invoice number assignment',
-    );
-    if (error) throw error;
-    invoiceNumber = data as string;
-  } catch (e) {
-    // If the rpc itself timed out, don't silently fall through to a second
-    // hanging request — surface it.
-    if (e instanceof Error && /timed out/.test(e.message)) throw e;
-    // Fallback for before migration 0007 is run (owner-only; has a small race).
-    const { data: biz, error: bErr } = await withTimeout(
-      sb.from('businesses').select('invoice_prefix, next_number').eq('id', input.business_id).single(),
-      15000,
-      'Business lookup',
-    );
-    if (bErr) throw bErr;
-    invoiceNumber = `${(biz as { invoice_prefix: string }).invoice_prefix ?? ''}${(biz as { next_number: number }).next_number}`;
-    const { error: uErr } = await withTimeout(
-      sb
-        .from('businesses')
-        .update({ next_number: (biz as { next_number: number }).next_number + 1 })
-        .eq('id', input.business_id),
-      15000,
-      'Invoice number update',
-    );
-    if (uErr) throw uErr;
-  }
-
-  const { data: invoice, error: iErr } = await withTimeout(
-    sb
+  const { data: invoice, error: iErr } = await sb
     .from('invoices')
     .insert({
       business_id: input.business_id,
       customer_id: input.customer_id ?? null,
       status: 'draft',
-      invoice_number: invoiceNumber,
       invoice_date: input.invoice_date ?? new Date().toISOString().slice(0, 10),
+      due_date: input.due_date ?? null,
+      po_number: input.po_number ?? null,
+      service_date: input.service_date ?? null,
+      service_period: input.service_period ?? null,
       currency: input.currency ?? 'USD',
       subtotal_cents: t.subtotalCents,
       discount_cents: t.discountCents,
@@ -200,16 +95,11 @@ export async function createDraft(input: DraftInput): Promise<Invoice> {
       total_cents: t.totalCents,
       notes: input.notes ?? null,
       terms: input.terms ?? null,
-      ...commissionColumns(input),
+      payment_instructions: input.payment_instructions ?? null,
     })
     .select()
-    .single(),
-    20000,
-    'Invoice save',
-  );
+    .single();
   if (iErr) throw iErr;
-
-  if (isCommission) return invoice as Invoice;
 
   const rows = input.lines.map((l, i) => ({
     invoice_id: (invoice as Invoice).id,
@@ -251,8 +141,7 @@ export async function saveDraft(
   if (new Date((current as { updated_at: string }).updated_at) > new Date(expectedUpdatedAt)) {
     throw new Error('This draft was changed in another tab. Reload to merge before saving.');
   }
-  const isCommission = input.template === 'commission';
-  if (!isCommission && input.lines.length === 0) throw new Error('Add at least one line item.');
+  if (input.lines.length === 0) throw new Error('Add at least one line item.');
   const t = totalsFor(input);
 
   const { data: invoice, error: iErr } = await sb
@@ -260,6 +149,10 @@ export async function saveDraft(
     .update({
       customer_id: input.customer_id ?? null,
       invoice_date: input.invoice_date,
+      due_date: input.due_date ?? null,
+      po_number: input.po_number ?? null,
+      service_date: input.service_date ?? null,
+      service_period: input.service_period ?? null,
       currency: input.currency ?? 'USD',
       subtotal_cents: t.subtotalCents,
       discount_cents: t.discountCents,
@@ -268,17 +161,15 @@ export async function saveDraft(
       total_cents: t.totalCents,
       notes: input.notes ?? null,
       terms: input.terms ?? null,
-      ...commissionColumns(input),
+      payment_instructions: input.payment_instructions ?? null,
     })
     .eq('id', id)
     .select()
     .single();
   if (iErr) throw iErr;
 
-  // Commission invoices carry no line rows; clear any left from a template switch.
   const { error: dErr } = await sb.from('invoice_lines').delete().eq('invoice_id', id);
   if (dErr) throw dErr;
-  if (isCommission) return invoice as Invoice;
   const rows = input.lines.map((l, i) => ({
     invoice_id: id,
     position: i,
@@ -299,13 +190,6 @@ export async function saveDraft(
 export async function deleteDraft(id: string): Promise<void> {
   const sb = requireSupabase();
   const { error } = await sb.from('invoices').delete().eq('id', id).eq('status', 'draft');
-  if (error) throw error;
-}
-
-/** Mark a draft as issued (final). Idempotent — only transitions from draft. */
-export async function markIssued(id: string): Promise<void> {
-  const sb = requireSupabase();
-  const { error } = await sb.from('invoices').update({ status: 'issued' }).eq('id', id).eq('status', 'draft');
   if (error) throw error;
 }
 

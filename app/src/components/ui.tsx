@@ -10,7 +10,7 @@ type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 export function Button({ variant = 'primary', size = 'md', className = '', ...rest }: BtnProps) {
   return (
     <button
-      className={['btn', `btn-${variant}`, size === 'sm' ? 'btn-sm' : '', className].filter(Boolean).join(' ')}
+      className={`btn btn-${variant} ${size === 'sm' ? 'btn-sm' : ''} ${className}`}
       {...rest}
     />
   );
@@ -66,20 +66,15 @@ export function Modal({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  // Keep the latest onClose in a ref so the mount-only effect below never
-  // re-runs (and never yanks focus back to the first field) when the parent
-  // re-renders with a new inline onClose callback — e.g. on every keystroke.
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCloseRef.current();
+      if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', onKey);
     ref.current?.querySelector<HTMLElement>('button, input, select, textarea')?.focus();
     return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  }, [onClose]);
 
   return (
     <div
