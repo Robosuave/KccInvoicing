@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
-import type { Business, Customer, Item, InvoiceTemplate } from '../db/types';
-import { createDraft, getDraft, previewTotals, saveDraft, type DraftInput } from '../data/drafts';
+import type { Business, Customer, Item, InvoiceTemplate, InvoiceStatus } from '../db/types';
+import { createDraft, getDraft, previewTotals, saveDraft, markIssued, type DraftInput } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listItems } from '../data/items';
 import { centsToDollars, dollarsToCents, multiplyQuantity, calculateCommissionTotals, percentOf } from '../lib/money';
@@ -69,6 +69,8 @@ export default function InvoiceEditor() {
   const isNew = !id || id === 'new';
 
   const [draftId, setDraftId] = useState<string | null>(isNew ? null : (id as string));
+  const [invoiceStatus, setInvoiceStatus] = useState<InvoiceStatus>('draft');
+  const isIssued = invoiceStatus !== 'draft';
   const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<string>(new Date(0).toISOString());
   const [loading, setLoading] = useState(!isNew);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -140,6 +142,7 @@ export default function InvoiceEditor() {
           return;
         }
         setDraftId(invoice.id);
+        setInvoiceStatus(invoice.status);
         setExpectedUpdatedAt(invoice.updated_at);
         setCustomerId(invoice.customer_id ?? '');
         setInvoiceDate(invoice.invoice_date);
@@ -357,11 +360,12 @@ export default function InvoiceEditor() {
   /* ---------- save ---------- */
 
   const doSave = useCallback(
-    async (manual: boolean): Promise<boolean> => {
+    async (manual: boolean): Promise<string | null> => {
+      if (isIssued) return null; // finalized invoices are read-only
       const errs = validate();
       if (errs.length > 0) {
         if (manual) setErrors(errs);
-        return false;
+        return null;
       }
       setErrors([]);
       setSaveStatus('saving');
@@ -370,31 +374,50 @@ export default function InvoiceEditor() {
         const input = toDraftInput();
         // strip fully-empty rows
         input.lines = input.lines.filter((l) => l.description.trim() || l.unit_price_cents > 0);
+        let savedId: string;
         if (draftId) {
           const updated = await saveDraft(draftId, input, expectedUpdatedAt);
           setExpectedUpdatedAt(updated.updated_at);
           setInvoiceNumber(updated.invoice_number ?? null);
+          savedId = draftId;
         } else {
           const created = await createDraft(input);
           setDraftId(created.id);
           setExpectedUpdatedAt(created.updated_at);
           setInvoiceNumber(created.invoice_number ?? null);
           navigate(`/invoices/${created.id}`, { replace: true });
+          savedId = created.id;
         }
         dirtyRef.current = false;
         setDirty(false);
         setEditorDirty(false);
         setSaveStatus('saved');
-        return true;
+        return savedId;
       } catch (e) {
         setSaveStatus('failed');
         setSaveMessage(e instanceof Error ? e.message : 'Save failed.');
         if (manual) setErrors([e instanceof Error ? e.message : 'Save failed.']);
-        return false;
+        return null;
       }
     },
-    [validate, toDraftInput, draftId, expectedUpdatedAt, navigate, setEditorDirty],
+    [validate, toDraftInput, draftId, expectedUpdatedAt, navigate, setEditorDirty, isIssued],
   );
+
+  /** Print / Save PDF. Finalizes the invoice (draft -> issued) on first print. */
+  const doPrint = useCallback(async () => {
+    if (!isIssued) {
+      const printId = await doSave(true);
+      if (!printId) return;
+      try {
+        await markIssued(printId);
+      } catch (e) {
+        setErrors([e instanceof Error ? e.message : 'Could not finalize the invoice.']);
+        return;
+      }
+      setInvoiceStatus('issued');
+    }
+    window.print();
+  }, [isIssued, doSave]);
 
   // autosave
   useEffect(() => {
@@ -500,7 +523,7 @@ export default function InvoiceEditor() {
     <div>
       <div className="btn-row no-print" style={{ marginBottom: 16, justifyContent: 'space-between' }}>
         <h1 className="page-title" style={{ margin: 0 }}>
-          {isNew && !draftId ? 'New invoice' : 'Edit draft'} — {activeBusiness.display_name}
+          {isNew && !draftId ? 'New invoice' : isIssued ? 'Invoice' : 'Edit draft'} — {activeBusiness.display_name}
         </h1>
         <SaveStatusIndicator status={saveStatus} message={saveMessage} />
       </div>
@@ -515,8 +538,13 @@ export default function InvoiceEditor() {
         </Alert>
       )}
 
+      {isIssued && (
+        <Alert kind="info">This invoice is finalized. It can be reprinted, but not edited.</Alert>
+      )}
+
       <div className="editor-layout">
         <div className="no-print">
+          <fieldset disabled={isIssued} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           <div className="card">
             <div className="form-row">
               {template !== 'commission' && (
@@ -745,17 +773,22 @@ export default function InvoiceEditor() {
               <TextArea id="inv-pay" rows={6} value={paymentInstructions} onChange={touch((e) => setPaymentInstructions(e.target.value))} />
             </Field>
           </div>
+          </fieldset>
 
           <div className="btn-row no-print" style={{ marginBottom: 24 }}>
-            <Button onClick={() => doSave(true)} disabled={saveStatus === 'saving'}>
-              {saveStatus === 'saving' ? 'Saving…' : draftId ? 'Save draft' : 'Create draft'}
-            </Button>
-            <Button variant="secondary" onClick={async () => { if (await doSave(true)) window.print(); }}>
+            {!isIssued && (
+              <Button onClick={() => doSave(true)} disabled={saveStatus === 'saving'}>
+                {saveStatus === 'saving' ? 'Saving…' : draftId ? 'Save draft' : 'Create draft'}
+              </Button>
+            )}
+            <Button variant="secondary" onClick={doPrint}>
               Print / Save PDF
             </Button>
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-              Drafts autosave{invoiceNumber ? ` as invoice #${invoiceNumber}` : ''}.
-            </span>
+            {!isIssued && (
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+                Drafts autosave{invoiceNumber ? ` as invoice #${invoiceNumber}` : ''}.
+              </span>
+            )}
           </div>
         </div>
 
@@ -766,7 +799,7 @@ export default function InvoiceEditor() {
           agentName={agentName} secondAgentName={secondAgentName}
           propertyAddress={propertyAddress}
           salePrice={salePrice} commissionPct={commissionPct}
-          otherChargeDesc={otherChargeDesc} commissionTotals={commissionPreview} />
+          otherChargeDesc={otherChargeDesc} commissionTotals={commissionPreview} invoiceStatus={invoiceStatus} />
       </div>
     </div>
   );
@@ -1000,11 +1033,13 @@ function InvoicePreview({
   commissionPct,
   otherChargeDesc,
   commissionTotals,
+  invoiceStatus,
 }: {
   business: Business;
   customer: Customer | null;
   lines: LineState[];
   totals: ReturnType<typeof previewTotals> | null;
+  invoiceStatus: InvoiceStatus;
   invoiceDate: string;
   invoiceNumber: string | null;
   notes: string;
@@ -1054,7 +1089,7 @@ function InvoicePreview({
             {isCommission ? 'COMMISSION' : 'INVOICE'}
           </div>
           {invoiceNumber && <div style={{ fontSize: 15, fontWeight: 700 }}>#{invoiceNumber}</div>}
-          <span className="badge badge-draft">DRAFT</span>
+          {invoiceStatus === 'draft' && <span className="badge badge-draft">DRAFT</span>}
           <div style={{ fontSize: 13, marginTop: 8 }}>Date: {invoiceDate || '—'}</div>
         </div>
       </div>

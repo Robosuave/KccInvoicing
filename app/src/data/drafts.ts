@@ -258,6 +258,13 @@ export async function deleteDraft(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Mark a draft as issued (final). Idempotent — only transitions from draft. */
+export async function markIssued(id: string): Promise<void> {
+  const sb = requireSupabase();
+  const { error } = await sb.from('invoices').update({ status: 'issued' }).eq('id', id).eq('status', 'draft');
+  if (error) throw error;
+}
+
 /** Live totals preview without touching the database. */
 export function previewTotals(input: DraftInput) {
   return totalsFor(input);

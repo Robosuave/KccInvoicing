@@ -26,7 +26,7 @@ interface BusinessState {
   requestSwitch: (businessId: string) => Promise<boolean>;
   pendingSwitch: string | null;
   resolvePendingSwitch: (choice: 'save' | 'discard' | 'cancel') => void;
-  onSaveDraftRef: React.MutableRefObject<(() => Promise<boolean>) | null>;
+  onSaveDraftRef: React.MutableRefObject<(() => Promise<string | null>) | null>;
 }
 
 const BusinessContext = createContext<BusinessState | null>(null);
@@ -48,7 +48,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
   const dirtyRef = useRef(false);
-  const onSaveDraftRef = useRef<(() => Promise<boolean>) | null>(null);
+  const onSaveDraftRef = useRef<(() => Promise<string | null>) | null>(null);
   const switchResolver = useRef<((v: boolean) => void) | null>(null);
 
   const refresh = useCallback(async () => {
