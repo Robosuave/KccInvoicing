@@ -122,6 +122,11 @@ export default function Invoices() {
                 <tr key={d.id}>
                   <td>
                     <strong>{d.draft_key}</strong>
+                    {d.template === 'commission' && (
+                      <span className="badge" style={{ marginLeft: 8 }}>
+                        Commission
+                      </span>
+                    )}
                     <div style={{ fontSize: 13, color: 'var(--muted)' }}>
                       Updated {new Date(d.updated_at).toLocaleString()}
                     </div>
