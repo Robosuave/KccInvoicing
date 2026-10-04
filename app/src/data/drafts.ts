@@ -1,6 +1,12 @@
 import { requireSupabase } from '../lib/supabase';
-import { calculateInvoiceTotals, multiplyQuantity, type CalcLine } from '../lib/money';
-import type { Invoice, InvoiceLine } from '../db/types';
+import {
+  calculateInvoiceTotals,
+  calculateCommissionTotals,
+  multiplyQuantity,
+  type CalcLine,
+  type CalcResult,
+} from '../lib/money';
+import type { Invoice, InvoiceLine, InvoiceTemplate } from '../db/types';
 
 export interface DraftLineInput {
   id?: string;
@@ -28,10 +34,38 @@ export interface DraftInput {
   notes?: string | null;
   terms?: string | null;
   payment_instructions?: string | null;
+  template?: InvoiceTemplate;
+  sale_price_cents?: number;
+  commission_pct?: string;
+  processing_fee_cents?: number;
+  other_charge_desc?: string | null;
+  other_charge_cents?: number;
+  agent_name?: string | null;
+  second_agent_name?: string | null;
   lines: DraftLineInput[];
 }
 
-function totalsFor(input: DraftInput) {
+function totalsFor(input: DraftInput): CalcResult {
+  if (input.template === 'commission') {
+    const c = calculateCommissionTotals(
+      input.sale_price_cents ?? 0,
+      input.commission_pct ?? '0',
+      input.processing_fee_cents ?? 0,
+      input.other_charge_cents ?? 0,
+    );
+    // Commission invoices have no line items, discounts, tax, or shipping.
+    return {
+      subtotalCents: c.commissionCents,
+      lineDiscountCents: 0,
+      invoiceDiscountCents: 0,
+      discountCents: 0,
+      taxableCents: c.commissionCents,
+      taxByRate: [],
+      taxCents: 0,
+      shippingCents: 0,
+      totalCents: c.totalCents,
+    };
+  }
   const calcLines: CalcLine[] = input.lines.map((l) => ({
     quantity: l.quantity,
     unitPriceCents: l.unit_price_cents,
@@ -43,6 +77,20 @@ function totalsFor(input: DraftInput) {
     invoiceTaxRate: input.invoice_tax_rate,
     shippingCents: input.shipping_cents ?? 0,
   });
+}
+
+/** Columns written for the commission template. */
+function commissionColumns(input: DraftInput) {
+  return {
+    template: input.template ?? 'standard',
+    sale_price_cents: input.sale_price_cents ?? 0,
+    commission_pct: input.commission_pct ?? '0',
+    processing_fee_cents: input.processing_fee_cents ?? 0,
+    other_charge_desc: input.other_charge_desc ?? null,
+    other_charge_cents: input.other_charge_cents ?? 0,
+    agent_name: input.agent_name ?? null,
+    second_agent_name: input.second_agent_name ?? null,
+  };
 }
 
 export async function listDrafts(businessId: string): Promise<Invoice[]> {
@@ -73,7 +121,8 @@ export async function getDraft(id: string): Promise<{ invoice: Invoice; lines: I
 /** Create a draft invoice with its lines and computed totals. */
 export async function createDraft(input: DraftInput): Promise<Invoice> {
   const sb = requireSupabase();
-  if (input.lines.length === 0) throw new Error('Add at least one line item.');
+  const isCommission = input.template === 'commission';
+  if (!isCommission && input.lines.length === 0) throw new Error('Add at least one line item.');
   const t = totalsFor(input);
 
   const { data: invoice, error: iErr } = await sb
@@ -96,10 +145,13 @@ export async function createDraft(input: DraftInput): Promise<Invoice> {
       notes: input.notes ?? null,
       terms: input.terms ?? null,
       payment_instructions: input.payment_instructions ?? null,
+      ...commissionColumns(input),
     })
     .select()
     .single();
   if (iErr) throw iErr;
+
+  if (isCommission) return invoice as Invoice;
 
   const rows = input.lines.map((l, i) => ({
     invoice_id: (invoice as Invoice).id,
@@ -141,7 +193,8 @@ export async function saveDraft(
   if (new Date((current as { updated_at: string }).updated_at) > new Date(expectedUpdatedAt)) {
     throw new Error('This draft was changed in another tab. Reload to merge before saving.');
   }
-  if (input.lines.length === 0) throw new Error('Add at least one line item.');
+  const isCommission = input.template === 'commission';
+  if (!isCommission && input.lines.length === 0) throw new Error('Add at least one line item.');
   const t = totalsFor(input);
 
   const { data: invoice, error: iErr } = await sb
@@ -162,14 +215,17 @@ export async function saveDraft(
       notes: input.notes ?? null,
       terms: input.terms ?? null,
       payment_instructions: input.payment_instructions ?? null,
+      ...commissionColumns(input),
     })
     .eq('id', id)
     .select()
     .single();
   if (iErr) throw iErr;
 
+  // Commission invoices carry no line rows; clear any left from a template switch.
   const { error: dErr } = await sb.from('invoice_lines').delete().eq('invoice_id', id);
   if (dErr) throw dErr;
+  if (isCommission) return invoice as Invoice;
   const rows = input.lines.map((l, i) => ({
     invoice_id: id,
     position: i,
