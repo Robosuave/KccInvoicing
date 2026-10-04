@@ -5,6 +5,7 @@ import { BusinessProvider, useBusiness } from './business/BusinessContext';
 import { APP_NAME } from './lib/config';
 import { Button, Modal } from './components/ui';
 import Login from './pages/Login';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Businesses from './pages/Businesses';
 import Customers from './pages/Customers';
@@ -188,6 +189,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route
             path="/*"
             element={

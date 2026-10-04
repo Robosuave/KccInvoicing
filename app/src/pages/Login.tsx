@@ -8,12 +8,13 @@ import { Alert, Button, Field, SetupRequired, TextField } from '../components/ui
 export default function Login() {
   const { signIn, authError } = useAuth();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetSent, setResetSent] = useState(false);
 
   if (!isBackendConfigured()) {
     return <SetupRequired what="Sign-in" />;
@@ -24,29 +25,53 @@ export default function Login() {
     setBusy(true);
     setError(null);
     try {
-      if (mode === 'signin') {
+      if (mode === 'forgot') {
+        const sb = getSupabase();
+        if (!sb) throw new Error('Backend not configured.');
+        const { error } = await sb.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+        if (error) throw error;
+        setResetSent(true);
+      } else if (mode === 'signin') {
         await signIn(email, password);
+        navigate('/', { replace: true });
       } else {
         const sb = getSupabase();
         if (!sb) throw new Error('Backend not configured.');
         const { error } = await sb.auth.signUp({ email, password });
         if (error) throw error;
         await signIn(email, password);
+        navigate('/', { replace: true });
       }
-      navigate('/', { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign-in failed.');
+      setError(err instanceof Error ? err.message : 'Request failed.');
     } finally {
       setBusy(false);
     }
+  };
+
+  const switchMode = (m: 'signin' | 'signup' | 'forgot') => {
+    setMode(m);
+    setError(null);
+    setResetSent(false);
   };
 
   return (
     <div style={{ maxWidth: 440, margin: '80px auto', padding: '0 16px' }}>
       <div className="card">
         <h1 className="page-title">{APP_NAME}</h1>
-        <p className="page-sub">{mode === 'signin' ? 'Sign in to your invoice desk.' : 'Create your account. Team members: sign up with the email address the invite was sent to.'}</p>
+        <p className="page-sub">
+          {mode === 'signin' && 'Sign in to your invoice desk.'}
+          {mode === 'signup' && 'Create your account. Team members: sign up with the email address the invite was sent to.'}
+          {mode === 'forgot' && 'Enter your account email and we\u2019ll send you a link to reset your password.'}
+        </p>
         {(error || authError) && <Alert kind="error">{error ?? authError}</Alert>}
+        {mode === 'forgot' && resetSent ? (
+          <Alert kind="success">
+            Reset link sent — check your inbox for an email from us, then follow the link to choose a new password.
+          </Alert>
+        ) : (
         <form onSubmit={submit}>
           <Field label="Email" htmlFor="email">
             <TextField
@@ -58,6 +83,7 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
             />
           </Field>
+          {mode !== 'forgot' && (
           <Field label="Password" htmlFor="password">
             <div style={{ position: 'relative' }}>
               <TextField
@@ -80,23 +106,41 @@ export default function Login() {
               </button>
             </div>
           </Field>
+          )}
+          {mode === 'signin' && (
+            <p style={{ marginTop: -8, marginBottom: 16, fontSize: 14, textAlign: 'right' }}>
+              <button className="btn btn-ghost btn-sm" type="button" onClick={() => switchMode('forgot')}>
+                Forgot password?
+              </button>
+            </p>
+          )}
           <Button type="submit" disabled={busy} style={{ width: '100%' }}>
-            {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}
+            {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send reset link'}
           </Button>
         </form>
+        )}
         <p style={{ marginTop: 16, fontSize: 14 }}>
-          {mode === 'signin' ? (
+          {mode === 'signin' && (
             <>
               No account yet?{' '}
-              <button className="btn btn-ghost btn-sm" type="button" onClick={() => setMode('signup')}>
+              <button className="btn btn-ghost btn-sm" type="button" onClick={() => switchMode('signup')}>
                 Create an account
               </button>
             </>
-          ) : (
+          )}
+          {mode === 'signup' && (
             <>
               Already have an account?{' '}
-              <button className="btn btn-ghost btn-sm" type="button" onClick={() => setMode('signin')}>
+              <button className="btn btn-ghost btn-sm" type="button" onClick={() => switchMode('signin')}>
                 Sign in
+              </button>
+            </>
+          )}
+          {mode === 'forgot' && (
+            <>
+              Remembered it?{' '}
+              <button className="btn btn-ghost btn-sm" type="button" onClick={() => switchMode('signin')}>
+                Back to sign in
               </button>
             </>
           )}
