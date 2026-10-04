@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useBusiness } from '../business/BusinessContext';
-import type { Business } from '../db/types';
+import type { Business, InvoiceTemplate } from '../db/types';
 import {
   archiveBusiness,
   createBusiness,
@@ -23,6 +23,7 @@ import {
 const EMPTY: Record<string, string> = {
   display_name: '',
   legal_name: '',
+  header_line: '',
   address_line1: '',
   address_line2: '',
   city: '',
@@ -41,7 +42,7 @@ const EMPTY: Record<string, string> = {
   default_tax_rate: '0',
   default_email_subject: '',
   default_email_message: '',
-  default_template_id: 'classic',
+  default_template: 'standard',
 };
 
 function toForm(b?: Business): Record<string, string> {
@@ -49,6 +50,7 @@ function toForm(b?: Business): Record<string, string> {
   return {
     display_name: b.display_name,
     legal_name: b.legal_name ?? '',
+    header_line: b.header_line ?? '',
     address_line1: b.address_line1 ?? '',
     address_line2: b.address_line2 ?? '',
     city: b.city ?? '',
@@ -67,7 +69,7 @@ function toForm(b?: Business): Record<string, string> {
     default_tax_rate: String(Number(b.default_tax_rate) * 100),
     default_email_subject: b.default_email_subject ?? '',
     default_email_message: b.default_email_message ?? '',
-    default_template_id: b.default_template_id ?? 'classic',
+    default_template: (b as { default_template?: string }).default_template ?? 'standard',
   };
 }
 
@@ -124,6 +126,7 @@ export default function Businesses() {
         workspace_id: workspace.id,
         display_name: form.display_name.trim(),
         legal_name: form.legal_name.trim() || null,
+        header_line: form.header_line.trim() || null,
         address_line1: form.address_line1.trim() || null,
         address_line2: form.address_line2.trim() || null,
         city: form.city.trim() || null,
@@ -142,7 +145,7 @@ export default function Businesses() {
         default_tax_rate: String(Number(form.default_tax_rate || '0') / 100),
         default_email_subject: form.default_email_subject.trim() || null,
         default_email_message: form.default_email_message.trim() || null,
-        default_template_id: form.default_template_id,
+        default_template: (form.default_template === 'commission' ? 'commission' : 'standard') as InvoiceTemplate,
       };
       let business: Business;
       if (editing === 'new') {
@@ -251,6 +254,9 @@ export default function Businesses() {
             <Field label="Legal business name" htmlFor="b-legal">
               <TextField id="b-legal" value={form.legal_name} onChange={set('legal_name')} />
             </Field>
+            <Field label="Header line (under business name on invoices)" htmlFor="b-headerline">
+              <TextField id="b-headerline" value={form.header_line} onChange={set('header_line')} placeholder="Robert Kaleky, Broker" />
+            </Field>
           </div>
           <div className="form-row">
             <Field label="Address line 1" htmlFor="b-a1">
@@ -305,6 +311,12 @@ export default function Businesses() {
             <Field label="Default tax rate %" htmlFor="b-taxrate" hint="e.g. 7 for 7%">
               <TextField id="b-taxrate" inputMode="decimal" value={form.default_tax_rate} onChange={set('default_tax_rate')} />
             </Field>
+            <Field label="Default invoice type" htmlFor="b-template" hint="Pre-selected when creating a new invoice.">
+              <SelectField id="b-template" value={form.default_template} onChange={set('default_template')}>
+                <option value="standard">Standard invoice (line items)</option>
+                <option value="commission">Commission / wire instructions</option>
+              </SelectField>
+            </Field>
           </div>
           <Field label="Default invoice notes" htmlFor="b-notes">
             <TextArea id="b-notes" value={form.invoice_notes} onChange={set('invoice_notes')} />
@@ -319,13 +331,6 @@ export default function Businesses() {
           </div>
           <Field label="Default email message" htmlFor="b-emsg">
             <TextArea id="b-emsg" value={form.default_email_message} onChange={set('default_email_message')} />
-          </Field>
-          <Field label="Default invoice template" htmlFor="b-tpl" hint="Used for new invoices; stored with each invoice at issuance.">
-            <SelectField id="b-tpl" value={form.default_template_id} onChange={set('default_template_id')}>
-              <option value="classic">Classic</option>
-              <option value="modern">Modern</option>
-              <option value="compact">Compact</option>
-            </SelectField>
           </Field>
           <Field
             label="Logo"

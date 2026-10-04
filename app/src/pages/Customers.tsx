@@ -23,6 +23,7 @@ import {
 
 const EMPTY: Record<string, string> = {
   name: '',
+  company: '',
   contact_person: '',
   billing_line1: '',
   billing_line2: '',
@@ -45,6 +46,7 @@ function toForm(c?: Customer): Record<string, string> {
   if (!c) return { ...EMPTY };
   return {
     name: c.name,
+    company: c.company ?? '',
     contact_person: c.contact_person ?? '',
     billing_line1: c.billing_line1 ?? '',
     billing_line2: c.billing_line2 ?? '',
@@ -67,7 +69,7 @@ function toForm(c?: Customer): Record<string, string> {
 const orNull = (v: string) => (v.trim() ? v.trim() : null);
 
 export default function Customers() {
-  const { activeBusiness, businesses, notConfigured, requestSwitch } = useBusiness();
+  const { activeBusiness, businesses, notConfigured, requestSwitch, loading: businessesLoading } = useBusiness();
   const [list, setList] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -78,6 +80,10 @@ export default function Customers() {
   const [saving, setSaving] = useState(false);
   const [copying, setCopying] = useState<Customer | null>(null);
   const [copyTarget, setCopyTarget] = useState('');
+
+  // Dania Realty (commission template) keeps customers minimal: company-led,
+  // no shipping address, payment terms, or tax-exempt flag.
+  const isCommission = activeBusiness?.default_template === 'commission';
 
   const load = async (q: string) => {
     if (!activeBusiness) return;
@@ -104,6 +110,7 @@ export default function Customers() {
   }, [search]);
 
   if (notConfigured) return <SetupRequired what="Customer management" />;
+  if (businessesLoading) return <p>Loading…</p>;
   if (!activeBusiness) return <EmptyState title="No business selected" body="Create a business first." />;
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
@@ -121,8 +128,13 @@ export default function Customers() {
   };
 
   const save = async () => {
-    if (!form.name.trim()) {
-      setFormError('Customer name is required.');
+    // Commission businesses are company-led: the company name stands in for
+    // the customer name so the record stays valid.
+    const effectiveName = isCommission
+      ? form.company.trim() || form.name.trim()
+      : form.name.trim();
+    if (!effectiveName) {
+      setFormError(isCommission ? 'Company name is required.' : 'Customer name is required.');
       return;
     }
     setSaving(true);
@@ -130,7 +142,8 @@ export default function Customers() {
     try {
       const payload = {
         business_id: activeBusiness.id,
-        name: form.name.trim(),
+        name: effectiveName,
+        company: orNull(form.company),
         contact_person: orNull(form.contact_person),
         billing_line1: orNull(form.billing_line1),
         billing_line2: orNull(form.billing_line2),
@@ -221,6 +234,7 @@ export default function Customers() {
                 <tr key={c.id}>
                   <td>
                     <strong>{c.name}</strong>
+                    {c.company && c.company !== c.name && <div>{c.company}</div>}
                     {c.tax_exempt && <div style={{ fontSize: 13, color: 'var(--muted)' }}>Tax-exempt</div>}
                   </td>
                   <td style={{ fontSize: 14 }}>
@@ -258,9 +272,20 @@ export default function Customers() {
       {editing && (
         <Modal title={editing === 'new' ? 'Add customer' : `Edit ${editing.name}`} onClose={() => setEditing(null)}>
           {formError && <Alert kind="error">{formError}</Alert>}
-          <Field label="Customer full name *" htmlFor="c-name">
-            <TextField id="c-name" value={form.name} onChange={set('name')} required />
-          </Field>
+          {isCommission ? (
+            <Field label="Company name *" htmlFor="c-company">
+              <TextField id="c-company" value={form.company} onChange={set('company')} autoComplete="organization" required />
+            </Field>
+          ) : (
+            <>
+              <Field label="Customer full name *" htmlFor="c-name">
+                <TextField id="c-name" value={form.name} onChange={set('name')} required />
+              </Field>
+              <Field label="Company name" htmlFor="c-company">
+                <TextField id="c-company" value={form.company} onChange={set('company')} autoComplete="organization" />
+              </Field>
+            </>
+          )}
           <div className="form-row">
             <Field label="Contact person" htmlFor="c-contact">
               <TextField id="c-contact" value={form.contact_person} onChange={set('contact_person')} />
@@ -292,37 +317,41 @@ export default function Customers() {
               <TextField id="c-bz" value={form.billing_zip} onChange={set('billing_zip')} />
             </Field>
           </div>
-          <h3 style={{ margin: '8px 0' }}>Shipping / service address (optional)</h3>
-          <div className="form-row">
-            <Field label="Street" htmlFor="c-s1">
-              <TextField id="c-s1" value={form.shipping_line1} onChange={set('shipping_line1')} />
-            </Field>
-            <Field label="Street (line 2)" htmlFor="c-s2">
-              <TextField id="c-s2" value={form.shipping_line2} onChange={set('shipping_line2')} />
-            </Field>
-          </div>
-          <div className="form-row">
-            <Field label="City" htmlFor="c-sc">
-              <TextField id="c-sc" value={form.shipping_city} onChange={set('shipping_city')} />
-            </Field>
-            <Field label="State" htmlFor="c-ss">
-              <TextField id="c-ss" value={form.shipping_state} onChange={set('shipping_state')} />
-            </Field>
-            <Field label="ZIP" htmlFor="c-sz">
-              <TextField id="c-sz" value={form.shipping_zip} onChange={set('shipping_zip')} />
-            </Field>
-          </div>
-          <div className="form-row">
-            <Field label="Default payment terms" htmlFor="c-terms">
-              <TextField id="c-terms" value={form.default_payment_terms} onChange={set('default_payment_terms')} />
-            </Field>
-            <Field label="Tax-exempt" htmlFor="c-te">
-              <SelectField id="c-te" value={form.tax_exempt} onChange={set('tax_exempt')}>
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </SelectField>
-            </Field>
-          </div>
+          {!isCommission && (
+            <>
+              <h3 style={{ margin: '8px 0' }}>Shipping / service address (optional)</h3>
+              <div className="form-row">
+                <Field label="Street" htmlFor="c-s1">
+                  <TextField id="c-s1" value={form.shipping_line1} onChange={set('shipping_line1')} />
+                </Field>
+                <Field label="Street (line 2)" htmlFor="c-s2">
+                  <TextField id="c-s2" value={form.shipping_line2} onChange={set('shipping_line2')} />
+                </Field>
+              </div>
+              <div className="form-row">
+                <Field label="City" htmlFor="c-sc">
+                  <TextField id="c-sc" value={form.shipping_city} onChange={set('shipping_city')} />
+                </Field>
+                <Field label="State" htmlFor="c-ss">
+                  <TextField id="c-ss" value={form.shipping_state} onChange={set('shipping_state')} />
+                </Field>
+                <Field label="ZIP" htmlFor="c-sz">
+                  <TextField id="c-sz" value={form.shipping_zip} onChange={set('shipping_zip')} />
+                </Field>
+              </div>
+              <div className="form-row">
+                <Field label="Default payment terms" htmlFor="c-terms">
+                  <TextField id="c-terms" value={form.default_payment_terms} onChange={set('default_payment_terms')} />
+                </Field>
+                <Field label="Tax-exempt" htmlFor="c-te">
+                  <SelectField id="c-te" value={form.tax_exempt} onChange={set('tax_exempt')}>
+                    <option value="no">No</option>
+                    <option value="yes">Yes</option>
+                  </SelectField>
+                </Field>
+              </div>
+            </>
+          )}
           <Field label="Customer notes" htmlFor="c-notes" hint="Internal notes. Never printed on invoices.">
             <TextArea id="c-notes" value={form.notes} onChange={set('notes')} />
           </Field>
