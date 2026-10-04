@@ -1,20 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
-import type { Business, Customer, Item } from '../db/types';
-import { createDraft, getDraft, previewTotals, saveDraft, type DraftInput } from '../data/drafts';
-import { issueInvoice, previewNextNumber } from '../data/issuance';
-import { renderInvoicePdfBlob, storeIssuedPdf } from '../pdf/service';
-import { TEMPLATES, isTemplateId, type TemplateId } from '../templates/templates';
+import type { Business, Customer, Invoice, Item, InvoiceTemplate, InvoiceStatus } from '../db/types';
+import { createDraft, getDraft, previewTotals, saveDraft, markIssued, type DraftInput } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listItems } from '../data/items';
-import { centsToDollars, dollarsToCents, multiplyQuantity } from '../lib/money';
+import { centsToDollars, dollarsToCents, multiplyQuantity, percentOf, pctToRate as strictPctToRate } from '../lib/money';
+import { getLogoUrl } from '../data/businesses';
+
+/** Extract a human-readable message from anything thrown — Supabase/PostgREST
+ *  errors are plain objects ({message, details, hint, code}), not Error instances. */
+function formatSaveError(e: unknown): string {
+  if (e instanceof Error && e.message) return e.message;
+  if (e && typeof e === 'object') {
+    const o = e as Record<string, unknown>;
+    const msg = [o.message, o.details, o.hint].filter(
+      (v): v is string => typeof v === 'string' && v.length > 0,
+    );
+    if (msg.length > 0) {
+      const code = typeof o.code === 'string' && o.code ? ` [${o.code}]` : '';
+      return msg.join(' — ') + code;
+    }
+  }
+  if (typeof e === 'string' && e) return e;
+  return 'Save failed.';
+}
 import {
   Alert,
   Button,
   EmptyState,
   Field,
-  Modal,
   SaveStatusIndicator,
   SelectField,
   SetupRequired,
@@ -58,14 +73,44 @@ function money(n: number): string {
   return `$${centsToDollars(n)}`;
 }
 
+/** Integer cents -> "15000.00" (no thousands separators — safe to parse back). */
+function plainDollars(cents: number): string {
+  const sign = cents < 0 ? '-' : '';
+  const abs = Math.abs(Math.round(cents));
+  return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`;
+}
+
+/** Parse a money field without throwing: null means empty or not a valid number. */
+function tryCents(v: string): number | null {
+  const t = v.trim();
+  if (!t) return null;
+  try {
+    return dollarsToCents(t);
+  } catch {
+    return null;
+  }
+}
+
+/** Per-row commission preview. A null amount means that row can't be calculated
+ *  (field empty or invalid); badFields names the fields with invalid input. */
+interface CommissionPreviewData {
+  commissionCents: number | null;
+  processingFeeCents: number | null;
+  otherChargeCents: number | null;
+  totalCents: number | null;
+  badFields: string[];
+}
+
 export default function InvoiceEditor() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { activeBusiness, workspace, notConfigured, setEditorDirty, onSaveDraftRef } = useBusiness();
+  const { activeBusiness, notConfigured, setEditorDirty, onSaveDraftRef, loading: businessesLoading } = useBusiness();
   const isNew = !id || id === 'new';
 
   const [draftId, setDraftId] = useState<string | null>(isNew ? null : (id as string));
+  const [invoiceStatus, setInvoiceStatus] = useState<InvoiceStatus>('draft');
+  const isIssued = invoiceStatus !== 'draft';
   const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<string>(new Date(0).toISOString());
   const [loading, setLoading] = useState(!isNew);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -75,10 +120,7 @@ export default function InvoiceEditor() {
 
   const [customerId, setCustomerId] = useState('');
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [dueDate, setDueDate] = useState('');
-  const [poNumber, setPoNumber] = useState('');
-  const [serviceDate, setServiceDate] = useState('');
-  const [servicePeriod, setServicePeriod] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
   const [lines, setLines] = useState<LineState[]>([newLine()]);
   const [discountMode, setDiscountMode] = useState<DiscountMode>('none');
   const [invoiceDiscountPct, setInvoiceDiscountPct] = useState('');
@@ -87,15 +129,44 @@ export default function InvoiceEditor() {
   const [shipping, setShipping] = useState('');
   const [notes, setNotes] = useState('');
   const [terms, setTerms] = useState('');
-  const [paymentInstructions, setPaymentInstructions] = useState('');
+  /* The full invoice record as loaded (for the issued payment-instructions snapshot). */
+  const [loadedInvoice, setLoadedInvoice] = useState<Invoice | null>(null);
+
+  /* commission template (Dania Realty) */
+  const [template, setTemplate] = useState<InvoiceTemplate>('standard');
+  const templateTouched = useRef(false);
+  const [salePrice, setSalePrice] = useState('');
+  const [commissionPct, setCommissionPct] = useState('');
+  const [commissionAmt, setCommissionAmt] = useState('');
+  /* true once the user types a $ directly — % or sale-price changes clear it and resume auto-fill */
+  const commissionAmtManual = useRef(false);
+  const [processingFee, setProcessingFee] = useState('295.00');
+  const [otherChargeDesc, setOtherChargeDesc] = useState('');
+  const [otherCharge, setOtherCharge] = useState('');
+  const [agentName, setAgentName] = useState('');
+  const [secondAgentName, setSecondAgentName] = useState('');
+  const [propertyAddress, setPropertyAddress] = useState('');
 
   const [dirty, setDirty] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [saveMessage, setSaveMessage] = useState<string | undefined>();
   const [errors, setErrors] = useState<string[]>([]);
-  const [issueOpen, setIssueOpen] = useState(false);
-  const [issueBusy, setIssueBusy] = useState(false);
-  const [templateId, setTemplateId] = useState<TemplateId>('classic');
+  const [showPreview, setShowPreview] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  // Business logo for the invoice header (signed URL, refreshed when the business changes).
+  useEffect(() => {
+    let cancelled = false;
+    setLogoUrl(null);
+    const path = activeBusiness?.logo_path;
+    if (!path) return;
+    getLogoUrl(path).then((url) => {
+      if (!cancelled) setLogoUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBusiness?.id, activeBusiness?.logo_path]);
   const dirtyRef = useRef(false);
   const stateRef = useRef({});
 
@@ -127,19 +198,13 @@ export default function InvoiceEditor() {
           setLoadError('This draft belongs to a different business.');
           return;
         }
-        if (invoice.status !== 'draft') {
-          // Issued/void invoices open read-only — never in the editor.
-          navigate(`/invoices/${id}/view`, { replace: true });
-          return;
-        }
         setDraftId(invoice.id);
+        setLoadedInvoice(invoice);
+        setInvoiceStatus(invoice.status);
         setExpectedUpdatedAt(invoice.updated_at);
         setCustomerId(invoice.customer_id ?? '');
         setInvoiceDate(invoice.invoice_date);
-        setDueDate(invoice.due_date ?? '');
-        setPoNumber(invoice.po_number ?? '');
-        setServiceDate(invoice.service_date ?? '');
-        setServicePeriod(invoice.service_period ?? '');
+        setInvoiceNumber(invoice.invoice_number ?? null);
         setLines(
           dbLines.map((l) => ({
             key: l.id,
@@ -154,7 +219,17 @@ export default function InvoiceEditor() {
         );
         setNotes(invoice.notes ?? '');
         setTerms(invoice.terms ?? '');
-        setPaymentInstructions(invoice.payment_instructions ?? '');
+        setTemplate(invoice.template ?? 'standard');
+        setSalePrice(invoice.sale_price_cents ? centsToDollars(invoice.sale_price_cents) : '');
+        setCommissionPct(invoice.commission_pct && Number(invoice.commission_pct) !== 0 ? String(Number(invoice.commission_pct)) : '');
+        setCommissionAmt(invoice.commission_amount_cents ? plainDollars(invoice.commission_amount_cents) : '');
+        commissionAmtManual.current = !!invoice.commission_amount_cents;
+        setPropertyAddress(invoice.property_address ?? '');
+        setProcessingFee(centsToDollars(invoice.processing_fee_cents));
+        setOtherChargeDesc(invoice.other_charge_desc ?? '');
+        setOtherCharge(invoice.other_charge_cents ? centsToDollars(invoice.other_charge_cents) : '');
+        setAgentName(invoice.agent_name ?? '');
+        setSecondAgentName(invoice.second_agent_name ?? '');
         // discount mode is not stored in phase 1; default to none
       })
       .catch((e) => setLoadError(e instanceof Error ? e.message : 'Failed to load draft.'))
@@ -165,15 +240,29 @@ export default function InvoiceEditor() {
   /* defaults for a new draft */
   useEffect(() => {
     if (!isNew || !activeBusiness) return;
+    // A business switch is a new context: re-apply that business's default template.
+    templateTouched.current = false;
+    setTemplate(activeBusiness.default_template === 'commission' ? 'commission' : 'standard');
     setNotes((v) => v || activeBusiness.invoice_notes || '');
     setTerms((v) => v || activeBusiness.payment_terms || '');
-    setPaymentInstructions((v) => v || activeBusiness.payment_instructions || '');
     setInvoiceTaxPct((v) => v || (Number(activeBusiness.default_tax_rate) > 0 ? rateToPct(activeBusiness.default_tax_rate) : ''));
-    if (isTemplateId(activeBusiness.default_template_id)) setTemplateId(activeBusiness.default_template_id);
     const pre = searchParams.get('customer');
     if (pre) setCustomerId(pre);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNew, activeBusiness?.id]);
+
+  /* auto-fill the commission $ box from % x sale price, until the user types a $ */
+  useEffect(() => {
+    if (template !== 'commission' || commissionAmtManual.current) return;
+    try {
+      const price = salePrice.trim();
+      const pct = commissionPct.trim();
+      if (!price || !pct) return;
+      setCommissionAmt(plainDollars(percentOf(dollarsToCents(price), pctToRate(pct))));
+    } catch {
+      /* leave the $ box alone while inputs are incomplete or invalid */
+    }
+  }, [template, salePrice, commissionPct]);
 
   /* customer default terms */
   useEffect(() => {
@@ -183,26 +272,41 @@ export default function InvoiceEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId]);
 
+  /* Payment / wire instructions are owner-controlled (migration 0016) and
+     read-only here. Issued invoices show the snapshot frozen at issue time;
+     drafts show the business's current default. */
+  const displayPaymentInstructions =
+    loadedInvoice?.payment_instructions_snapshot ??
+    loadedInvoice?.payment_instructions ??
+    activeBusiness?.payment_instructions ??
+    '';
+
   /* ---------- draft input + validation ---------- */
 
   const toDraftInput = useCallback((): DraftInput => {
     if (!activeBusiness) throw new Error('No business selected.');
+    const isCommission = template === 'commission';
     return {
       business_id: activeBusiness.id,
-      customer_id: customerId || null,
+      customer_id: isCommission ? null : customerId || null,
       invoice_date: invoiceDate,
-      due_date: dueDate || null,
-      po_number: poNumber || null,
-      service_date: serviceDate || null,
-      service_period: servicePeriod || null,
       currency: 'USD',
+      template,
+      sale_price_cents: isCommission && salePrice.trim() ? dollarsToCents(salePrice.trim()) : 0,
+      commission_pct: isCommission && commissionPct.trim() ? commissionPct.trim() : '0',
+      commission_amount_cents: isCommission && commissionAmt.trim() ? dollarsToCents(commissionAmt.trim()) : null,
+      processing_fee_cents: isCommission && processingFee.trim() ? dollarsToCents(processingFee.trim()) : 0,
+      other_charge_desc: isCommission && otherChargeDesc.trim() ? otherChargeDesc.trim() : null,
+      other_charge_cents: isCommission && otherCharge.trim() ? dollarsToCents(otherCharge.trim()) : 0,
+      agent_name: isCommission && agentName.trim() ? agentName.trim() : null,
+      second_agent_name: isCommission && secondAgentName.trim() ? secondAgentName.trim() : null,
+      property_address: isCommission && propertyAddress.trim() ? propertyAddress.trim() : null,
       invoice_discount_rate: discountMode === 'invoice' && invoiceDiscountPct.trim() ? pctToRate(invoiceDiscountPct) : undefined,
       invoice_tax_rate: useTax && invoiceTaxPct.trim() ? pctToRate(invoiceTaxPct) : undefined,
       shipping_cents: shipping.trim() ? dollarsToCents(shipping.trim()) : 0,
       notes: notes || null,
       terms: terms || null,
-      payment_instructions: paymentInstructions || null,
-      lines: lines.map((l) => ({
+      lines: isCommission ? [] : lines.map((l) => ({
         item_id: l.itemId,
         description: l.description.trim(),
         quantity: l.quantity.trim() || '1',
@@ -212,12 +316,48 @@ export default function InvoiceEditor() {
         tax_rate: l.taxRate.trim() ? pctToRate(l.taxRate) : undefined,
       })),
     };
-  }, [activeBusiness, customerId, invoiceDate, dueDate, poNumber, serviceDate, servicePeriod, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, paymentInstructions]);
+  }, [activeBusiness, customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, template, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge, agentName, secondAgentName, propertyAddress]);
 
   const validate = useCallback((): string[] => {
     const errs: string[] = [];
-    if (!customerId) errs.push('Choose a customer.');
+    if (template !== 'commission' && !customerId) errs.push('Choose a customer.');
     if (!invoiceDate) errs.push('Invoice date is required.');
+    if (template === 'commission') {
+      const amt = (label: string, v: string, opts?: { required?: boolean; positive?: boolean }) => {
+        const t = v.trim();
+        if (!t) {
+          if (opts?.required) errs.push(`${label} is required.`);
+          return;
+        }
+        try {
+          const c = dollarsToCents(t);
+          if (opts?.positive && c <= 0) errs.push(`${label} must be greater than zero.`);
+        } catch {
+          errs.push(`${label} must be a valid amount.`);
+        }
+      };
+      amt('Sale price', salePrice, { required: true, positive: true });
+      const pctT = commissionPct.trim();
+      if (pctT && (!/^\d+(\.\d+)?$/.test(pctT) || Number(pctT) < 0)) {
+        errs.push('Commission % must be a valid percent.');
+      }
+      amt('Commission amount', commissionAmt);
+      if (!pctT && !commissionAmt.trim()) {
+        errs.push('Enter a commission % or a commission amount.');
+      }
+      if (!propertyAddress.trim()) errs.push('Property address is required.');
+      if (!agentName.trim()) errs.push('Agent name is required.');
+      amt('Processing fee', processingFee);
+      amt('Other charge', otherCharge);
+      if (otherCharge.trim() && !otherChargeDesc.trim()) errs.push('Other charge needs a description.');
+      try {
+        toDraftInput();
+        previewTotals(toDraftInput());
+      } catch (e) {
+        errs.push(e instanceof Error ? e.message : 'Totals could not be calculated.');
+      }
+      return errs;
+    }
     const nonEmpty = lines.filter((l) => l.description.trim() || l.unitPrice.trim());
     if (nonEmpty.length === 0) errs.push('Add at least one line item.');
     lines.forEach((l, i) => {
@@ -256,7 +396,7 @@ export default function InvoiceEditor() {
       errs.push(e instanceof Error ? e.message : 'Totals could not be calculated.');
     }
     return errs;
-  }, [customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, toDraftInput]);
+  }, [customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, toDraftInput, template, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge]);
 
   const totals = useMemo(() => {
     try {
@@ -266,14 +406,68 @@ export default function InvoiceEditor() {
     }
   }, [toDraftInput]);
 
+  const commissionPreview = useMemo((): CommissionPreviewData | null => {
+    if (template !== 'commission') return null;
+    const badFields: string[] = [];
+
+    // One bad field must never blank the whole table: compute each row on its own.
+    const saleCents = tryCents(salePrice);
+    if (salePrice.trim() !== '' && saleCents === null) badFields.push('Sale price');
+
+    const pctStr = commissionPct.trim();
+    let pctValid = true;
+    if (pctStr !== '') {
+      try {
+        strictPctToRate(pctStr);
+      } catch {
+        pctValid = false;
+        badFields.push('Commission %');
+      }
+    }
+
+    // Commission $: a typed amount wins; otherwise derive from sale price x %.
+    let commissionCents: number | null = null;
+    const overrideCents = tryCents(commissionAmt);
+    if (commissionAmt.trim() !== '') {
+      if (overrideCents === null) badFields.push('Commission amount');
+      else commissionCents = overrideCents;
+    } else if (saleCents !== null && pctStr !== '' && pctValid) {
+      try {
+        commissionCents = percentOf(saleCents, pctToRate(pctStr));
+      } catch {
+        commissionCents = null;
+      }
+    }
+
+    const feeCents = processingFee.trim() === '' ? 0 : tryCents(processingFee);
+    if (feeCents === null) badFields.push('Processing fee');
+
+    const otherCents = otherCharge.trim() === '' ? 0 : tryCents(otherCharge);
+    if (otherCents === null) badFields.push('Other charge');
+
+    const totalCents =
+      commissionCents !== null && feeCents !== null && otherCents !== null
+        ? commissionCents + feeCents + otherCents
+        : null;
+
+    return { commissionCents, processingFeeCents: feeCents, otherChargeCents: otherCents, totalCents, badFields };
+  }, [template, salePrice, commissionPct, commissionAmt, processingFee, otherCharge]);
+
   /* ---------- save ---------- */
 
   const doSave = useCallback(
-    async (manual: boolean): Promise<boolean> => {
+    async (manual: boolean): Promise<string | null> => {
+      if (isIssued) return null; // finalized invoices are read-only
       const errs = validate();
       if (errs.length > 0) {
-        if (manual) setErrors(errs);
-        return false;
+        if (manual) {
+          setErrors(errs);
+          // The user is often scrolled down at the preview — bring the errors into view.
+          requestAnimationFrame(() => {
+            document.getElementById('invoice-errors')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
+        }
+        return null;
       }
       setErrors([]);
       setSaveStatus('saving');
@@ -282,29 +476,50 @@ export default function InvoiceEditor() {
         const input = toDraftInput();
         // strip fully-empty rows
         input.lines = input.lines.filter((l) => l.description.trim() || l.unit_price_cents > 0);
+        let savedId: string;
         if (draftId) {
           const updated = await saveDraft(draftId, input, expectedUpdatedAt);
           setExpectedUpdatedAt(updated.updated_at);
+          setInvoiceNumber(updated.invoice_number ?? null);
+          savedId = draftId;
         } else {
           const created = await createDraft(input);
           setDraftId(created.id);
           setExpectedUpdatedAt(created.updated_at);
+          setInvoiceNumber(created.invoice_number ?? null);
           navigate(`/invoices/${created.id}`, { replace: true });
+          savedId = created.id;
         }
         dirtyRef.current = false;
         setDirty(false);
         setEditorDirty(false);
         setSaveStatus('saved');
-        return true;
+        return savedId;
       } catch (e) {
         setSaveStatus('failed');
-        setSaveMessage(e instanceof Error ? e.message : 'Save failed.');
-        if (manual) setErrors([e instanceof Error ? e.message : 'Save failed.']);
-        return false;
+        setSaveMessage(formatSaveError(e));
+        if (manual) setErrors([formatSaveError(e)]);
+        return null;
       }
     },
-    [validate, toDraftInput, draftId, expectedUpdatedAt, navigate, setEditorDirty],
+    [validate, toDraftInput, draftId, expectedUpdatedAt, navigate, setEditorDirty, isIssued],
   );
+
+  /** Print / Save PDF. Finalizes the invoice (draft -> issued) on first print. */
+  const doPrint = useCallback(async () => {
+    if (!isIssued) {
+      const printId = await doSave(true);
+      if (!printId) return;
+      try {
+        await markIssued(printId);
+      } catch (e) {
+        setErrors([e instanceof Error ? e.message : 'Could not finalize the invoice.']);
+        return;
+      }
+      setInvoiceStatus('issued');
+    }
+    window.print();
+  }, [isIssued, doSave]);
 
   // autosave
   useEffect(() => {
@@ -322,38 +537,6 @@ export default function InvoiceEditor() {
       onSaveDraftRef.current = null;
     };
   }, [doSave, onSaveDraftRef]);
-
-  /** Issue the draft: save, assign the number atomically, snapshot, store the PDF. */
-  const doIssue = useCallback(async (): Promise<void> => {
-    if (!draftId || !workspace || !activeBusiness) return;
-    setIssueBusy(true);
-    try {
-      const saved = await doSave(true);
-      if (!saved) {
-        setIssueBusy(false);
-        setIssueOpen(false);
-        return;
-      }
-      const { snapshot } = await issueInvoice(draftId, templateId);
-      // Generate and privately store the issued PDF. A failure here does not
-      // un-issue the invoice — the detail page offers a retry.
-      try {
-        const blob = await renderInvoicePdfBlob(snapshot, templateId);
-        await storeIssuedPdf(workspace.id, activeBusiness.id, draftId, blob);
-      } catch (e) {
-        console.error('Issued PDF could not be stored:', e);
-      }
-      dirtyRef.current = false;
-      setDirty(false);
-      setEditorDirty(false);
-      navigate(`/invoices/${draftId}/view`);
-    } catch (e) {
-      setErrors([e instanceof Error ? e.message : 'Issuing failed.']);
-      setIssueOpen(false);
-    } finally {
-      setIssueBusy(false);
-    }
-  }, [draftId, workspace, activeBusiness, doSave, templateId, navigate, setEditorDirty]);
 
   // warn before leaving with unsaved changes
   useEffect(() => {
@@ -432,67 +615,159 @@ export default function InvoiceEditor() {
   /* ---------- render ---------- */
 
   if (notConfigured) return <SetupRequired what="The invoice editor" />;
+  if (businessesLoading) return <p>Loading…</p>;
   if (!activeBusiness) return <EmptyState title="No business selected" body="Create a business first." />;
   if (loading) return <p>Loading draft…</p>;
   if (loadError) return <Alert kind="error">{loadError}</Alert>;
 
   const customer = customers.find((c) => c.id === customerId) ?? null;
 
+  const previewEl = (
+    <InvoicePreview business={activeBusiness} customer={customer} lines={lines} totals={totals}
+      invoiceDate={invoiceDate} invoiceNumber={invoiceNumber}
+      notes={notes} terms={terms} paymentInstructions={displayPaymentInstructions}
+      discountMode={discountMode} template={template}
+      agentName={agentName} secondAgentName={secondAgentName}
+      propertyAddress={propertyAddress}
+      salePrice={salePrice} commissionPct={commissionPct}
+      otherChargeDesc={otherChargeDesc} commissionTotals={commissionPreview} invoiceStatus={invoiceStatus}
+      logoUrl={logoUrl} />
+  );
+
   return (
     <div>
       <div className="btn-row no-print" style={{ marginBottom: 16, justifyContent: 'space-between' }}>
         <h1 className="page-title" style={{ margin: 0 }}>
-          {isNew && !draftId ? 'New invoice' : 'Edit draft'} — {activeBusiness.display_name}
+          {isNew && !draftId ? 'New invoice' : isIssued ? 'Invoice' : 'Edit draft'} — {activeBusiness.display_name}
         </h1>
         <SaveStatusIndicator status={saveStatus} message={saveMessage} />
       </div>
 
       {errors.length > 0 && (
-        <Alert kind="error">
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {errors.map((e, i) => (
-              <li key={i}>{e}</li>
-            ))}
-          </ul>
-        </Alert>
+        <div id="invoice-errors">
+          <Alert kind="error">
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {errors.map((e, i) => (
+                <li key={i}>{e}</li>
+              ))}
+            </ul>
+          </Alert>
+        </div>
+      )}
+
+      {isIssued && (
+        <Alert kind="info">This invoice is finalized. It can be reprinted, but not edited.</Alert>
       )}
 
       <div className="editor-layout">
-        <div>
+        <div className="no-print">
+          <fieldset disabled={isIssued} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           <div className="card">
             <div className="form-row">
-              <Field label="Customer *" htmlFor="inv-cust">
-                <SelectField id="inv-cust" value={customerId} onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => setCustomerId(e.target.value))}>
-                  <option value="">Choose a customer…</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </SelectField>
-              </Field>
+              {template !== 'commission' && (
+                <Field label="Customer *" htmlFor="inv-cust">
+                  <SelectField id="inv-cust" value={customerId} onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => setCustomerId(e.target.value))}>
+                    <option value="">Choose a customer…</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </SelectField>
+                </Field>
+              )}
               <Field label="Invoice date *" htmlFor="inv-date">
                 <TextField id="inv-date" type="date" value={invoiceDate} onChange={touch((e) => setInvoiceDate(e.target.value))} />
-              </Field>
-              <Field label="Due date" htmlFor="inv-due">
-                <TextField id="inv-due" type="date" value={dueDate} onChange={touch((e) => setDueDate(e.target.value))} />
-              </Field>
-            </div>
-            <div className="form-row">
-              <Field label="P.O. / reference #" htmlFor="inv-po">
-                <TextField id="inv-po" value={poNumber} onChange={touch((e) => setPoNumber(e.target.value))} />
-              </Field>
-              <Field label="Service date" htmlFor="inv-sd">
-                <TextField id="inv-sd" type="date" value={serviceDate} onChange={touch((e) => setServiceDate(e.target.value))} />
-              </Field>
-              <Field label="Service period" htmlFor="inv-sp" hint="e.g. October 2026">
-                <TextField id="inv-sp" value={servicePeriod} onChange={touch((e) => setServicePeriod(e.target.value))} />
               </Field>
             </div>
           </div>
 
           <div className="card">
-            <h2 style={{ marginTop: 0 }}>Line items</h2>
+            <Field label="Invoice type" htmlFor="inv-template" hint="Standard = line-item invoice. Commission = Dania Realty commission / wire instruction form.">
+              <SelectField
+                id="inv-template"
+                value={template}
+                onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => {
+                  templateTouched.current = true;
+                  setTemplate(e.target.value as InvoiceTemplate);
+                })}
+              >
+                <option value="standard">Standard invoice (line items)</option>
+                <option value="commission">Commission / wire instructions</option>
+              </SelectField>
+            </Field>
+          </div>
+
+          {template === 'commission' ? (
+            <div className="card">
+              <h2 style={{ marginTop: 0 }}>Commission &amp; fees</h2>
+              <Field label="Property address *" htmlFor="com-prop" hint="From the HUD / closing statement">
+                <TextField id="com-prop" value={propertyAddress} onChange={touch((e) => setPropertyAddress(e.target.value))} placeholder="123 Main St, Hollywood, FL 33021" />
+              </Field>
+              <div className="form-row">
+                <Field label="Agent name *" htmlFor="com-agent">
+                  <TextField id="com-agent" value={agentName} onChange={touch((e) => setAgentName(e.target.value))} placeholder="Listing / selling agent" />
+                </Field>
+                <Field label="Second sales person" htmlFor="com-agent2" hint="If applicable">
+                  <TextField id="com-agent2" value={secondAgentName} onChange={touch((e) => setSecondAgentName(e.target.value))} />
+                </Field>
+              </div>
+              <div className="form-row">
+                <Field label="Sale price $ *" htmlFor="com-sale">
+                  <TextField id="com-sale" inputMode="decimal" value={salePrice} onChange={touch((e) => { commissionAmtManual.current = false; setSalePrice(e.target.value); })} placeholder="0.00" />
+                </Field>
+                <Field label="Real estate commission %" htmlFor="com-pct" hint="e.g. 3 for 3%">
+                  <TextField id="com-pct" inputMode="decimal" value={commissionPct} onChange={touch((e) => { commissionAmtManual.current = false; setCommissionPct(e.target.value); })} />
+                </Field>
+              </div>
+              <div className="form-row">
+                <Field label="Commission amount $ *" htmlFor="com-amt" hint="Auto-filled from % — edit to override">
+                  <TextField id="com-amt" inputMode="decimal" value={commissionAmt} onChange={touch((e) => { commissionAmtManual.current = true; setCommissionAmt(e.target.value); })} placeholder="0.00" />
+                </Field>
+                <Field label="Processing fee $" htmlFor="com-fee">
+                  <TextField id="com-fee" inputMode="decimal" value={processingFee} onChange={touch((e) => setProcessingFee(e.target.value))} placeholder="295.00" />
+                </Field>
+              </div>
+              <div className="form-row">
+                <Field label="Other charge $" htmlFor="com-other">
+                  <TextField id="com-other" inputMode="decimal" value={otherCharge} onChange={touch((e) => setOtherCharge(e.target.value))} placeholder="0.00" />
+                </Field>
+                <Field label="Other charge description" htmlFor="com-otherdesc">
+                  <TextField id="com-otherdesc" value={otherChargeDesc} onChange={touch((e) => setOtherChargeDesc(e.target.value))} placeholder="What the other charge is for" />
+                </Field>
+              </div>
+              {commissionPreview && (
+                <div className="totals-box" aria-live="polite">
+                  <div className="totals-row">
+                    <span>Commission{commissionPct.trim() !== '' ? ` (${commissionPct.trim()}%)` : ''}</span>
+                    <span>{commissionPreview.commissionCents !== null ? money(commissionPreview.commissionCents) : '—'}</span>
+                  </div>
+                  <div className="totals-row">
+                    <span>Processing fee</span>
+                    <span>{commissionPreview.processingFeeCents !== null ? money(commissionPreview.processingFeeCents) : '—'}</span>
+                  </div>
+                  {(commissionPreview.otherChargeCents ?? 0) > 0 && (
+                    <div className="totals-row">
+                      <span>Other charge{otherChargeDesc.trim() !== '' ? ` — ${otherChargeDesc.trim()}` : ''}</span>
+                      <span>{money(commissionPreview.otherChargeCents ?? 0)}</span>
+                    </div>
+                  )}
+                  <div className="totals-row grand">
+                    <span>Total due</span>
+                    <span>{commissionPreview.totalCents !== null ? money(commissionPreview.totalCents) : '—'}</span>
+                  </div>
+                  {commissionPreview.badFields.length > 0 && (
+                    <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>
+                      Check {commissionPreview.badFields.join(', ')} — not a valid amount.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="card">
+                <h2 style={{ marginTop: 0 }}>Line items</h2>
             {lines.map((l, i) => (
               <div className="line-item" key={l.key}>
                 <div className="line-item-head">
@@ -599,74 +874,89 @@ export default function InvoiceEditor() {
               </div>
             )}
           </div>
+            </>
+          )}
 
           <div className="card">
             <h2 style={{ marginTop: 0 }}>Notes &amp; payment</h2>
             <Field label="Notes / comments" htmlFor="inv-notes">
               <TextArea id="inv-notes" value={notes} onChange={touch((e) => setNotes(e.target.value))} />
             </Field>
-            <Field label="Terms" htmlFor="inv-terms">
-              <TextField id="inv-terms" value={terms} onChange={touch((e) => setTerms(e.target.value))} />
-            </Field>
-            <Field label="Payment instructions" htmlFor="inv-pay">
-              <TextArea id="inv-pay" value={paymentInstructions} onChange={touch((e) => setPaymentInstructions(e.target.value))} />
+            {template !== 'commission' && (
+              <Field label="Terms" htmlFor="inv-terms">
+                <TextField id="inv-terms" value={terms} onChange={touch((e) => setTerms(e.target.value))} />
+              </Field>
+            )}
+            <Field
+              label={template === 'commission' ? 'Wire instructions' : 'Payment instructions'}
+              htmlFor="inv-pay"
+              hint="Set by the business owner under Businesses > Edit business. Read-only here."
+            >
+              <div
+                id="inv-pay"
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  padding: '10px 12px',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  background: 'var(--surface-muted, #f6f8fb)',
+                  minHeight: 44,
+                }}
+              >
+                {displayPaymentInstructions || <span style={{ color: 'var(--muted)' }}>None set for this business.</span>}
+              </div>
             </Field>
           </div>
+          </fieldset>
 
           <div className="btn-row no-print" style={{ marginBottom: 24 }}>
-            <Button onClick={() => doSave(true)} disabled={saveStatus === 'saving'}>
-              {saveStatus === 'saving' ? 'Saving…' : draftId ? 'Save draft' : 'Create draft'}
-            </Button>
-            {draftId && (
-              <Button variant="secondary" onClick={() => setIssueOpen(true)} disabled={issueBusy}>
-                Issue invoice…
+            {!isIssued && (
+              <Button onClick={() => doSave(true)} disabled={saveStatus === 'saving'}>
+                {saveStatus === 'saving' ? 'Saving…' : draftId ? 'Save draft' : 'Create draft'}
               </Button>
             )}
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-              Drafts autosave. Issuing assigns the invoice number permanently.
-            </span>
+            <Button variant="secondary" onClick={() => setShowPreview(true)}>
+              Preview
+            </Button>
+            <Button variant="secondary" onClick={doPrint}>
+              Print / Save PDF
+            </Button>
+            {!isIssued && (
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+                Drafts autosave{invoiceNumber ? ` as invoice #${invoiceNumber}` : ''}.
+              </span>
+            )}
           </div>
-
-          {draftId && (
-            <div className="card no-print">
-              <Field label="Invoice template" htmlFor="inv-template" hint="Used for the issued PDF and print. Stored with the invoice at issuance.">
-                <SelectField id="inv-template" value={templateId} onChange={(e) => setTemplateId(e.target.value as TemplateId)}>
-                  {TEMPLATES.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name} — {t.description}</option>
-                  ))}
-                </SelectField>
-              </Field>
-            </div>
-          )}
         </div>
 
-        <InvoicePreview business={activeBusiness} customer={customer} lines={lines} totals={totals}
-          invoiceDate={invoiceDate} dueDate={dueDate} poNumber={poNumber}
-          notes={notes} terms={terms} paymentInstructions={paymentInstructions}
-          discountMode={discountMode} />
+        {previewEl}
       </div>
 
-      {issueOpen && (
-        <Modal title="Issue this invoice?" onClose={() => !issueBusy && setIssueOpen(false)}>
-          <p>
-            This will permanently assign invoice number{' '}
-            <strong>{activeBusiness ? previewNextNumber(activeBusiness) : '…'}</strong>, store an
-            immutable snapshot of the business, customer, lines, and totals, and generate the
-            issued PDF. The draft can no longer be edited — later corrections use the revision
-            workflow.
-          </p>
-          {totals && (
-            <p>Total due: <strong>{`$${centsToDollars(totals.totalCents)}`}</strong></p>
-          )}
-          <div className="btn-row">
-            <Button onClick={doIssue} disabled={issueBusy}>
-              {issueBusy ? 'Issuing…' : `Issue as ${activeBusiness ? previewNextNumber(activeBusiness) : ''}`}
-            </Button>
-            <Button variant="secondary" onClick={() => setIssueOpen(false)} disabled={issueBusy}>
-              Cancel
-            </Button>
+      {showPreview && (
+        <div
+          className="no-print"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Invoice print preview"
+          style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(15,23,42,0.65)', overflowY: 'auto', padding: '20px 12px' }}
+          onClick={() => setShowPreview(false)}
+        >
+          <div
+            style={{ maxWidth: 800, margin: '0 auto', background: '#fff', borderRadius: 12, padding: 16 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="btn-row" style={{ marginBottom: 12 }}>
+              <Button variant="secondary" onClick={async () => { setShowPreview(false); await doPrint(); }}>
+                Print / Save PDF
+              </Button>
+              <Button variant="ghost" onClick={() => setShowPreview(false)}>
+                Back to editing
+              </Button>
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>This is how your invoice will print.</span>
+            </div>
+            {previewEl}
           </div>
-        </Modal>
+        </div>
       )}
     </div>
   );
@@ -676,56 +966,147 @@ export default function InvoiceEditor() {
  * Shared invoice rendering model — the editor preview, the PDF, and print
  * must all render from this same structure (spec §8).
  */
-function InvoicePreview({
-  business, customer, lines, totals, invoiceDate, dueDate, poNumber, notes, terms, paymentInstructions, discountMode,
+/** Commission / wire-instruction preview body (Dania Realty template). */
+function CommissionPreviewBody({
+  agentName,
+  secondAgentName,
+  propertyAddress,
+  salePrice,
+  commissionPct,
+  otherChargeDesc,
+  commissionTotals,
+  paymentInstructions,
+  notes,
 }: {
-  business: Business;
-  customer: Customer | null;
+  agentName: string;
+  secondAgentName: string;
+  propertyAddress: string;
+  salePrice: string;
+  commissionPct: string;
+  otherChargeDesc: string;
+  commissionTotals: CommissionPreviewData | null;
+  paymentInstructions: string;
+  notes: string;
+}) {
+  const pct = commissionPct.trim();
+  const sale = salePrice.trim() || '0.00';
+  const otherDesc = otherChargeDesc.trim();
+  const showOther =
+    otherDesc !== '' || (commissionTotals !== null && (commissionTotals.otherChargeCents ?? 0) > 0);
+  return (
+    <>
+      {commissionTotals && commissionTotals.badFields.length > 0 && (
+        <div
+          className="no-print"
+          style={{
+            marginBottom: 12,
+            background: '#fef3f2',
+            border: '1px solid #f3b8b3',
+            borderRadius: 8,
+            padding: '10px 12px',
+            fontSize: 13,
+            color: '#8f1d14',
+          }}
+        >
+          <strong>Can't calculate the totals</strong> — check{' '}
+          {commissionTotals.badFields.join(', ')}: it doesn't look like a valid amount. Fix it in
+          the form and the numbers will appear.
+        </div>
+      )}      {propertyAddress.trim() !== '' && (
+        <div style={{ marginBottom: 12, fontSize: 15 }}>
+          <strong>Property:</strong> {propertyAddress.trim()}
+        </div>
+      )}
+      {(agentName.trim() !== '' || secondAgentName.trim() !== '') && (
+        <div style={{ marginBottom: 12, fontSize: 14 }}>
+          {agentName.trim() !== '' && (
+            <div>
+              <strong>Agent:</strong> {agentName.trim()}
+            </div>
+          )}
+          {secondAgentName.trim() !== '' && (
+            <div>
+              <strong>Second sales person:</strong> {secondAgentName.trim()}
+            </div>
+          )}
+        </div>
+      )}
+      <table className="inv-table">
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th style={{ textAlign: 'right' }}>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Real Estate Commission{pct !== '' ? ` (${pct}% of $${sale})` : ''}</td>
+            <td style={{ textAlign: 'right' }}>
+              {commissionTotals?.commissionCents != null ? money(commissionTotals.commissionCents) : '—'}
+            </td>
+          </tr>
+          <tr>
+            <td>Processing Fee</td>
+            <td style={{ textAlign: 'right' }}>
+              {commissionTotals?.processingFeeCents != null ? money(commissionTotals.processingFeeCents) : '—'}
+            </td>
+          </tr>
+          {showOther && (
+            <tr>
+              <td>Other Charge{otherDesc !== '' ? ` — ${otherDesc}` : ''}</td>
+              <td style={{ textAlign: 'right' }}>
+                {commissionTotals?.otherChargeCents != null ? money(commissionTotals.otherChargeCents) : '—'}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      {commissionTotals?.totalCents != null && (
+        <div className="inv-totals">
+          <div className="totals-row grand">
+            <span>TOTAL</span>
+            <span>{money(commissionTotals.totalCents)}</span>
+          </div>
+        </div>
+      )}
+      {notes.trim() !== '' && (
+        <div style={{ marginTop: 12 }}>
+          <strong>Notes</strong>
+          <div style={{ whiteSpace: 'pre-wrap', marginTop: 4, fontSize: 14 }}>{notes.trim()}</div>
+        </div>
+      )}
+      {paymentInstructions !== '' && (
+        <div
+          className="inv-wirebox"
+          style={{
+            marginTop: 16,
+            background: '#e7f3e7',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: 12,
+          }}
+        >
+          {!/^wire instructions/im.test(paymentInstructions) && <strong>WIRE INSTRUCTIONS</strong>}
+          <div style={{ whiteSpace: 'pre-wrap', marginTop: 6, fontSize: 14 }}>{paymentInstructions}</div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Standard line-item preview body. */
+function StandardPreviewBody({
+  lines,
+  totals,
+  discountMode,
+}: {
   lines: LineState[];
   totals: ReturnType<typeof previewTotals> | null;
-  invoiceDate: string;
-  dueDate: string;
-  poNumber: string;
-  notes: string;
-  terms: string;
-  paymentInstructions: string;
   discountMode: DiscountMode;
 }) {
   const visible = lines.filter((l) => l.description.trim() || l.unitPrice.trim());
   return (
-    <div className="invoice-preview" aria-label="Invoice preview">
-      <div className="inv-head">
-        <div>
-          <h2>{business.display_name}</h2>
-          <div style={{ color: 'var(--muted)', fontSize: 13 }}>
-            {[business.address_line1, business.address_line2].filter(Boolean).join(', ')}
-            <br />
-            {[business.city, business.state, business.zip].filter(Boolean).join(', ')}
-            {business.phone && <><br />{business.phone}</>}
-            {business.email && <><br />{business.email}</>}
-          </div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: 2 }}>INVOICE</div>
-          <span className="badge badge-draft">DRAFT</span>
-          <div style={{ fontSize: 13, marginTop: 8 }}>Date: {invoiceDate || '—'}</div>
-          {dueDate && <div style={{ fontSize: 13 }}>Due: {dueDate}</div>}
-          {poNumber && <div style={{ fontSize: 13 }}>P.O. #{poNumber}</div>}
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 8 }}>
-        <strong>Bill to</strong>
-        <div>{customer ? customer.name : '—'}</div>
-        {customer && (
-          <div style={{ color: 'var(--muted)', fontSize: 13 }}>
-            {[customer.billing_line1, customer.billing_city, customer.billing_state, customer.billing_zip].filter(Boolean).join(', ')}
-            {customer.phone && <><br />{customer.phone}</>}
-            {customer.email && <><br />{customer.email}</>}
-          </div>
-        )}
-      </div>
-
+    <>
       <table className="inv-table">
         <thead>
           <tr>
@@ -738,44 +1119,236 @@ function InvoicePreview({
         </thead>
         <tbody>
           {visible.length === 0 && (
-            <tr><td colSpan={5} style={{ color: 'var(--muted)' }}>No line items yet.</td></tr>
+            <tr>
+              <td colSpan={5} style={{ color: 'var(--muted)' }}>
+                No line items yet.
+              </td>
+            </tr>
           )}
           {visible.map((l, i) => {
             let amt = '—';
             try {
-              amt = money(multiplyQuantity(dollarsToCents(l.unitPrice.trim() || '0'), l.quantity.trim() || '1'));
+              amt = money(
+                multiplyQuantity(dollarsToCents(l.unitPrice.trim() || '0'), l.quantity.trim() || '1'),
+              );
             } catch {
               amt = '—';
             }
             return (
               <tr key={l.key}>
                 <td>{i + 1}</td>
-                <td style={{ whiteSpace: 'pre-wrap' }}>{l.description || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                <td style={{ textAlign: 'right' }}>{l.quantity} {l.unitLabel}</td>
-                <td style={{ textAlign: 'right' }}>{l.unitPrice ? `$${l.unitPrice}` : '—'}</td>
+                <td style={{ whiteSpace: 'pre-wrap' }}>
+                  {l.description || <span style={{ color: 'var(--muted)' }}>—</span>}
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  {l.quantity} {l.unitLabel}
+                </td>
+                <td style={{ textAlign: 'right' }}>{l.unitPrice !== '' ? `$${l.unitPrice}` : '—'}</td>
                 <td style={{ textAlign: 'right' }}>{amt}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
-
       {totals && (
         <div className="inv-totals">
-          <div className="totals-row"><span>Subtotal</span><span>{money(totals.subtotalCents)}</span></div>
-          {totals.discountCents > 0 && <div className="totals-row"><span>Discount{discountMode === 'invoice' ? '' : ' (lines)'}</span><span>−{money(totals.discountCents)}</span></div>}
+          <div className="totals-row">
+            <span>Subtotal</span>
+            <span>{money(totals.subtotalCents)}</span>
+          </div>
+          {totals.discountCents > 0 && (
+            <div className="totals-row">
+              <span>Discount{discountMode === 'invoice' ? '' : ' (lines)'}</span>
+              <span>−{money(totals.discountCents)}</span>
+            </div>
+          )}
           {totals.taxByRate.map((g) => (
-            <div className="totals-row" key={g.rate}><span>Tax {(Number(g.rate) * 100).toFixed(2)}%</span><span>{money(g.cents)}</span></div>
+            <div className="totals-row" key={g.rate}>
+              <span>Tax {(Number(g.rate) * 100).toFixed(2)}%</span>
+              <span>{money(g.cents)}</span>
+            </div>
           ))}
-          {totals.shippingCents > 0 && <div className="totals-row"><span>Shipping</span><span>{money(totals.shippingCents)}</span></div>}
-          <div className="totals-row grand"><span>Total due</span><span>{money(totals.totalCents)}</span></div>
+          {totals.shippingCents > 0 && (
+            <div className="totals-row">
+              <span>Shipping</span>
+              <span>{money(totals.shippingCents)}</span>
+            </div>
+          )}
+          <div className="totals-row grand">
+            <span>Total due</span>
+            <span>{money(totals.totalCents)}</span>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * Shared invoice rendering model — the editor preview, the PDF, and print
+ * must all render from this same structure (spec §8).
+ */
+function InvoicePreview({
+  business,
+  customer,
+  lines,
+  totals,
+  invoiceDate,
+  invoiceNumber,
+  notes,
+  terms,
+  paymentInstructions,
+  discountMode,
+  template,
+  agentName,
+  secondAgentName,
+  propertyAddress,
+  salePrice,
+  commissionPct,
+  otherChargeDesc,
+  commissionTotals,
+  invoiceStatus,
+  logoUrl,
+}: {
+  business: Business;
+  customer: Customer | null;
+  lines: LineState[];
+  totals: ReturnType<typeof previewTotals> | null;
+  invoiceStatus: InvoiceStatus;
+  invoiceDate: string;
+  invoiceNumber: string | null;
+  notes: string;
+  terms: string;
+  paymentInstructions: string;
+  discountMode: DiscountMode;
+  template: InvoiceTemplate;
+  agentName: string;
+  secondAgentName: string;
+  propertyAddress: string;
+  salePrice: string;
+  commissionPct: string;
+  otherChargeDesc: string;
+  commissionTotals: CommissionPreviewData | null;
+  logoUrl: string | null;
+}) {
+  const isCommission = template === 'commission';
+  return (
+    <div className="invoice-preview" aria-label="Invoice preview">
+      <div className="inv-head">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 10 }}>
+          {logoUrl && (
+            <img
+              src={logoUrl}
+              alt={`${business.display_name} logo`}
+              style={{ height: 72, width: 'auto', maxWidth: 260, objectFit: 'contain' }}
+            />
+          )}
+          <div>
+            <h2 style={{ margin: 0 }}>{business.display_name}</h2>
+            {business.header_line && (
+              <div style={{ fontSize: 15, fontWeight: 700, margin: '2px 0 4px' }}>
+                {business.header_line}
+              </div>
+            )}
+            <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+              {[business.address_line1, business.address_line2].filter(Boolean).join(', ')}
+              <br />
+              {[business.city, business.state, business.zip].filter(Boolean).join(', ')}
+              {business.phone && (
+                <>
+                  <br />
+                  {business.phone}
+                </>
+              )}
+              {business.email && (
+                <>
+                  <br />
+                  {business.email}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: isCommission ? 20 : 26, fontWeight: 800, letterSpacing: isCommission ? 1 : 2 }}>
+            {isCommission ? 'COMMISSION / WIRE INSTRUCTIONS' : 'INVOICE'}
+          </div>
+          {invoiceNumber && <div style={{ fontSize: 15, fontWeight: 700 }}>#{invoiceNumber}</div>}
+          {invoiceStatus === 'draft' && <span className="badge badge-draft">DRAFT</span>}
+          <div style={{ fontSize: 20, fontWeight: 700, marginTop: 8 }}>Date: {invoiceDate || '—'}</div>
+        </div>
+      </div>
+
+      {!isCommission && (
+        <div style={{ marginBottom: 8 }}>
+          <strong>Bill to</strong>
+          <div>{customer ? customer.name : '—'}</div>
+          {customer && (
+            <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+              {[customer.billing_line1, customer.billing_city, customer.billing_state, customer.billing_zip]
+                .filter(Boolean)
+                .join(', ')}
+              {customer.phone && (
+                <>
+                  <br />
+                  {customer.phone}
+                </>
+              )}
+              {customer.email && (
+                <>
+                  <br />
+                  {customer.email}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {notes && <div style={{ marginTop: 20 }}><strong>Notes</strong><div style={{ whiteSpace: 'pre-wrap' }}>{notes}</div></div>}
-      {terms && <div style={{ marginTop: 12 }}><strong>Terms:</strong> {terms}</div>}
-      {paymentInstructions && <div style={{ marginTop: 12 }}><strong>Payment instructions</strong><div style={{ whiteSpace: 'pre-wrap' }}>{paymentInstructions}</div></div>}
-      <div style={{ marginTop: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Thank you for your business!</div>
+      {isCommission ? (
+        <CommissionPreviewBody
+          agentName={agentName}
+          secondAgentName={secondAgentName}
+          propertyAddress={propertyAddress}
+          salePrice={salePrice}
+          commissionPct={commissionPct}
+          otherChargeDesc={otherChargeDesc}
+          commissionTotals={commissionTotals}
+          paymentInstructions={paymentInstructions}
+          notes={notes}
+        />
+      ) : (
+        <StandardPreviewBody lines={lines} totals={totals} discountMode={discountMode} />
+      )}
+
+      {!isCommission && notes.trim() !== '' && (
+        <div className="inv-section" style={{ marginTop: 20 }}>
+          <strong>Notes</strong>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{notes.trim()}</div>
+        </div>
+      )}
+      {!isCommission && terms !== '' && (
+        <div className="inv-section" style={{ marginTop: 12 }}>
+          <strong>Terms:</strong> {terms}
+        </div>
+      )}
+      {!isCommission && paymentInstructions !== '' && (
+        <div className="inv-section" style={{ marginTop: 12 }}>
+          <strong>Payment instructions</strong>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{paymentInstructions}</div>
+        </div>
+      )}
+      {isCommission ? (
+        <div className="inv-footer" style={{ marginTop: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+          Commission / Wire Instruction Form | {business.display_name}
+          <br />
+          Verify wire instructions before payment.
+        </div>
+      ) : (
+        <div className="inv-footer" style={{ marginTop: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+          Thank you for your business!
+        </div>
+      )}
     </div>
   );
 }
