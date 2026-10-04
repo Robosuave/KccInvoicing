@@ -17,6 +17,25 @@
 alter table public.invoices
   add column if not exists payment_instructions_snapshot text;
 
+-- Ensure the owner-check helper exists with the correct (plpgsql, non-inlined)
+-- definition regardless of which earlier migrations were applied.
+create or replace function public.is_workspace_owner(w_id uuid)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  return exists (
+    select 1 from public.workspace_members m
+    where m.workspace_id = w_id
+      and m.user_id = auth.uid()
+      and m.role = 'owner'
+  );
+end;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Invoices: server-side payment-instructions lock.
 --  - INSERT: any client-supplied payment_instructions is discarded; the
