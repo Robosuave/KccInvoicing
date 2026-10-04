@@ -553,7 +553,7 @@ export default function InvoiceEditor() {
                   <TextField id="com-sale" inputMode="decimal" value={salePrice} onChange={touch((e) => setSalePrice(e.target.value))} placeholder="0.00" />
                 </Field>
                 <Field label="Real estate commission %" htmlFor="com-pct" hint="e.g. 3 for 3%">
-                  <TextField id="com-pct" inputMode="decimal" value={commissionPct} onChange={touch((e) => setCommissionPct(e.target.value))} placeholder="3" />
+                  <TextField id="com-pct" inputMode="decimal" value={commissionPct} onChange={touch((e) => setCommissionPct(e.target.value))} />
                 </Field>
               </div>
               <div className="form-row">
