@@ -164,9 +164,6 @@ export default function InvoiceEditor() {
   const [agentName, setAgentName] = useState('');
   const [secondAgentName, setSecondAgentName] = useState('');
   const [propertyAddress, setPropertyAddress] = useState('');
-  const [propertyCity, setPropertyCity] = useState('');
-  const [propertyState, setPropertyState] = useState('');
-  const [propertyZip, setPropertyZip] = useState('');
 
   const [dirty, setDirty] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -246,9 +243,6 @@ export default function InvoiceEditor() {
         setCommissionAmt(invoice.commission_amount_cents ? plainDollars(invoice.commission_amount_cents) : '');
         commissionAmtManual.current = !!invoice.commission_amount_cents;
         setPropertyAddress(invoice.property_address ?? '');
-        setPropertyCity(invoice.property_city ?? '');
-        setPropertyState(invoice.property_state ?? '');
-        setPropertyZip(invoice.property_zip ?? '');
         setProcessingFee(centsToDollars(invoice.processing_fee_cents));
         setOtherChargeDesc(invoice.other_charge_desc ?? '');
         setOtherCharge(invoice.other_charge_cents ? centsToDollars(invoice.other_charge_cents) : '');
@@ -325,9 +319,6 @@ export default function InvoiceEditor() {
       agent_name: isCommission && agentName.trim() ? agentName.trim() : null,
       second_agent_name: isCommission && secondAgentName.trim() ? secondAgentName.trim() : null,
       property_address: isCommission && propertyAddress.trim() ? propertyAddress.trim() : null,
-      property_city: isCommission && propertyCity.trim() ? propertyCity.trim() : null,
-      property_state: isCommission && propertyState.trim() ? propertyState.trim() : null,
-      property_zip: isCommission && propertyZip.trim() ? propertyZip.trim() : null,
       invoice_discount_rate: discountMode === 'invoice' && invoiceDiscountPct.trim() ? pctToRate(invoiceDiscountPct) : undefined,
       invoice_tax_rate: useTax && invoiceTaxPct.trim() ? pctToRate(invoiceTaxPct) : undefined,
       shipping_cents: shipping.trim() ? dollarsToCents(shipping.trim()) : 0,
@@ -343,7 +334,7 @@ export default function InvoiceEditor() {
         tax_rate: l.taxRate.trim() ? pctToRate(l.taxRate) : undefined,
       })),
     };
-  }, [activeBusiness, customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, template, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge, agentName, secondAgentName, propertyAddress, propertyCity, propertyState, propertyZip]);
+  }, [activeBusiness, customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, template, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge, agentName, secondAgentName, propertyAddress]);
 
   const validate = useCallback((): string[] => {
     const errs: string[] = [];
@@ -670,9 +661,6 @@ export default function InvoiceEditor() {
   const COMMISSION_ENTER_FLOW = [
     'inv-date',
     'com-prop',
-    'com-city',
-    'com-state',
-    'com-zip',
     'com-agent',
     'com-agent2',
     'com-sale',
@@ -784,7 +772,6 @@ export default function InvoiceEditor() {
       discountMode={discountMode} template={template}
       agentName={agentName} secondAgentName={secondAgentName}
       propertyAddress={propertyAddress}
-      propertyCity={propertyCity} propertyState={propertyState} propertyZip={propertyZip}
       salePrice={salePrice} commissionPct={commissionPct}
       otherChargeDesc={otherChargeDesc} commissionTotals={commissionPreview} invoiceStatus={invoiceStatus}
       logoUrl={logoUrl} />
@@ -912,20 +899,9 @@ export default function InvoiceEditor() {
           {template === 'commission' ? (
             <div className="card">
               <h2 style={{ marginTop: 0 }}>Commission &amp; fees</h2>
-              <Field label="Street address *" htmlFor="com-prop" hint="From the HUD / closing statement">
-                <TextField id="com-prop" enterKeyHint="next" value={propertyAddress} onChange={touch((e) => setPropertyAddress(e.target.value))} placeholder="123 Main St" />
+              <Field label="Property address *" htmlFor="com-prop" hint="From the HUD / closing statement">
+                <TextField id="com-prop" enterKeyHint="next" value={propertyAddress} onChange={touch((e) => setPropertyAddress(e.target.value))} placeholder="123 Main St, Hollywood, FL 33021" />
               </Field>
-              <div className="form-row">
-                <Field label="City" htmlFor="com-city">
-                  <TextField id="com-city" enterKeyHint="next" value={propertyCity} onChange={touch((e) => setPropertyCity(e.target.value))} autoComplete="address-level2" />
-                </Field>
-                <Field label="State" htmlFor="com-state">
-                  <TextField id="com-state" enterKeyHint="next" value={propertyState} onChange={touch((e) => setPropertyState(e.target.value))} autoComplete="address-level1" />
-                </Field>
-                <Field label="Zip" htmlFor="com-zip">
-                  <TextField id="com-zip" enterKeyHint="next" inputMode="numeric" value={propertyZip} onChange={touch((e) => setPropertyZip(e.target.value))} autoComplete="postal-code" />
-                </Field>
-              </div>
               <div className="form-row">
                 <Field label="Agent name *" htmlFor="com-agent">
                   <TextField id="com-agent" enterKeyHint="next" value={agentName} onChange={touch((e) => setAgentName(e.target.value))} placeholder="Listing / selling agent" />
@@ -1302,9 +1278,6 @@ function CommissionPreviewBody({
   agentName,
   secondAgentName,
   propertyAddress,
-  propertyCity,
-  propertyState,
-  propertyZip,
   salePrice,
   commissionPct,
   otherChargeDesc,
@@ -1315,9 +1288,6 @@ function CommissionPreviewBody({
   agentName: string;
   secondAgentName: string;
   propertyAddress: string;
-  propertyCity: string;
-  propertyState: string;
-  propertyZip: string;
   salePrice: string;
   commissionPct: string;
   otherChargeDesc: string;
@@ -1363,16 +1333,10 @@ function CommissionPreviewBody({
               </div>
             )}
           </div>
-          {(propertyAddress.trim() !== '' || propertyCity.trim() !== '' || propertyState.trim() !== '' || propertyZip.trim() !== '') && (
+          {propertyAddress.trim() !== '' && (
             <div style={{ fontSize: 14 }}>
               <strong>Property address</strong>
-              {propertyAddress.trim() !== '' && <div>{propertyAddress.trim()}</div>}
-              {(propertyCity.trim() !== '' || propertyState.trim() !== '' || propertyZip.trim() !== '') && (
-                <div>
-                  {[propertyCity.trim(), propertyState.trim()].filter(Boolean).join(', ')}
-                  {propertyZip.trim() !== '' && ` ${propertyZip.trim()}`}
-                </div>
-              )}
+              <div>{propertyAddress.trim()}</div>
             </div>
           )}
         </div>
@@ -1549,9 +1513,6 @@ function InvoicePreview({
   agentName,
   secondAgentName,
   propertyAddress,
-  propertyCity,
-  propertyState,
-  propertyZip,
   salePrice,
   commissionPct,
   otherChargeDesc,
@@ -1574,9 +1535,6 @@ function InvoicePreview({
   agentName: string;
   secondAgentName: string;
   propertyAddress: string;
-  propertyCity: string;
-  propertyState: string;
-  propertyZip: string;
   salePrice: string;
   commissionPct: string;
   otherChargeDesc: string;
@@ -1683,9 +1641,6 @@ function InvoicePreview({
           agentName={agentName}
           secondAgentName={secondAgentName}
           propertyAddress={propertyAddress}
-          propertyCity={propertyCity}
-          propertyState={propertyState}
-          propertyZip={propertyZip}
           salePrice={salePrice}
           commissionPct={commissionPct}
           otherChargeDesc={otherChargeDesc}
