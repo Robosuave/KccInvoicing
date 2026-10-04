@@ -9,7 +9,8 @@
 
 /** Parse a decimal string like "33.3" or "-12.50" into { num, den } with den > 0. */
 export function parseDecimal(s: string): { num: bigint; den: bigint } {
-  const t = s.trim();
+  // Forgiving input: "225,000.00" and "$1,234.56" are common when typing money.
+  const t = s.trim().replace(/,/g, '').replace(/^\$/, '');
   if (!/^-?\d+(\.\d+)?$/.test(t)) throw new Error(`Invalid decimal: ${s}`);
   const negative = t.startsWith('-');
   const digits = negative ? t.slice(1) : t;

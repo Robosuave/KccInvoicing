@@ -20,6 +20,10 @@ describe('dollarsToCents', () => {
     expect(dollarsToCents('10.005')).toBe(1001);
     expect(dollarsToCents('10.004')).toBe(1000);
   });
+  it('accepts commas and a leading $', () => {
+    expect(dollarsToCents('225,000.00')).toBe(22500000);
+    expect(dollarsToCents('$1,234.56')).toBe(123456);
+  });
   it('rejects garbage', () => {
     expect(() => dollarsToCents('abc')).toThrow();
     expect(() => dollarsToCents('12.34.56')).toThrow();

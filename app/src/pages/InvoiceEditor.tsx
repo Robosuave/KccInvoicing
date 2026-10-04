@@ -516,7 +516,7 @@ export default function InvoiceEditor() {
       )}
 
       <div className="editor-layout">
-        <div>
+        <div className="no-print">
           <div className="card">
             <div className="form-row">
               {template !== 'commission' && (

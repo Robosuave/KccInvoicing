@@ -292,6 +292,9 @@ textarea.input { min-height: 96px; resize: vertical; }
 }
 
 @media print {
-  .sidebar, .topbar, .no-print { display: none !important; }
+  .sidebar, .topbar, .no-print, .alert { display: none !important; }
   .content { padding: 0; max-width: none; }
+  .editor-layout { display: block !important; }
+  .invoice-preview { position: static; box-shadow: none; border: none; padding: 0; break-inside: avoid; }
+  @page { margin: 12mm; }
 }
