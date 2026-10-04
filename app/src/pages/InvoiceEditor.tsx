@@ -110,6 +110,7 @@ export default function InvoiceEditor() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [saveMessage, setSaveMessage] = useState<string | undefined>();
   const [errors, setErrors] = useState<string[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
   const dirtyRef = useRef(false);
   const stateRef = useRef({});
 
@@ -519,6 +520,17 @@ export default function InvoiceEditor() {
 
   const customer = customers.find((c) => c.id === customerId) ?? null;
 
+  const previewEl = (
+    <InvoicePreview business={activeBusiness} customer={customer} lines={lines} totals={totals}
+      invoiceDate={invoiceDate} invoiceNumber={invoiceNumber}
+      notes={notes} terms={terms} paymentInstructions={paymentInstructions}
+      discountMode={discountMode} template={template}
+      agentName={agentName} secondAgentName={secondAgentName}
+      propertyAddress={propertyAddress}
+      salePrice={salePrice} commissionPct={commissionPct}
+      otherChargeDesc={otherChargeDesc} commissionTotals={commissionPreview} invoiceStatus={invoiceStatus} />
+  );
+
   return (
     <div>
       <div className="btn-row no-print" style={{ marginBottom: 16, justifyContent: 'space-between' }}>
@@ -781,6 +793,9 @@ export default function InvoiceEditor() {
                 {saveStatus === 'saving' ? 'Saving…' : draftId ? 'Save draft' : 'Create draft'}
               </Button>
             )}
+            <Button variant="secondary" onClick={() => setShowPreview(true)}>
+              Preview
+            </Button>
             <Button variant="secondary" onClick={doPrint}>
               Print / Save PDF
             </Button>
@@ -792,15 +807,35 @@ export default function InvoiceEditor() {
           </div>
         </div>
 
-        <InvoicePreview business={activeBusiness} customer={customer} lines={lines} totals={totals}
-          invoiceDate={invoiceDate} invoiceNumber={invoiceNumber}
-          notes={notes} terms={terms} paymentInstructions={paymentInstructions}
-          discountMode={discountMode} template={template}
-          agentName={agentName} secondAgentName={secondAgentName}
-          propertyAddress={propertyAddress}
-          salePrice={salePrice} commissionPct={commissionPct}
-          otherChargeDesc={otherChargeDesc} commissionTotals={commissionPreview} invoiceStatus={invoiceStatus} />
+        {previewEl}
       </div>
+
+      {showPreview && (
+        <div
+          className="no-print"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Invoice print preview"
+          style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(15,23,42,0.65)', overflowY: 'auto', padding: '20px 12px' }}
+          onClick={() => setShowPreview(false)}
+        >
+          <div
+            style={{ maxWidth: 800, margin: '0 auto', background: '#fff', borderRadius: 12, padding: 16 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="btn-row" style={{ marginBottom: 12 }}>
+              <Button variant="secondary" onClick={async () => { setShowPreview(false); await doPrint(); }}>
+                Print / Save PDF
+              </Button>
+              <Button variant="ghost" onClick={() => setShowPreview(false)}>
+                Back to editing
+              </Button>
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>This is how your invoice will print.</span>
+            </div>
+            {previewEl}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
