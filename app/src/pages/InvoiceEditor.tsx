@@ -1203,7 +1203,6 @@ function CommissionPreviewBody({
   commissionTotals,
   paymentInstructions,
   notes,
-  customer,
 }: {
   agentName: string;
   secondAgentName: string;
@@ -1214,7 +1213,6 @@ function CommissionPreviewBody({
   commissionTotals: CommissionPreviewData | null;
   paymentInstructions: string;
   notes: string;
-  customer: Customer | null;
 }) {
   const pct = commissionPct.trim();
   const sale = salePrice.trim() || '0.00';
@@ -1557,7 +1555,6 @@ function InvoicePreview({
           commissionTotals={commissionTotals}
           paymentInstructions={paymentInstructions}
           notes={notes}
-          customer={customer}
         />
       ) : (
         <StandardPreviewBody lines={lines} totals={totals} discountMode={discountMode} />
