@@ -23,6 +23,7 @@ import {
 const EMPTY: Record<string, string> = {
   display_name: '',
   legal_name: '',
+  header_line: '',
   address_line1: '',
   address_line2: '',
   city: '',
@@ -49,6 +50,7 @@ function toForm(b?: Business): Record<string, string> {
   return {
     display_name: b.display_name,
     legal_name: b.legal_name ?? '',
+    header_line: b.header_line ?? '',
     address_line1: b.address_line1 ?? '',
     address_line2: b.address_line2 ?? '',
     city: b.city ?? '',
@@ -124,6 +126,7 @@ export default function Businesses() {
         workspace_id: workspace.id,
         display_name: form.display_name.trim(),
         legal_name: form.legal_name.trim() || null,
+        header_line: form.header_line.trim() || null,
         address_line1: form.address_line1.trim() || null,
         address_line2: form.address_line2.trim() || null,
         city: form.city.trim() || null,
@@ -250,6 +253,9 @@ export default function Businesses() {
             </Field>
             <Field label="Legal business name" htmlFor="b-legal">
               <TextField id="b-legal" value={form.legal_name} onChange={set('legal_name')} />
+            </Field>
+            <Field label="Header line (under business name on invoices)" htmlFor="b-headerline">
+              <TextField id="b-headerline" value={form.header_line} onChange={set('header_line')} placeholder="Robert Kaleky, Broker" />
             </Field>
           </div>
           <div className="form-row">

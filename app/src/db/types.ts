@@ -11,6 +11,7 @@ export interface Business {
   workspace_id: string;
   display_name: string;
   legal_name: string | null;
+  header_line: string | null;
   logo_path: string | null;
   address_line1: string | null;
   address_line2: string | null;

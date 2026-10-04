@@ -1201,6 +1201,11 @@ function InvoicePreview({
           )}
           <div>
             <h2>{business.display_name}</h2>
+            {business.header_line && (
+              <div style={{ fontSize: 15, fontWeight: 700, margin: '2px 0 4px' }}>
+                {business.header_line}
+              </div>
+            )}
             <div style={{ color: 'var(--muted)', fontSize: 13 }}>
               {[business.address_line1, business.address_line2].filter(Boolean).join(', ')}
               <br />
