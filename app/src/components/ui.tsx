@@ -10,7 +10,7 @@ type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 export function Button({ variant = 'primary', size = 'md', className = '', ...rest }: BtnProps) {
   return (
     <button
-      className={`btn btn-${variant} ${size === 'sm' ? 'btn-sm' : ''} ${className}`}
+      className={['btn', `btn-${variant}`, size === 'sm' ? 'btn-sm' : '', className].filter(Boolean).join(' ')}
       {...rest}
     />
   );

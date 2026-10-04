@@ -11,6 +11,7 @@ export default function Login() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +45,7 @@ export default function Login() {
     <div style={{ maxWidth: 440, margin: '80px auto', padding: '0 16px' }}>
       <div className="card">
         <h1 className="page-title">{APP_NAME}</h1>
-        <p className="page-sub">{mode === 'signin' ? 'Sign in to your invoice desk.' : 'Create your account. Invited agents: sign up with the email address the invite was sent to.'}</p>
+        <p className="page-sub">{mode === 'signin' ? 'Sign in to your invoice desk.' : 'Create your account. Team members: sign up with the email address the invite was sent to.'}</p>
         {(error || authError) && <Alert kind="error">{error ?? authError}</Alert>}
         <form onSubmit={submit}>
           <Field label="Email" htmlFor="email">
@@ -58,14 +59,26 @@ export default function Login() {
             />
           </Field>
           <Field label="Password" htmlFor="password">
-            <TextField
-              id="password"
-              type="password"
-              required
-              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <div style={{ position: 'relative' }}>
+              <TextField
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                required
+                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                style={{ paddingRight: 64 }}
+              />
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)' }}
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </Field>
           <Button type="submit" disabled={busy} style={{ width: '100%' }}>
             {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}
