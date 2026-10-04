@@ -9,13 +9,16 @@ import {
 } from 'react';
 import type { Business, Workspace } from '../db/types';
 import { ensureWorkspace, listBusinesses } from '../data/businesses';
-import { BackendNotConfiguredError } from '../lib/supabase';
+import { redeemInvites } from '../data/team';
+import { requireSupabase, BackendNotConfiguredError } from '../lib/supabase';
 import { useAuth } from '../auth/AuthContext';
 
 interface BusinessState {
   workspace: Workspace | null;
   businesses: Business[];
   activeBusiness: Business | null;
+  /** True when the signed-in user owns the workspace (full access). Agents get false. */
+  isOwner: boolean;
   loading: boolean;
   notConfigured: boolean;
   loadError: string | null;
@@ -46,6 +49,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [notConfigured, setNotConfigured] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
   const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
   const dirtyRef = useRef(false);
   const onSaveDraftRef = useRef<(() => Promise<string | null>) | null>(null);
@@ -55,13 +59,25 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     if (!user) {
       setWorkspace(null);
       setBusinesses([]);
+      setIsOwner(false);
       return;
     }
     setLoading(true);
     setLoadError(null);
     try {
+      // Redeem email invites BEFORE ensureWorkspace, so an invited agent
+      // joins the existing workspace instead of getting their own.
+      await redeemInvites();
       const ws = await ensureWorkspace();
       setWorkspace(ws);
+      const sb = requireSupabase();
+      const { data: membership } = await sb
+        .from('workspace_members')
+        .select('role')
+        .eq('workspace_id', ws.id)
+        .eq('user_id', user.id)
+        .single();
+      setIsOwner(membership?.role === 'owner');
       const list = await listBusinesses(ws.id);
       setBusinesses(list);
       setNotConfigured(false);
@@ -154,6 +170,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         workspace,
         businesses,
         activeBusiness,
+        isOwner,
         loading,
         notConfigured,
         loadError,

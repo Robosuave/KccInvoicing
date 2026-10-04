@@ -126,14 +126,30 @@ export async function createDraft(input: DraftInput): Promise<Invoice> {
   if (!isCommission && input.lines.length === 0) throw new Error('Add at least one line item.');
   const t = totalsFor(input);
 
-  // Assign the business's next invoice number (e.g. Dania Realty starts at 501).
-  const { data: biz, error: bErr } = await sb
-    .from('businesses')
-    .select('invoice_prefix, next_number')
-    .eq('id', input.business_id)
-    .single();
-  if (bErr) throw bErr;
-  const invoiceNumber = `${(biz as { invoice_prefix: string }).invoice_prefix ?? ''}${(biz as { next_number: number }).next_number}`;
+  // Assign the business's next invoice number atomically (e.g. Dania Realty starts at 501).
+  // The security-definer function both reads and increments, so agents (who cannot
+  // update businesses directly) can still create invoices, and concurrent creates
+  // can never grab the same number.
+  let invoiceNumber: string;
+  try {
+    const { data, error } = await sb.rpc('assign_invoice_number', { b_id: input.business_id });
+    if (error) throw error;
+    invoiceNumber = data as string;
+  } catch {
+    // Fallback for before migration 0007 is run (owner-only; has a small race).
+    const { data: biz, error: bErr } = await sb
+      .from('businesses')
+      .select('invoice_prefix, next_number')
+      .eq('id', input.business_id)
+      .single();
+    if (bErr) throw bErr;
+    invoiceNumber = `${(biz as { invoice_prefix: string }).invoice_prefix ?? ''}${(biz as { next_number: number }).next_number}`;
+    const { error: uErr } = await sb
+      .from('businesses')
+      .update({ next_number: (biz as { next_number: number }).next_number + 1 })
+      .eq('id', input.business_id);
+    if (uErr) throw uErr;
+  }
 
   const { data: invoice, error: iErr } = await sb
     .from('invoices')
@@ -157,12 +173,6 @@ export async function createDraft(input: DraftInput): Promise<Invoice> {
     .select()
     .single();
   if (iErr) throw iErr;
-
-  const { error: nErr } = await sb
-    .from('businesses')
-    .update({ next_number: (biz as { next_number: number }).next_number + 1 })
-    .eq('id', input.business_id);
-  if (nErr) throw nErr;
 
   if (isCommission) return invoice as Invoice;
 

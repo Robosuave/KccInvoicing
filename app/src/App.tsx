@@ -12,6 +12,7 @@ import Items from './pages/Items';
 import Invoices from './pages/Invoices';
 import InvoiceEditor from './pages/InvoiceEditor';
 import Settings from './pages/Settings';
+import Team from './pages/Team';
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -20,12 +21,20 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return children;
 }
 
+function OwnerRoute({ children }: { children: ReactNode }) {
+  const { isOwner, loading } = useBusiness();
+  if (loading) return <p style={{ padding: 40 }}>Loading…</p>;
+  if (!isOwner) return <Navigate to="/" replace />;
+  return children;
+}
+
 const NAV = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/invoices', label: 'Invoices' },
   { to: '/customers', label: 'Customers' },
   { to: '/items', label: 'Products & services' },
-  { to: '/businesses', label: 'Businesses' },
+  { to: '/businesses', label: 'Businesses', ownerOnly: true },
+  { to: '/team', label: 'Team', ownerOnly: true },
   { to: '/settings', label: 'Settings' },
 ];
 
@@ -76,7 +85,7 @@ function PendingSwitchModal() {
 }
 
 function Shell() {
-  const { activeBusiness } = useBusiness();
+  const { activeBusiness, isOwner } = useBusiness();
   const { signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
@@ -88,7 +97,7 @@ function Shell() {
           <div className="brand-name">{APP_NAME}</div>
           <div className="brand-sub">Phase 1</div>
         </div>
-        {NAV.map((n) => (
+        {NAV.filter((n) => !n.ownerOnly || isOwner).map((n) => (
           <NavLink
             key={n.to}
             to={n.to}
@@ -133,7 +142,8 @@ function Shell() {
             <Route path="/invoices/:id" element={<InvoiceEditor />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/items" element={<Items />} />
-            <Route path="/businesses" element={<Businesses />} />
+            <Route path="/businesses" element={<OwnerRoute><Businesses /></OwnerRoute>} />
+            <Route path="/team" element={<OwnerRoute><Team /></OwnerRoute>} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

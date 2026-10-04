@@ -44,7 +44,7 @@ export default function Login() {
     <div style={{ maxWidth: 440, margin: '80px auto', padding: '0 16px' }}>
       <div className="card">
         <h1 className="page-title">{APP_NAME}</h1>
-        <p className="page-sub">{mode === 'signin' ? 'Sign in to your invoice desk.' : 'Create the owner account.'}</p>
+        <p className="page-sub">{mode === 'signin' ? 'Sign in to your invoice desk.' : 'Create your account. Invited agents: sign up with the email address the invite was sent to.'}</p>
         {(error || authError) && <Alert kind="error">{error ?? authError}</Alert>}
         <form onSubmit={submit}>
           <Field label="Email" htmlFor="email">
