@@ -754,6 +754,9 @@ export default function InvoiceEditor() {
             <Button onClick={() => doSave(true)} disabled={saveStatus === 'saving'}>
               {saveStatus === 'saving' ? 'Saving…' : draftId ? 'Save draft' : 'Create draft'}
             </Button>
+            <Button variant="secondary" onClick={() => window.print()}>
+              Print / Save PDF
+            </Button>
             <span style={{ fontSize: 13, color: 'var(--muted)' }}>
               Drafts autosave. Invoice numbers are assigned at issuance (Phase 2).
             </span>
