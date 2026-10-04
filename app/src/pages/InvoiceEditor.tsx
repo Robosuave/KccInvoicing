@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
 import type { Business, Customer, Invoice, Item, InvoiceTemplate, InvoiceStatus } from '../db/types';
 import { createDraft, getDraft, previewTotals, saveDraft, markIssued, type DraftInput } from '../data/drafts';
-import { listCustomers } from '../data/customers';
+import { listCustomers, createCustomer } from '../data/customers';
 import { listItems } from '../data/items';
 import { centsToDollars, dollarsToCents, multiplyQuantity, percentOf, pctToRate as strictPctToRate } from '../lib/money';
 import { getLogoUrl } from '../data/businesses';
@@ -32,6 +32,7 @@ import {
   Button,
   EmptyState,
   Field,
+  Modal,
   SaveStatusIndicator,
   SelectField,
   SetupRequired,
@@ -122,6 +123,13 @@ export default function InvoiceEditor() {
 
   const [customerId, setCustomerId] = useState('');
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // Quick-add company (commission invoices): create a customer without leaving the editor.
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickCompany, setQuickCompany] = useState('');
+  const [quickContact, setQuickContact] = useState('');
+  const [quickPhone, setQuickPhone] = useState('');
+  const [quickError, setQuickError] = useState<string | null>(null);
+  const [quickSaving, setQuickSaving] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
   const [lines, setLines] = useState<LineState[]>([newLine()]);
   const [discountMode, setDiscountMode] = useState<DiscountMode>('none');
@@ -662,6 +670,38 @@ export default function InvoiceEditor() {
     }
   };
 
+  /* Quick-add a company/customer without leaving the invoice editor. */
+  const quickAddCompany = async () => {
+    const companyName = quickCompany.trim();
+    if (!companyName) {
+      setQuickError('Company name is required.');
+      return;
+    }
+    if (!activeBusiness) return;
+    setQuickSaving(true);
+    setQuickError(null);
+    try {
+      const created = await createCustomer({
+        business_id: activeBusiness.id,
+        name: companyName,
+        company: companyName,
+        contact_person: quickContact.trim() || null,
+        phone: quickPhone.trim() || null,
+      });
+      setCustomers((prev) => [...prev, created].sort((a, b) => (a.company || a.name).localeCompare(b.company || b.name)));
+      setCustomerId(created.id);
+      markDirty();
+      setQuickAddOpen(false);
+      setQuickCompany('');
+      setQuickContact('');
+      setQuickPhone('');
+    } catch (e) {
+      setQuickError(e instanceof Error ? e.message : 'Could not create the company.');
+    } finally {
+      setQuickSaving(false);
+    }
+  };
+
   /* ---------- render ---------- */
 
   if (notConfigured) return <SetupRequired what="The invoice editor" />;
@@ -732,14 +772,31 @@ export default function InvoiceEditor() {
               )}
               {template === 'commission' && (
                 <Field label="Company" htmlFor="inv-company" hint="Prints under the date on the invoice">
-                  <SelectField id="inv-company" value={customerId} onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => setCustomerId(e.target.value))}>
-                    <option value="">Choose a company…</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.company || c.name}
-                      </option>
-                    ))}
-                  </SelectField>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <SelectField id="inv-company" value={customerId} onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => setCustomerId(e.target.value))}>
+                        <option value="">Choose a company…</option>
+                        {customers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.company || c.name}
+                          </option>
+                        ))}
+                      </SelectField>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setQuickCompany('');
+                        setQuickContact('');
+                        setQuickPhone('');
+                        setQuickError(null);
+                        setQuickAddOpen(true);
+                      }}
+                      aria-label="Add a new company"
+                    >
+                      + New
+                    </Button>
+                  </div>
                 </Field>
               )}
               <Field label="Invoice date *" htmlFor="inv-date">
@@ -974,6 +1031,54 @@ export default function InvoiceEditor() {
             </Field>
           </div>
           </fieldset>
+
+          {quickAddOpen && (
+            <Modal title="Add a new company" onClose={() => setQuickAddOpen(false)}>
+              {quickError && <Alert kind="error">{quickError}</Alert>}
+              <Field label="Company name *" htmlFor="qc-company">
+                <TextField
+                  id="qc-company"
+                  value={quickCompany}
+                  onChange={(e) => setQuickCompany(e.target.value)}
+                  autoComplete="organization"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') quickAddCompany();
+                  }}
+                />
+              </Field>
+              <div className="form-row">
+                <Field label="Contact person" htmlFor="qc-contact">
+                  <TextField
+                    id="qc-contact"
+                    value={quickContact}
+                    onChange={(e) => setQuickContact(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') quickAddCompany();
+                    }}
+                  />
+                </Field>
+                <Field label="Phone" htmlFor="qc-phone">
+                  <TextField
+                    id="qc-phone"
+                    type="tel"
+                    value={quickPhone}
+                    onChange={(e) => setQuickPhone(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') quickAddCompany();
+                    }}
+                  />
+                </Field>
+              </div>
+              <div className="btn-row">
+                <Button onClick={quickAddCompany} disabled={quickSaving}>
+                  {quickSaving ? 'Adding…' : 'Add company'}
+                </Button>
+                <Button variant="secondary" onClick={() => setQuickAddOpen(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </Modal>
+          )}
 
           <div className="btn-row no-print" style={{ marginBottom: 24 }}>
             {!isIssued && (
@@ -1345,8 +1450,14 @@ function InvoicePreview({
           {invoiceNumber && <div style={{ fontSize: 15, fontWeight: 700 }}>#{invoiceNumber}</div>}
           {invoiceStatus === 'draft' && <span className="badge badge-draft">DRAFT</span>}
           <div style={{ fontSize: 20, fontWeight: 700, marginTop: 8 }}>Date: {invoiceDate || '—'}</div>
-          {isCommission && customer && (customer.company || customer.name) && (
-            <div style={{ fontSize: 16, fontWeight: 600, marginTop: 4 }}>{customer.company || customer.name}</div>
+          {isCommission && customer && (
+            <div style={{ marginTop: 4 }}>
+              {(customer.company || customer.name) && (
+                <div style={{ fontSize: 16, fontWeight: 600 }}>{customer.company || customer.name}</div>
+              )}
+              {customer.contact_person && <div style={{ fontSize: 14 }}>{customer.contact_person}</div>}
+              {customer.phone && <div style={{ fontSize: 14 }}>{customer.phone}</div>}
+            </div>
           )}
         </div>
       </div>
