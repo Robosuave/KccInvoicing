@@ -255,7 +255,7 @@ textarea.input { min-height: 96px; resize: vertical; }
   position: sticky; top: 88px;
 }
 .invoice-preview h2 { margin: 0; font-size: 22px; }
-.inv-head { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.inv-head { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 20px; background: #e7f3e7; padding: 14px 16px; border-radius: 8px; }
 .inv-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
 .inv-table th { text-align: left; border-bottom: 2px solid var(--text); padding: 8px 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; }
 .inv-table td { border-bottom: 1px solid var(--border); padding: 8px 6px; vertical-align: top; }
@@ -302,7 +302,7 @@ textarea.input { min-height: 96px; resize: vertical; }
     font-size: 12.5px;
   }
   .invoice-preview h2 { font-size: 20px !important; }
-  .inv-head { margin-bottom: 10px !important; }
+  .inv-head { margin-bottom: 10px !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .inv-table { margin: 8px 0 !important; }
   .inv-table th, .inv-table td { padding: 5px 6px !important; }
   .inv-totals { width: 220px !important; }
