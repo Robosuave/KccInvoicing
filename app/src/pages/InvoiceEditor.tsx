@@ -768,6 +768,27 @@ export default function InvoiceEditor() {
       logoUrl={logoUrl} />
   );
 
+  const actionButtons = (
+    <>
+      {!isIssued && (
+        <Button onClick={() => doSave(true)} disabled={saveStatus === 'saving'}>
+          {saveStatus === 'saving' ? 'Saving…' : draftId ? 'Save draft' : 'Create draft'}
+        </Button>
+      )}
+      <Button variant="secondary" onClick={() => setShowPreview(true)}>
+        Preview
+      </Button>
+      <Button variant="secondary" onClick={doPrint} data-action="print">
+        Print / Save PDF
+      </Button>
+      {!isIssued && (
+        <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+          Drafts autosave{invoiceNumber ? ` as invoice #${invoiceNumber}` : ''}.
+        </span>
+      )}
+    </>
+  );
+
   return (
     <div>
       <div className="no-print" style={{ marginBottom: 12 }}>
@@ -786,6 +807,9 @@ export default function InvoiceEditor() {
         >
           ← Back to invoices
         </Button>
+      </div>
+      <div className="btn-row no-print" style={{ marginBottom: 16 }}>
+        {actionButtons}
       </div>
       <div className="btn-row no-print" style={{ marginBottom: 16, justifyContent: 'space-between' }}>
         <h1 className="page-title" style={{ margin: 0 }}>
@@ -1171,22 +1195,7 @@ export default function InvoiceEditor() {
           )}
 
           <div id="invoice-actions" className="btn-row no-print" style={{ marginBottom: 24 }}>
-            {!isIssued && (
-              <Button onClick={() => doSave(true)} disabled={saveStatus === 'saving'}>
-                {saveStatus === 'saving' ? 'Saving…' : draftId ? 'Save draft' : 'Create draft'}
-              </Button>
-            )}
-            <Button variant="secondary" onClick={() => setShowPreview(true)}>
-              Preview
-            </Button>
-            <Button variant="secondary" onClick={doPrint} data-action="print">
-              Print / Save PDF
-            </Button>
-            {!isIssued && (
-              <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-                Drafts autosave{invoiceNumber ? ` as invoice #${invoiceNumber}` : ''}.
-              </span>
-            )}
+            {actionButtons}
           </div>
         </div>
 
