@@ -5,15 +5,15 @@ import { BusinessProvider, useBusiness } from './business/BusinessContext';
 import { APP_NAME } from './lib/config';
 import { Button, Modal } from './components/ui';
 import Login from './pages/Login';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Businesses from './pages/Businesses';
 import Customers from './pages/Customers';
 import Items from './pages/Items';
 import Invoices from './pages/Invoices';
 import InvoiceEditor from './pages/InvoiceEditor';
-import InvoiceDetail from './pages/InvoiceDetail';
-import InvoicePrint from './pages/InvoicePrint';
 import Settings from './pages/Settings';
+import Team from './pages/Team';
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -22,12 +22,20 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return children;
 }
 
+function OwnerRoute({ children }: { children: ReactNode }) {
+  const { isOwner, loading } = useBusiness();
+  if (loading) return <p style={{ padding: 40 }}>Loading…</p>;
+  if (!isOwner) return <Navigate to="/" replace />;
+  return children;
+}
+
 const NAV = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/invoices', label: 'Invoices' },
   { to: '/customers', label: 'Customers' },
   { to: '/items', label: 'Products & services' },
-  { to: '/businesses', label: 'Businesses' },
+  { to: '/businesses', label: 'Businesses', ownerOnly: true },
+  { to: '/team', label: 'Team', ownerOnly: true },
   { to: '/settings', label: 'Settings' },
 ];
 
@@ -78,8 +86,8 @@ function PendingSwitchModal() {
 }
 
 function Shell() {
-  const { activeBusiness } = useBusiness();
-  const { signOut } = useAuth();
+  const { activeBusiness, isOwner } = useBusiness();
+  const { user, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
 
@@ -90,7 +98,12 @@ function Shell() {
           <div className="brand-name">{APP_NAME}</div>
           <div className="brand-sub">Phase 1</div>
         </div>
-        {NAV.map((n) => (
+        {NAV.filter((n) => {
+          if (n.ownerOnly && !isOwner) return false;
+          // Commission businesses (Dania Realty) don't use line items.
+          if (n.to === '/items' && activeBusiness?.default_template === 'commission') return false;
+          return true;
+        }).map((n) => (
           <NavLink
             key={n.to}
             to={n.to}
@@ -102,6 +115,21 @@ function Shell() {
           </NavLink>
         ))}
         <div className="sidebar-footer">
+          {user?.email && (
+            <div
+              title="Signed in as"
+              style={{
+                padding: '0 14px 8px',
+                fontSize: 12,
+                color: '#9fb3d1',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {user.email}
+            </div>
+          )}
           <button
             className="nav-link"
             style={{ background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer', color: '#dbe4f2' }}
@@ -123,8 +151,25 @@ function Shell() {
               {activeBusiness.display_name}
             </span>
           )}
-          <div style={{ marginLeft: 'auto' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+            {user?.email && (
+              <span
+                className="topbar-email"
+                title="Signed in as"
+                style={{ fontSize: 12, color: '#5b6b85', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              >
+                {user.email}
+              </span>
+            )}
             <BusinessSwitcher />
+            <button
+              className="btn btn-secondary btn-sm"
+              style={{ whiteSpace: 'nowrap' }}
+              onClick={() => signOut()}
+              aria-label="Log off"
+            >
+              Log off
+            </button>
           </div>
         </div>
         <main className="content" key={location.pathname}>
@@ -133,11 +178,10 @@ function Shell() {
             <Route path="/invoices" element={<Invoices />} />
             <Route path="/invoices/new" element={<InvoiceEditor />} />
             <Route path="/invoices/:id" element={<InvoiceEditor />} />
-            <Route path="/invoices/:id/view" element={<InvoiceDetail />} />
-            <Route path="/invoices/:id/print" element={<InvoicePrint />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/items" element={<Items />} />
-            <Route path="/businesses" element={<Businesses />} />
+            <Route path="/businesses" element={<OwnerRoute><Businesses /></OwnerRoute>} />
+            <Route path="/team" element={<OwnerRoute><Team /></OwnerRoute>} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
@@ -154,6 +198,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route
             path="/*"
             element={

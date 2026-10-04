@@ -11,6 +11,7 @@ export interface Business {
   workspace_id: string;
   display_name: string;
   legal_name: string | null;
+  header_line: string | null;
   logo_path: string | null;
   address_line1: string | null;
   address_line2: string | null;
@@ -28,9 +29,9 @@ export interface Business {
   invoice_prefix: string;
   next_number: number;
   default_tax_rate: string; // numeric from Postgres
+  default_template: InvoiceTemplate;
   default_email_subject: string | null;
   default_email_message: string | null;
-  default_template_id: string;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
@@ -40,6 +41,7 @@ export interface Customer {
   id: string;
   business_id: string;
   name: string;
+  company: string | null;
   contact_person: string | null;
   billing_line1: string | null;
   billing_line2: string | null;
@@ -76,7 +78,8 @@ export interface Item {
 }
 
 export type InvoiceStatus = 'draft' | 'issued' | 'void';
-export type PaymentStatus = 'unpaid' | 'partial' | 'paid';
+
+export type InvoiceTemplate = 'standard' | 'commission';
 
 export interface Invoice {
   id: string;
@@ -84,6 +87,7 @@ export interface Invoice {
   customer_id: string | null;
   status: InvoiceStatus;
   invoice_number: string | null;
+  created_by: string | null;
   draft_key: string;
   invoice_date: string;
   due_date: string | null;
@@ -97,16 +101,20 @@ export interface Invoice {
   shipping_cents: number;
   total_cents: number;
   amount_paid_cents: number;
+  template: InvoiceTemplate;
+  sale_price_cents: number;
+  commission_pct: string; // numeric from Postgres, e.g. "3.000"
+  commission_amount_cents: number | null; // manual $ override; null = compute from %
+  processing_fee_cents: number;
+  other_charge_desc: string | null;
+  other_charge_cents: number;
+  agent_name: string | null;
+  second_agent_name: string | null;
+  property_address: string | null;
   notes: string | null;
   terms: string | null;
   payment_instructions: string | null;
-  payment_status: PaymentStatus;
-  revised_from_id: string | null;
-  revision_no: number;
-  voided_at: string | null;
-  void_reason: string | null;
-  issued_pdf_path: string | null;
-  template_id: string;
+  payment_instructions_snapshot: string | null;
   snapshot: Record<string, unknown> | null;
   issued_at: string | null;
   created_at: string;
@@ -125,32 +133,5 @@ export interface InvoiceLine {
   discount_cents: number;
   tax_rate: string;
   line_total_cents: number;
-  created_at: string;
-}
-
-export type PaymentMethod = 'cash' | 'check' | 'bank_transfer' | 'other';
-
-export interface Payment {
-  id: string;
-  invoice_id: string;
-  business_id: string;
-  amount_cents: number;
-  method: PaymentMethod;
-  reference: string | null;
-  note: string | null;
-  payment_date: string;
-  idempotency_key: string;
-  reversed_at: string | null;
-  reversed_reason: string | null;
-  created_at: string;
-}
-
-export interface AuditEvent {
-  id: string;
-  business_id: string;
-  invoice_id: string | null;
-  actor: string | null;
-  action: string;
-  details: Record<string, unknown>;
   created_at: string;
 }
