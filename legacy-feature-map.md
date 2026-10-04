@@ -50,6 +50,9 @@ Footer / notes:
 - Editable comments label ("Please click below to edit text" → "Comments:")
 - Default comments: "Make checks payable to: ( Kaleky Computer Consulting Inc )" + contact block
 - "Thank You For Your Business!" editable footer line
+- Screenshot reference: legacy-screenshots/invoice-builder-bottom.jpg (2026-10-03) confirms the
+  Subtotal / Sales Tax / Shipping & Handling / Total Due rows, the editable comments block with the
+  company contact text, and the checked "Email To Customer" checkbox.
 
 Actions:
 - Save Invoice, Print Preview
