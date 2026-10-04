@@ -292,7 +292,7 @@ textarea.input { min-height: 96px; resize: vertical; }
 }
 
 @media print {
-  .sidebar, .topbar, .no-print, .alert, .scrim { display: none !important; }
+  .sidebar, .topbar, .no-print, .alert, .scrim, .badge-draft { display: none !important; }
   .app-shell { display: block !important; min-height: 0 !important; }
   .main { display: block !important; }
   .content { padding: 0; max-width: none; }
