@@ -297,7 +297,7 @@ textarea.input { min-height: 96px; resize: vertical; }
   .editor-layout { display: block !important; }
   .invoice-preview {
     position: static; box-shadow: none; border: none; padding: 0;
-    font-size: 12.5px; break-inside: avoid;
+    font-size: 12.5px; break-inside: avoid; zoom: 0.85;
   }
   .invoice-preview h2 { font-size: 20px !important; }
   .inv-head { margin-bottom: 10px !important; }

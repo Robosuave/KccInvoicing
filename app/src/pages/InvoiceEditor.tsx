@@ -731,9 +731,11 @@ export default function InvoiceEditor() {
             <Field label="Notes / comments" htmlFor="inv-notes">
               <TextArea id="inv-notes" value={notes} onChange={touch((e) => setNotes(e.target.value))} />
             </Field>
-            <Field label="Terms" htmlFor="inv-terms">
-              <TextField id="inv-terms" value={terms} onChange={touch((e) => setTerms(e.target.value))} />
-            </Field>
+            {template !== 'commission' && (
+              <Field label="Terms" htmlFor="inv-terms">
+                <TextField id="inv-terms" value={terms} onChange={touch((e) => setTerms(e.target.value))} />
+              </Field>
+            )}
             <Field
               label={template === 'commission' ? 'Wire instructions' : 'Payment instructions'}
               htmlFor="inv-pay"
@@ -1103,7 +1105,7 @@ function InvoicePreview({
           <div style={{ whiteSpace: 'pre-wrap' }}>{notes}</div>
         </div>
       )}
-      {terms !== '' && (
+      {!isCommission && terms !== '' && (
         <div className="inv-section" style={{ marginTop: 12 }}>
           <strong>Terms:</strong> {terms}
         </div>
