@@ -1531,8 +1531,6 @@ function InvoicePreview({
                 <div style={{ fontSize: 16, fontWeight: 600 }}>{customer.company || customer.name}</div>
               )}
               {customer.contact_person && <div style={{ fontSize: 14 }}>{customer.contact_person}</div>}
-              {customer.phone && <div style={{ fontSize: 14 }}>{customer.phone}</div>}
-              {customer.email && <div style={{ fontSize: 14 }}>{customer.email}</div>}
               {(customer.billing_line1 || customer.billing_city || customer.billing_state || customer.billing_zip) && (
                 <div style={{ fontSize: 14 }}>
                   {customer.billing_line1 && <div>{customer.billing_line1}</div>}
@@ -1544,6 +1542,8 @@ function InvoicePreview({
                   )}
                 </div>
               )}
+              {customer.phone && <div style={{ fontSize: 14 }}>{customer.phone}</div>}
+              {customer.email && <div style={{ fontSize: 14 }}>{customer.email}</div>}
             </div>
           )}
         </div>
