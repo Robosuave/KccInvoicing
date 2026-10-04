@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
 import type { Business, Customer, Invoice, Item, InvoiceTemplate, InvoiceStatus } from '../db/types';
 import { createDraft, getDraft, previewTotals, saveDraft, markIssued, type DraftInput } from '../data/drafts';
@@ -107,7 +107,6 @@ interface CommissionPreviewData {
 export default function InvoiceEditor() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const { activeBusiness, workspace, notConfigured, setEditorDirty, onSaveDraftRef, loading: businessesLoading } = useBusiness();
   const isNew = !id || id === 'new';
 
@@ -501,7 +500,10 @@ export default function InvoiceEditor() {
           setDraftId(created.id);
           setExpectedUpdatedAt(created.updated_at);
           setInvoiceNumber(created.invoice_number ?? null);
-          navigate(`/invoices/${created.id}`, { replace: true });
+          // Swap the URL without a router navigation: navigating from /invoices/new
+          // to /invoices/:id would unmount and remount the editor (separate routes),
+          // losing focus and jumping the page to the top mid-typing.
+          window.history.replaceState(null, '', `/invoices/${created.id}`);
           savedId = created.id;
         }
         dirtyRef.current = false;
@@ -516,7 +518,7 @@ export default function InvoiceEditor() {
         return null;
       }
     },
-    [validate, toDraftInput, draftId, expectedUpdatedAt, navigate, setEditorDirty, isIssued],
+    [validate, toDraftInput, draftId, expectedUpdatedAt, setEditorDirty, isIssued],
   );
 
   /** Print / Save PDF. Finalizes the invoice (draft -> issued) on first print. */
