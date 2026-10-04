@@ -112,6 +112,9 @@ export interface Invoice {
   agent_name: string | null;
   second_agent_name: string | null;
   property_address: string | null;
+  property_city: string | null;
+  property_state: string | null;
+  property_zip: string | null;
   notes: string | null;
   terms: string | null;
   payment_instructions: string | null;

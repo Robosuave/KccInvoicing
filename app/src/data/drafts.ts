@@ -42,6 +42,9 @@ export interface DraftInput {
   agent_name?: string | null;
   second_agent_name?: string | null;
   property_address?: string | null;
+  property_city?: string | null;
+  property_state?: string | null;
+  property_zip?: string | null;
   lines: DraftLineInput[];
 }
 
@@ -93,6 +96,9 @@ function commissionColumns(input: DraftInput) {
     agent_name: input.agent_name ?? null,
     second_agent_name: input.second_agent_name ?? null,
     property_address: input.property_address ?? null,
+    property_city: input.property_city ?? null,
+    property_state: input.property_state ?? null,
+    property_zip: input.property_zip ?? null,
   };
 }
 

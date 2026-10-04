@@ -179,8 +179,11 @@ function CommissionBody({ snap }: { snap: InvoiceSnapshot }) {
 
   return (
     <View>
-      {c.property_address && (
-        <Text style={styles.propLine}><Text style={{ fontWeight: 'bold' }}>Property: </Text>{c.property_address}</Text>
+      {(c.property_address || c.property_city || c.property_state || c.property_zip) && (
+        <Text style={styles.propLine}>
+          <Text style={{ fontWeight: 'bold' }}>Property: </Text>
+          {[c.property_address, [c.property_city, c.property_state].filter(Boolean).join(', ') + (c.property_zip ? ` ${c.property_zip}` : '')].filter((s) => s && s.trim()).join(', ')}
+        </Text>
       )}
       {(c.agent_name || c.second_agent_name) && (
         <View style={{ marginBottom: 10 }}>

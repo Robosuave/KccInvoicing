@@ -60,6 +60,9 @@ export interface SnapshotCommission {
   agent_name: string | null;
   second_agent_name: string | null;
   property_address: string | null;
+  property_city: string | null;
+  property_state: string | null;
+  property_zip: string | null;
 }
 
 export interface InvoiceSnapshot {
@@ -117,6 +120,7 @@ export function buildLiveSnapshot(args: {
     sale_price_cents: number; commission_pct: string; commission_amount_cents: number | null;
     processing_fee_cents: number; other_charge_desc: string | null; other_charge_cents: number;
     agent_name: string | null; second_agent_name: string | null; property_address: string | null;
+    property_city: string | null; property_state: string | null; property_zip: string | null;
     issued_at: string | null;
   };
   business: {
@@ -158,6 +162,9 @@ export function buildLiveSnapshot(args: {
       agent_name: inv.agent_name,
       second_agent_name: inv.second_agent_name,
       property_address: inv.property_address,
+      property_city: inv.property_city,
+      property_state: inv.property_state,
+      property_zip: inv.property_zip,
     },
     totals: {
       subtotal_cents: inv.subtotal_cents,
