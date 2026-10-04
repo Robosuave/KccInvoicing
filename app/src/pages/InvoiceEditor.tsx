@@ -5,7 +5,7 @@ import type { Business, Customer, Item, InvoiceTemplate } from '../db/types';
 import { createDraft, getDraft, previewTotals, saveDraft, type DraftInput } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listItems } from '../data/items';
-import { centsToDollars, dollarsToCents, multiplyQuantity, calculateCommissionTotals } from '../lib/money';
+import { centsToDollars, dollarsToCents, multiplyQuantity, calculateCommissionTotals, percentOf } from '../lib/money';
 import {
   Alert,
   Button,
@@ -95,6 +95,8 @@ export default function InvoiceEditor() {
   const [salePrice, setSalePrice] = useState('');
   const [commissionPct, setCommissionPct] = useState('');
   const [commissionAmt, setCommissionAmt] = useState('');
+  /* true once the user types a $ directly — % or sale-price changes clear it and resume auto-fill */
+  const commissionAmtManual = useRef(false);
   const [processingFee, setProcessingFee] = useState('295.00');
   const [otherChargeDesc, setOtherChargeDesc] = useState('');
   const [otherCharge, setOtherCharge] = useState('');
@@ -161,6 +163,7 @@ export default function InvoiceEditor() {
         setSalePrice(invoice.sale_price_cents ? centsToDollars(invoice.sale_price_cents) : '');
         setCommissionPct(invoice.commission_pct && Number(invoice.commission_pct) !== 0 ? String(Number(invoice.commission_pct)) : '');
         setCommissionAmt(invoice.commission_amount_cents ? plainDollars(invoice.commission_amount_cents) : '');
+        commissionAmtManual.current = !!invoice.commission_amount_cents;
         setPropertyAddress(invoice.property_address ?? '');
         setProcessingFee(centsToDollars(invoice.processing_fee_cents));
         setOtherChargeDesc(invoice.other_charge_desc ?? '');
@@ -188,6 +191,19 @@ export default function InvoiceEditor() {
     if (pre) setCustomerId(pre);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNew, activeBusiness?.id]);
+
+  /* auto-fill the commission $ box from % x sale price, until the user types a $ */
+  useEffect(() => {
+    if (template !== 'commission' || commissionAmtManual.current) return;
+    try {
+      const price = salePrice.trim();
+      const pct = commissionPct.trim();
+      if (!price || !pct) return;
+      setCommissionAmt(plainDollars(percentOf(dollarsToCents(price), pctToRate(pct))));
+    } catch {
+      /* leave the $ box alone while inputs are incomplete or invalid */
+    }
+  }, [template, salePrice, commissionPct]);
 
   /* customer default terms */
   useEffect(() => {
@@ -550,15 +566,15 @@ export default function InvoiceEditor() {
               </div>
               <div className="form-row">
                 <Field label="Sale price $ *" htmlFor="com-sale">
-                  <TextField id="com-sale" inputMode="decimal" value={salePrice} onChange={touch((e) => setSalePrice(e.target.value))} placeholder="0.00" />
+                  <TextField id="com-sale" inputMode="decimal" value={salePrice} onChange={touch((e) => { commissionAmtManual.current = false; setSalePrice(e.target.value); })} placeholder="0.00" />
                 </Field>
                 <Field label="Real estate commission %" htmlFor="com-pct" hint="e.g. 3 for 3%">
-                  <TextField id="com-pct" inputMode="decimal" value={commissionPct} onChange={touch((e) => setCommissionPct(e.target.value))} />
+                  <TextField id="com-pct" inputMode="decimal" value={commissionPct} onChange={touch((e) => { commissionAmtManual.current = false; setCommissionPct(e.target.value); })} />
                 </Field>
               </div>
               <div className="form-row">
-                <Field label="Commission amount $ *" htmlFor="com-amt" hint="Enter the commission amount">
-                  <TextField id="com-amt" inputMode="decimal" value={commissionAmt} onChange={touch((e) => setCommissionAmt(e.target.value))} placeholder="0.00" />
+                <Field label="Commission amount $ *" htmlFor="com-amt" hint="Auto-filled from % — edit to override">
+                  <TextField id="com-amt" inputMode="decimal" value={commissionAmt} onChange={touch((e) => { commissionAmtManual.current = true; setCommissionAmt(e.target.value); })} placeholder="0.00" />
                 </Field>
                 <Field label="Processing fee $" htmlFor="com-fee">
                   <TextField id="com-fee" inputMode="decimal" value={processingFee} onChange={touch((e) => setProcessingFee(e.target.value))} placeholder="295.00" />
