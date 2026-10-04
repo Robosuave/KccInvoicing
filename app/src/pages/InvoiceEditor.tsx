@@ -937,6 +937,7 @@ function CommissionPreviewBody({
   otherChargeDesc,
   commissionTotals,
   paymentInstructions,
+  notes,
 }: {
   agentName: string;
   secondAgentName: string;
@@ -946,6 +947,7 @@ function CommissionPreviewBody({
   otherChargeDesc: string;
   commissionTotals: CommissionPreviewData | null;
   paymentInstructions: string;
+  notes: string;
 }) {
   const pct = commissionPct.trim();
   const sale = salePrice.trim() || '0.00';
@@ -990,9 +992,6 @@ function CommissionPreviewBody({
           )}
         </div>
       )}
-      <div style={{ marginBottom: 4 }}>
-        <strong>DESCRIPTION / COMMISSION &amp; FEES</strong>
-      </div>
       <table className="inv-table">
         <thead>
           <tr>
@@ -1031,6 +1030,12 @@ function CommissionPreviewBody({
           </div>
         </div>
       )}
+      {notes.trim() !== '' && (
+        <div style={{ marginTop: 12 }}>
+          <strong>Notes</strong>
+          <div style={{ whiteSpace: 'pre-wrap', marginTop: 4, fontSize: 14 }}>{notes.trim()}</div>
+        </div>
+      )}
       {paymentInstructions !== '' && (
         <div
           className="inv-wirebox"
@@ -1042,7 +1047,7 @@ function CommissionPreviewBody({
             padding: 12,
           }}
         >
-          <strong>WIRE INSTRUCTIONS</strong>
+          {!/^wire instructions/im.test(paymentInstructions) && <strong>WIRE INSTRUCTIONS</strong>}
           <div style={{ whiteSpace: 'pre-wrap', marginTop: 6, fontSize: 14 }}>{paymentInstructions}</div>
         </div>
       )}
@@ -1271,12 +1276,13 @@ function InvoicePreview({
           otherChargeDesc={otherChargeDesc}
           commissionTotals={commissionTotals}
           paymentInstructions={paymentInstructions}
+          notes={notes}
         />
       ) : (
         <StandardPreviewBody lines={lines} totals={totals} discountMode={discountMode} />
       )}
 
-      {notes.trim() !== '' && (
+      {!isCommission && notes.trim() !== '' && (
         <div className="inv-section" style={{ marginTop: 20 }}>
           <strong>Notes</strong>
           <div style={{ whiteSpace: 'pre-wrap' }}>{notes.trim()}</div>
