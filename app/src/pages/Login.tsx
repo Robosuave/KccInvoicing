@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { getSupabase } from '../lib/supabase';
-import { APP_NAME, isBackendConfigured } from '../lib/config';
+import { APP_NAME, APP_URL, isBackendConfigured } from '../lib/config';
 import { Alert, Button, Field, SetupRequired, TextField } from '../components/ui';
 
 export default function Login() {
@@ -29,7 +29,7 @@ export default function Login() {
         const sb = getSupabase();
         if (!sb) throw new Error('Backend not configured.');
         const { error } = await sb.auth.resetPasswordForEmail(email.trim(), {
-          redirectTo: `${window.location.origin}/reset-password`,
+          redirectTo: `${APP_URL}/reset-password`,
         });
         if (error) throw error;
         setResetSent(true);

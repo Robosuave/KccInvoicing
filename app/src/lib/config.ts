@@ -4,6 +4,14 @@
 
 export const APP_NAME = 'My Business Invoice Desk';
 
+/**
+ * Canonical public URL of the deployed app. Password-reset emails link here —
+ * it is intentionally NOT derived from window.location.origin, because the
+ * reset request can originate from a preview build or local dev server while
+ * the emailed link must always open the live app.
+ */
+export const APP_URL = 'https://kcc-invoicing.vercel.app';
+
 export const DEFAULT_CURRENCY = 'USD';
 
 /** Rounding policy: half-up, applied in integer minor units. See lib/money.ts. */
