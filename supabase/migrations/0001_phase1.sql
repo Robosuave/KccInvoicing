@@ -3,6 +3,19 @@
 -- Phase 1 scope: workspaces, businesses, customers, items, draft invoices + lines.
 -- Issuance/numbering function, payments, audit trail, templates arrive in Phase 2.
 
+-- ============ helpers ============
+
+create or replace function public.is_workspace_member(w_id uuid)
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select exists (
+    select 1 from public.workspace_members m
+    where m.workspace_id = w_id and m.user_id = auth.uid()
+  );
+$$;
 
 -- ============ workspaces ============
 
@@ -19,20 +32,6 @@ create table public.workspace_members (
   created_at timestamptz not null default now(),
   primary key (workspace_id, user_id)
 );
-
--- ============ helpers ============
-
-create or replace function public.is_workspace_member(w_id uuid)
-returns boolean
-language sql
-security definer
-stable
-as $$
-  select exists (
-    select 1 from public.workspace_members m
-    where m.workspace_id = w_id and m.user_id = auth.uid()
-  );
-$$;
 
 alter table public.workspaces enable row level security;
 alter table public.workspace_members enable row level security;
