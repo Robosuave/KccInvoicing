@@ -4,14 +4,16 @@ import { useBusiness } from '../business/BusinessContext';
 import type { Customer, Invoice } from '../db/types';
 import { createDraft, deleteDraft, getDraft, listDrafts } from '../data/drafts';
 import { listCustomers } from '../data/customers';
+import { listBusinessMembers } from '../data/team';
 import { centsToDollars } from '../lib/money';
 import { Alert, Button, EmptyState, SetupRequired } from '../components/ui';
 
 export default function Invoices() {
-  const { activeBusiness, notConfigured } = useBusiness();
+  const { activeBusiness, notConfigured, isOwner } = useBusiness();
   const navigate = useNavigate();
   const [drafts, setDrafts] = useState<Invoice[]>([]);
   const [customers, setCustomers] = useState<Record<string, Customer>>({});
+  const [creatorEmails, setCreatorEmails] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,6 +24,19 @@ export default function Invoices() {
       const [d, c] = await Promise.all([listDrafts(activeBusiness.id), listCustomers(activeBusiness.id)]);
       setDrafts(d);
       setCustomers(Object.fromEntries(c.map((x) => [x.id, x])));
+      // Owners see who created each invoice.
+      if (isOwner) {
+        try {
+          const members = await listBusinessMembers(activeBusiness.id);
+          const byId: Record<string, string> = {};
+          for (const m of members) byId[m.user_id] = m.email;
+          setCreatorEmails(byId);
+        } catch {
+          setCreatorEmails({});
+        }
+      } else {
+        setCreatorEmails({});
+      }
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load drafts.');
@@ -141,6 +156,11 @@ export default function Invoices() {
                     <div style={{ fontSize: 13, color: 'var(--muted)' }}>
                       Updated {new Date(d.updated_at).toLocaleString()}
                     </div>
+                    {isOwner && d.created_by && creatorEmails[d.created_by] && (
+                      <div style={{ fontSize: 13, color: 'var(--muted)' }}>
+                        By {creatorEmails[d.created_by]}
+                      </div>
+                    )}
                   </td>
                   <td>{d.customer_id ? customers[d.customer_id]?.name ?? '—' : '—'}</td>
                   <td style={{ fontSize: 14 }}>{d.invoice_date}</td>

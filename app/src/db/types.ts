@@ -86,6 +86,7 @@ export interface Invoice {
   customer_id: string | null;
   status: InvoiceStatus;
   invoice_number: string | null;
+  created_by: string | null;
   draft_key: string;
   invoice_date: string;
   due_date: string | null;
