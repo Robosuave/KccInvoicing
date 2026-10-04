@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { getSupabase } from '../lib/supabase';
 import { APP_NAME, APP_URL, isBackendConfigured } from '../lib/config';
@@ -8,8 +8,13 @@ import { Alert, Button, Field, SetupRequired, TextField } from '../components/ui
 export default function Login() {
   const { signIn, authError } = useAuth();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
-  const [email, setEmail] = useState('');
+  const [searchParams] = useSearchParams();
+  // Invite links land here as /login?signup=1&email=agent@x.com — open directly
+  // on account creation with the invited email prefilled.
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>(() =>
+    searchParams.get('signup') === '1' || searchParams.get('mode') === 'signup' ? 'signup' : 'signin',
+  );
+  const [email, setEmail] = useState(() => searchParams.get('email') ?? '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -63,7 +68,10 @@ export default function Login() {
         <h1 className="page-title">{APP_NAME}</h1>
         <p className="page-sub">
           {mode === 'signin' && 'Sign in to your invoice desk.'}
-          {mode === 'signup' && 'Create your account. Team members: sign up with the email address the invite was sent to.'}
+          {mode === 'signup' &&
+            (searchParams.get('email')
+              ? 'You\u2019ve been invited to the team — create your account below with your invited email address.'
+              : 'Create your account. Team members: sign up with the email address the invite was sent to.')}
           {mode === 'forgot' && 'Enter your account email and we\u2019ll send you a link to reset your password.'}
         </p>
         {(error || authError) && <Alert kind="error">{error ?? authError}</Alert>}

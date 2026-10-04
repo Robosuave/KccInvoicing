@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useBusiness } from '../business/BusinessContext';
+import { APP_URL } from '../lib/config';
 import {
   cancelInvite,
   inviteAgent,
@@ -11,6 +12,28 @@ import {
 } from '../data/team';
 import { Alert, Button, EmptyState, Field, TextField } from '../components/ui';
 
+/** Link that drops a new agent straight onto account creation with their email prefilled. */
+export function inviteLinkFor(inviteEmail: string): string {
+  const params = new URLSearchParams({ signup: '1', email: inviteEmail });
+  return `${APP_URL}/login?${params.toString()}`;
+}
+
+async function copyText(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    // Fallback for browsers without async clipboard access.
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+}
+
 export default function Team() {
   const { businesses, isOwner } = useBusiness();
   const [businessId, setBusinessId] = useState<string>('');
@@ -21,6 +44,8 @@ export default function Team() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [lastInviteLink, setLastInviteLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Default to Dania Realty when present.
   useEffect(() => {
@@ -52,16 +77,25 @@ export default function Team() {
     load();
   }, [load]);
 
+  const copyInviteLink = async (link: string) => {
+    await copyText(link);
+    setCopied(true);
+    setNotice('Invite link copied — paste it into a text message to the agent.');
+    window.setTimeout(() => setCopied(false), 2000);
+  };
+
   const doInvite = async () => {
     if (!businessId) return;
     setSaving(true);
     setError(null);
     setNotice(null);
     try {
-      await inviteAgent(businessId, email);
+      const inviteEmail = email.trim();
+      await inviteAgent(businessId, inviteEmail);
       setEmail('');
+      setLastInviteLink(inviteLinkFor(inviteEmail));
       setNotice(
-        'Invite sent. Have the agent open the app and sign up with that exact email address — they will only see this business.',
+        'Invite sent. Text the agent the invite link below — it takes them straight to creating their account.',
       );
       await load();
     } catch (e) {
@@ -163,6 +197,23 @@ export default function Team() {
         </div>
       </div>
 
+      {lastInviteLink && (
+        <div className="card" style={{ marginBottom: 16, borderColor: 'var(--accent)' }}>
+          <h2 style={{ marginTop: 0 }}>Invite link — text this to the agent</h2>
+          <p style={{ color: 'var(--muted)', fontSize: 14, marginTop: 0 }}>
+            It opens the app directly on account creation with their email already filled in.
+          </p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 240px' }}>
+              <TextField value={lastInviteLink} readOnly onFocus={(e) => e.target.select()} aria-label="Invite link" />
+            </div>
+            <Button onClick={() => copyInviteLink(lastInviteLink)}>
+              {copied ? 'Copied!' : 'Copy link'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <p style={{ color: 'var(--muted)' }}>Loading…</p>
       ) : (
@@ -219,6 +270,9 @@ export default function Team() {
                           {new Date(i.created_at).toLocaleDateString()}
                         </td>
                         <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                          <Button variant="ghost" size="sm" onClick={() => copyInviteLink(inviteLinkFor(i.email))}>
+                            Copy link
+                          </Button>{' '}
                           <Button variant="ghost" size="sm" onClick={() => doCancelInvite(i.id)}>
                             Cancel
                           </Button>
