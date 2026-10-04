@@ -584,6 +584,9 @@ export default function InvoiceEditor() {
           {template === 'commission' ? (
             <div className="card">
               <h2 style={{ marginTop: 0 }}>Commission &amp; fees</h2>
+              <Field label="Property address *" htmlFor="com-prop" hint="From the HUD / closing statement">
+                <TextField id="com-prop" value={propertyAddress} onChange={touch((e) => setPropertyAddress(e.target.value))} placeholder="123 Main St, Hollywood, FL 33021" />
+              </Field>
               <div className="form-row">
                 <Field label="Agent name *" htmlFor="com-agent">
                   <TextField id="com-agent" value={agentName} onChange={touch((e) => setAgentName(e.target.value))} placeholder="Listing / selling agent" />
@@ -616,9 +619,6 @@ export default function InvoiceEditor() {
                   <TextField id="com-otherdesc" value={otherChargeDesc} onChange={touch((e) => setOtherChargeDesc(e.target.value))} placeholder="What the other charge is for" />
                 </Field>
               </div>
-              <Field label="Property address *" htmlFor="com-prop" hint="From the HUD / closing statement">
-                <TextField id="com-prop" value={propertyAddress} onChange={touch((e) => setPropertyAddress(e.target.value))} placeholder="123 Main St, Hollywood, FL 33021" />
-              </Field>
               {commissionPreview && (
                 <div className="totals-box" aria-live="polite">
                   <div className="totals-row">
