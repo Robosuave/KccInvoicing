@@ -69,13 +69,6 @@ export default function Dashboard() {
         )}
       </p>
 
-      <div className="stats">
-        <Stat label="Draft invoices" value={String(stats.drafts)} note={`Draft total ${centsToDollars(stats.draftTotal)}`} />
-        <Stat label="Issued invoices" value={String(stats.issued)} note={`Billed total ${centsToDollars(stats.issuedTotal)}`} />
-        <Stat label="Customers" value={String(stats.customers)} />
-        <Stat label="Catalog items" value={String(stats.items)} />
-      </div>
-
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Quick actions</h2>
         <div className="btn-row">
@@ -89,6 +82,14 @@ export default function Dashboard() {
             Manage items
           </Link>
         </div>
+      </div>
+
+      <h2>At a glance</h2>
+      <div className="stats stats-compact">
+        <Stat label="Draft invoices" value={String(stats.drafts)} note={`Draft total ${centsToDollars(stats.draftTotal)}`} />
+        <Stat label="Issued invoices" value={String(stats.issued)} note={`Billed total ${centsToDollars(stats.issuedTotal)}`} />
+        <Stat label="Customers" value={String(stats.customers)} />
+        <Stat label="Catalog items" value={String(stats.items)} />
       </div>
 
       <div className="card">
