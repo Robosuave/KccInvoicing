@@ -1,25 +1,8 @@
 # Dania Realty Commission / Wire Instruction Form — structure notes
 
-User's existing real-estate invoice form (photo received 2026-10-03, file: Dania_Realty_Commission_...;
-clear screenshot received 2026-10-03, legacy-screenshots/dania-realty-commission-form.jpg).
-Layout documented for the new app's template design.
-
-Wire block text as shown on the form (provided by the user 2026-10-03) — SENSITIVE:
-local notes only, NEVER commit to the public repo.
-
-WIRE INSTRUCTIONS
-Chase Bank
-Routing Number: 267084131
-Account Number: 383068613
-
-Dania Realty, Inc.
-2800 N 46th AV A608
-Hollywood, FL 33021
-Phone: 954.441.4540
-
-Zelle: RobKaleky@gmail.com
-
-Verify wire instructions before payment.
+User's existing real-estate invoice form (photo received 2026-10-03, file: Dania_Realty_Commission_...).
+Layout documented for the new app's template design. Bank account details from the photo are NOT
+recorded here; they live in the user's own document.
 
 ## Layout
 

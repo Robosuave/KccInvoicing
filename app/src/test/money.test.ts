@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   balanceDue,
+  calculateCommissionTotals,
   calculateInvoiceTotals,
   centsToDollars,
   dollarsToCents,
   multiplyQuantity,
+  pctToRate,
   percentOf,
 } from '../lib/money';
 
@@ -17,6 +19,10 @@ describe('dollarsToCents', () => {
   it('rounds half-up', () => {
     expect(dollarsToCents('10.005')).toBe(1001);
     expect(dollarsToCents('10.004')).toBe(1000);
+  });
+  it('accepts commas and a leading $', () => {
+    expect(dollarsToCents('225,000.00')).toBe(22500000);
+    expect(dollarsToCents('$1,234.56')).toBe(123456);
   });
   it('rejects garbage', () => {
     expect(() => dollarsToCents('abc')).toThrow();
@@ -126,5 +132,64 @@ describe('centsToDollars', () => {
   it('formats with commas', () => {
     expect(centsToDollars(530700)).toBe('5,307.00');
     expect(centsToDollars(19080)).toBe('190.80');
+  });
+});
+
+describe('pctToRate', () => {
+  it('converts whole percents', () => {
+    expect(pctToRate('3')).toBe('0.03');
+    expect(pctToRate('100')).toBe('1');
+  });
+  it('converts fractional percents', () => {
+    expect(pctToRate('2.5')).toBe('0.025');
+  });
+  it('treats blank as zero', () => {
+    expect(pctToRate('')).toBe('0');
+    expect(pctToRate('   ')).toBe('0');
+  });
+  it('rejects non-numeric input', () => {
+    expect(() => pctToRate('abc')).toThrow();
+    expect(() => pctToRate('-3')).toThrow();
+  });
+});
+
+describe('calculateCommissionTotals', () => {
+  it('computes commission, fee, and total', () => {
+    // $500,000 sale at 3% + $295 fee = $15,000 + $295 = $15,295
+    const t = calculateCommissionTotals(50000000, '3', 29500, 0);
+    expect(t.commissionCents).toBe(1500000);
+    expect(t.processingFeeCents).toBe(29500);
+    expect(t.otherChargeCents).toBe(0);
+    expect(t.totalCents).toBe(1529500);
+  });
+  it('includes the other charge', () => {
+    const t = calculateCommissionTotals(10000000, '2.5', 29500, 10000);
+    expect(t.commissionCents).toBe(250000); // 2.5% of $100,000
+    expect(t.totalCents).toBe(250000 + 29500 + 10000);
+  });
+  it('rounds commission half-up', () => {
+    expect(calculateCommissionTotals(1001, '3', 0, 0).commissionCents).toBe(30);
+    expect(calculateCommissionTotals(1000, '3', 0, 0).commissionCents).toBe(30);
+  });
+  it('rejects negative inputs', () => {
+    expect(() => calculateCommissionTotals(-1, '3', 0, 0)).toThrow();
+    expect(() => calculateCommissionTotals(0, '3', -1, 0)).toThrow();
+    expect(() => calculateCommissionTotals(0, '3', 0, -5)).toThrow();
+    expect(() => calculateCommissionTotals(0, 'abc', 0, 0)).toThrow();
+  });
+  it('uses the $ override when given, and it flows into the total', () => {
+    // 3% of $500,000 would be $15,000, but the $ box says $14,500
+    const t = calculateCommissionTotals(50000000, '3', 29500, 0, 1450000);
+    expect(t.commissionCents).toBe(1450000);
+    expect(t.totalCents).toBe(1450000 + 29500);
+  });
+  it('accepts an override of 0', () => {
+    const t = calculateCommissionTotals(50000000, '3', 29500, 10000, 0);
+    expect(t.commissionCents).toBe(0);
+    expect(t.totalCents).toBe(29500 + 10000);
+  });
+  it('rejects a bad override', () => {
+    expect(() => calculateCommissionTotals(0, '3', 0, 0, -1)).toThrow();
+    expect(() => calculateCommissionTotals(0, '3', 0, 0, 10.5)).toThrow();
   });
 });
