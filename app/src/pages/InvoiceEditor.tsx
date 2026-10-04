@@ -749,7 +749,7 @@ export default function InvoiceEditor() {
             <Button onClick={() => doSave(true)} disabled={saveStatus === 'saving'}>
               {saveStatus === 'saving' ? 'Saving…' : draftId ? 'Save draft' : 'Create draft'}
             </Button>
-            <Button variant="secondary" onClick={() => window.print()}>
+            <Button variant="secondary" onClick={async () => { if (await doSave(true)) window.print(); }}>
               Print / Save PDF
             </Button>
             <span style={{ fontSize: 13, color: 'var(--muted)' }}>
