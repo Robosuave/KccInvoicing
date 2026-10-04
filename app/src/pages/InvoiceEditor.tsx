@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
 import type { Business, Customer, Invoice, Item, InvoiceTemplate, InvoiceStatus } from '../db/types';
 import { createDraft, getDraft, previewTotals, saveDraft, markIssued, type DraftInput } from '../data/drafts';
@@ -107,6 +107,7 @@ interface CommissionPreviewData {
 export default function InvoiceEditor() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { activeBusiness, workspace, notConfigured, setEditorDirty, onSaveDraftRef, loading: businessesLoading } = useBusiness();
   const isNew = !id || id === 'new';
 
@@ -769,6 +770,11 @@ export default function InvoiceEditor() {
 
   return (
     <div>
+      <div className="no-print" style={{ marginBottom: 12 }}>
+        <Button variant="secondary" size="sm" onClick={() => navigate('/invoices')}>
+          ← Back to invoices
+        </Button>
+      </div>
       <div className="btn-row no-print" style={{ marginBottom: 16, justifyContent: 'space-between' }}>
         <h1 className="page-title" style={{ margin: 0 }}>
           {isNew && !draftId ? 'New invoice' : isIssued ? 'Invoice' : 'Edit draft'} — {activeBusiness.display_name}
