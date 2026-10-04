@@ -825,9 +825,9 @@ export default function InvoiceEditor() {
                           companyArrowRef.current = false;
                           touch((ev: React.ChangeEvent<HTMLSelectElement>) => setCustomerId(ev.target.value))(e);
                           if (!viaArrows) {
-                            // Option picked from the dropdown: move straight to Invoice date.
+                            // Option picked from the dropdown: move straight to Property address.
                             requestAnimationFrame(() => {
-                              document.getElementById('inv-date')?.focus();
+                              document.getElementById('com-prop')?.focus();
                             });
                           }
                         }}
