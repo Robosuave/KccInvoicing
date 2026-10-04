@@ -131,6 +131,9 @@ export default function InvoiceEditor() {
   const [quickEmail, setQuickEmail] = useState('');
   const [quickError, setQuickError] = useState<string | null>(null);
   const [quickSaving, setQuickSaving] = useState(false);
+  // Tracks arrow-key navigation in the Company picker so auto-advance only
+  // fires when an option is actually picked (not while arrowing on desktop).
+  const companyArrowRef = useRef(false);
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
   const [lines, setLines] = useState<LineState[]>([newLine()]);
   const [discountMode, setDiscountMode] = useState<DiscountMode>('none');
@@ -648,13 +651,10 @@ export default function InvoiceEditor() {
     markDirty();
   };
 
-  /* Commission invoices: Enter jumps to the next text field for fast keyboard flow.
-     Selects, textareas, and buttons keep their native behavior. */
   /* Commission invoices: Enter advances through a fixed field order.
      Skips the auto-calculated Commission $ and the fixed Processing fee.
      From the last field it scrolls to the Save / Preview / Print buttons. */
   const COMMISSION_ENTER_FLOW = [
-    'inv-company', // select
     'inv-date',
     'com-prop',
     'com-agent',
@@ -673,7 +673,7 @@ export default function InvoiceEditor() {
   const commissionEnterToNext = (e: React.KeyboardEvent<HTMLElement>) => {
     if (e.key !== 'Enter') return;
     const target = e.target as HTMLElement;
-    if (target.tagName !== 'INPUT' && target.tagName !== 'SELECT') return;
+    if (target.tagName !== 'INPUT') return;
     const id = (target as HTMLInputElement).id;
     let idx = COMMISSION_ENTER_FLOW.indexOf(id);
     if (idx === -1) {
@@ -814,7 +814,24 @@ export default function InvoiceEditor() {
                 <Field label="Company" htmlFor="inv-company" hint="Prints under the date on the invoice">
                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <SelectField id="inv-company" value={customerId} onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => setCustomerId(e.target.value))}>
+                      <SelectField
+                        id="inv-company"
+                        value={customerId}
+                        onKeyDown={(e) => {
+                          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') companyArrowRef.current = true;
+                        }}
+                        onChange={(e) => {
+                          const viaArrows = companyArrowRef.current;
+                          companyArrowRef.current = false;
+                          touch((ev: React.ChangeEvent<HTMLSelectElement>) => setCustomerId(ev.target.value))(e);
+                          if (!viaArrows) {
+                            // Option picked from the dropdown: move straight to Invoice date.
+                            requestAnimationFrame(() => {
+                              document.getElementById('inv-date')?.focus();
+                            });
+                          }
+                        }}
+                      >
                         <option value="">Choose a company…</option>
                         {customers.map((c) => (
                           <option key={c.id} value={c.id}>
