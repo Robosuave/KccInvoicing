@@ -1231,8 +1231,8 @@ function InvoicePreview({
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: 2 }}>
-            {isCommission ? 'COMMISSION' : 'INVOICE'}
+          <div style={{ fontSize: isCommission ? 20 : 26, fontWeight: 800, letterSpacing: isCommission ? 1 : 2 }}>
+            {isCommission ? 'COMMISSION / WIRE INSTRUCTIONS' : 'INVOICE'}
           </div>
           {invoiceNumber && <div style={{ fontSize: 15, fontWeight: 700 }}>#{invoiceNumber}</div>}
           {invoiceStatus === 'draft' && <span className="badge badge-draft">DRAFT</span>}
