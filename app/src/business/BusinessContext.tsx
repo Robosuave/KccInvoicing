@@ -46,7 +46,9 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       return null;
     }
   });
-  const [loading, setLoading] = useState(false);
+  // Start true so the first paint shows "Loading…" instead of flashing the
+  // "no business" empty state before businesses have been fetched.
+  const [loading, setLoading] = useState(true);
   const [notConfigured, setNotConfigured] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
@@ -60,6 +62,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       setWorkspace(null);
       setBusinesses([]);
       setIsOwner(false);
+      setLoading(false);
       return;
     }
     setLoading(true);

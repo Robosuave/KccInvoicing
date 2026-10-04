@@ -48,7 +48,7 @@ function toForm(i?: Item): ItemForm {
 }
 
 export default function Items() {
-  const { activeBusiness, notConfigured } = useBusiness();
+  const { activeBusiness, notConfigured, loading: businessesLoading } = useBusiness();
   const [list, setList] = useState<Item[]>([]);
   const [search, setSearch] = useState('');
   const [showInactive, setShowInactive] = useState(false);
@@ -84,6 +84,7 @@ export default function Items() {
   }, [search]);
 
   if (notConfigured) return <SetupRequired what="The item catalog" />;
+  if (businessesLoading) return <p>Loading…</p>;
   if (!activeBusiness) return <EmptyState title="No business selected" body="Create a business first." />;
 
   const set = (k: keyof ItemForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>

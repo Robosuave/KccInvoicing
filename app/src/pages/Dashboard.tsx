@@ -8,16 +8,16 @@ import { listItems } from '../data/items';
 import { centsToDollars } from '../lib/money';
 
 export default function Dashboard() {
-  const { activeBusiness, notConfigured, loadError } = useBusiness();
+  const { activeBusiness, notConfigured, loadError, loading: businessesLoading } = useBusiness();
   const [stats, setStats] = useState({ drafts: 0, draftTotal: 0, issued: 0, issuedTotal: 0, customers: 0, items: 0 });
-  const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
     if (!activeBusiness) {
-      setLoading(false);
+      setStatsLoading(false);
       return;
     }
-    setLoading(true);
+    setStatsLoading(true);
     Promise.all([
       listInvoices(activeBusiness.id, 'draft'),
       listInvoices(activeBusiness.id, 'issued'),
@@ -35,12 +35,13 @@ export default function Dashboard() {
         });
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => setStatsLoading(false));
   }, [activeBusiness]);
 
   if (notConfigured) return <SetupRequired what="The dashboard" />;
   if (loadError) return <Alert kind="error">{loadError}</Alert>;
-  if (!activeBusiness && !loading) {
+  if (businessesLoading) return <p>Loading…</p>;
+  if (!activeBusiness) {
     return (
       <EmptyState
         title="No business yet"
@@ -99,7 +100,7 @@ export default function Dashboard() {
         </ul>
       </div>
 
-      {!loading && (
+      {!statsLoading && (
         <div className="no-print" style={{ marginTop: 8 }}>
           <Link to="/invoices">
             <Button variant="ghost" size="sm">

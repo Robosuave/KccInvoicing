@@ -9,7 +9,7 @@ import { centsToDollars } from '../lib/money';
 import { Alert, Button, EmptyState, SetupRequired } from '../components/ui';
 
 export default function Invoices() {
-  const { activeBusiness, notConfigured, isOwner } = useBusiness();
+  const { activeBusiness, notConfigured, isOwner, loading: businessesLoading } = useBusiness();
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [filter, setFilter] = useState<'all' | 'draft' | 'issued'>('all');
@@ -55,6 +55,7 @@ export default function Invoices() {
   }, [activeBusiness?.id, filter]);
 
   if (notConfigured) return <SetupRequired what="Invoices" />;
+  if (businessesLoading) return <p>Loading…</p>;
   if (!activeBusiness) return <EmptyState title="No business selected" body="Create a business first." />;
 
   const duplicate = async (id: string) => {

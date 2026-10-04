@@ -105,7 +105,7 @@ export default function InvoiceEditor() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { activeBusiness, notConfigured, setEditorDirty, onSaveDraftRef } = useBusiness();
+  const { activeBusiness, notConfigured, setEditorDirty, onSaveDraftRef, loading: businessesLoading } = useBusiness();
   const isNew = !id || id === 'new';
 
   const [draftId, setDraftId] = useState<string | null>(isNew ? null : (id as string));
@@ -615,6 +615,7 @@ export default function InvoiceEditor() {
   /* ---------- render ---------- */
 
   if (notConfigured) return <SetupRequired what="The invoice editor" />;
+  if (businessesLoading) return <p>Loading…</p>;
   if (!activeBusiness) return <EmptyState title="No business selected" body="Create a business first." />;
   if (loading) return <p>Loading draft…</p>;
   if (loadError) return <Alert kind="error">{loadError}</Alert>;

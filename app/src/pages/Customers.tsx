@@ -67,7 +67,7 @@ function toForm(c?: Customer): Record<string, string> {
 const orNull = (v: string) => (v.trim() ? v.trim() : null);
 
 export default function Customers() {
-  const { activeBusiness, businesses, notConfigured, requestSwitch } = useBusiness();
+  const { activeBusiness, businesses, notConfigured, requestSwitch, loading: businessesLoading } = useBusiness();
   const [list, setList] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -104,6 +104,7 @@ export default function Customers() {
   }, [search]);
 
   if (notConfigured) return <SetupRequired what="Customer management" />;
+  if (businessesLoading) return <p>Loading…</p>;
   if (!activeBusiness) return <EmptyState title="No business selected" body="Create a business first." />;
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
