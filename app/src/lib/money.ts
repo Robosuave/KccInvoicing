@@ -161,6 +161,48 @@ export function calculateInvoiceTotals(
 }
 
 /** Remaining balance after payments. */
+/** Convert a percent string like "3" or "2.5" to a rate string like "0.03" / "0.025". */
+export function pctToRate(pct: string): string {
+  const t = pct.trim();
+  if (!t) return '0';
+  if (!/^\d+(\.\d+)?$/.test(t)) throw new Error('percent must be a non-negative decimal');
+  return String(Number(t) / 100);
+}
+
+export interface CommissionTotals {
+  commissionCents: number;
+  processingFeeCents: number;
+  otherChargeCents: number;
+  totalCents: number;
+}
+
+/**
+ * Commission invoice math (Dania Realty template):
+ *   commission = round(sale_price * pct / 100), half-up
+ *   total = commission + processing_fee + other_charge
+ * All inputs and outputs are integer cents.
+ */
+export function calculateCommissionTotals(
+  salePriceCents: number,
+  commissionPct: string,
+  processingFeeCents: number,
+  otherChargeCents: number,
+): CommissionTotals {
+  if (!Number.isInteger(salePriceCents) || salePriceCents < 0)
+    throw new Error('salePriceCents must be a non-negative integer');
+  if (!Number.isInteger(processingFeeCents) || processingFeeCents < 0)
+    throw new Error('processingFeeCents must be a non-negative integer');
+  if (!Number.isInteger(otherChargeCents) || otherChargeCents < 0)
+    throw new Error('otherChargeCents must be a non-negative integer');
+  const commissionCents = percentOf(salePriceCents, pctToRate(commissionPct));
+  return {
+    commissionCents,
+    processingFeeCents,
+    otherChargeCents,
+    totalCents: commissionCents + processingFeeCents + otherChargeCents,
+  };
+}
+
 export function balanceDue(totalCents: number, paidCents: number): number {
   if (paidCents > totalCents) throw new Error('Payment exceeds balance.');
   return totalCents - paidCents;
