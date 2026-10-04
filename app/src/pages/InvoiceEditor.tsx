@@ -87,6 +87,7 @@ export default function InvoiceEditor() {
 
   /* commission template (Dania Realty) */
   const [template, setTemplate] = useState<InvoiceTemplate>('standard');
+  const templateTouched = useRef(false);
   const [salePrice, setSalePrice] = useState('');
   const [commissionPct, setCommissionPct] = useState('');
   const [processingFee, setProcessingFee] = useState('295.00');
@@ -171,6 +172,9 @@ export default function InvoiceEditor() {
   /* defaults for a new draft */
   useEffect(() => {
     if (!isNew || !activeBusiness) return;
+    if (!templateTouched.current && activeBusiness.default_template === 'commission') {
+      setTemplate('commission');
+    }
     setNotes((v) => v || activeBusiness.invoice_notes || '');
     setTerms((v) => v || activeBusiness.payment_terms || '');
     setPaymentInstructions((v) => v || activeBusiness.payment_instructions || '');
@@ -523,7 +527,10 @@ export default function InvoiceEditor() {
               <SelectField
                 id="inv-template"
                 value={template}
-                onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => setTemplate(e.target.value as InvoiceTemplate))}
+                onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => {
+                  templateTouched.current = true;
+                  setTemplate(e.target.value as InvoiceTemplate);
+                })}
               >
                 <option value="standard">Standard invoice (line items)</option>
                 <option value="commission">Commission / wire instructions</option>
