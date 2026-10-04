@@ -5,7 +5,7 @@ import type { Business, Customer, Item, InvoiceTemplate, InvoiceStatus } from '.
 import { createDraft, getDraft, previewTotals, saveDraft, markIssued, type DraftInput } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listItems } from '../data/items';
-import { centsToDollars, dollarsToCents, multiplyQuantity, calculateCommissionTotals, percentOf } from '../lib/money';
+import { centsToDollars, dollarsToCents, multiplyQuantity, percentOf, pctToRate as strictPctToRate } from '../lib/money';
 import {
   Alert,
   Button,
@@ -59,6 +59,27 @@ function plainDollars(cents: number): string {
   const sign = cents < 0 ? '-' : '';
   const abs = Math.abs(Math.round(cents));
   return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`;
+}
+
+/** Parse a money field without throwing: null means empty or not a valid number. */
+function tryCents(v: string): number | null {
+  const t = v.trim();
+  if (!t) return null;
+  try {
+    return dollarsToCents(t);
+  } catch {
+    return null;
+  }
+}
+
+/** Per-row commission preview. A null amount means that row can't be calculated
+ *  (field empty or invalid); badFields names the fields with invalid input. */
+interface CommissionPreviewData {
+  commissionCents: number | null;
+  processingFeeCents: number | null;
+  otherChargeCents: number | null;
+  totalCents: number | null;
+  badFields: string[];
 }
 
 export default function InvoiceEditor() {
@@ -343,19 +364,51 @@ export default function InvoiceEditor() {
     }
   }, [toDraftInput]);
 
-  const commissionPreview = useMemo(() => {
+  const commissionPreview = useMemo((): CommissionPreviewData | null => {
     if (template !== 'commission') return null;
-    try {
-      return calculateCommissionTotals(
-        salePrice.trim() ? dollarsToCents(salePrice.trim()) : 0,
-        commissionPct.trim() || '0',
-        processingFee.trim() ? dollarsToCents(processingFee.trim()) : 0,
-        otherCharge.trim() ? dollarsToCents(otherCharge.trim()) : 0,
-        commissionAmt.trim() ? dollarsToCents(commissionAmt.trim()) : null,
-      );
-    } catch {
-      return null;
+    const badFields: string[] = [];
+
+    // One bad field must never blank the whole table: compute each row on its own.
+    const saleCents = tryCents(salePrice);
+    if (salePrice.trim() !== '' && saleCents === null) badFields.push('Sale price');
+
+    const pctStr = commissionPct.trim();
+    let pctValid = true;
+    if (pctStr !== '') {
+      try {
+        strictPctToRate(pctStr);
+      } catch {
+        pctValid = false;
+        badFields.push('Commission %');
+      }
     }
+
+    // Commission $: a typed amount wins; otherwise derive from sale price x %.
+    let commissionCents: number | null = null;
+    const overrideCents = tryCents(commissionAmt);
+    if (commissionAmt.trim() !== '') {
+      if (overrideCents === null) badFields.push('Commission amount');
+      else commissionCents = overrideCents;
+    } else if (saleCents !== null && pctStr !== '' && pctValid) {
+      try {
+        commissionCents = percentOf(saleCents, pctToRate(pctStr));
+      } catch {
+        commissionCents = null;
+      }
+    }
+
+    const feeCents = processingFee.trim() === '' ? 0 : tryCents(processingFee);
+    if (feeCents === null) badFields.push('Processing fee');
+
+    const otherCents = otherCharge.trim() === '' ? 0 : tryCents(otherCharge);
+    if (otherCents === null) badFields.push('Other charge');
+
+    const totalCents =
+      commissionCents !== null && feeCents !== null && otherCents !== null
+        ? commissionCents + feeCents + otherCents
+        : null;
+
+    return { commissionCents, processingFeeCents: feeCents, otherChargeCents: otherCents, totalCents, badFields };
   }, [template, salePrice, commissionPct, commissionAmt, processingFee, otherCharge]);
 
   /* ---------- save ---------- */
@@ -365,7 +418,13 @@ export default function InvoiceEditor() {
       if (isIssued) return null; // finalized invoices are read-only
       const errs = validate();
       if (errs.length > 0) {
-        if (manual) setErrors(errs);
+        if (manual) {
+          setErrors(errs);
+          // The user is often scrolled down at the preview — bring the errors into view.
+          requestAnimationFrame(() => {
+            document.getElementById('invoice-errors')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
+        }
         return null;
       }
       setErrors([]);
@@ -541,13 +600,15 @@ export default function InvoiceEditor() {
       </div>
 
       {errors.length > 0 && (
-        <Alert kind="error">
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {errors.map((e, i) => (
-              <li key={i}>{e}</li>
-            ))}
-          </ul>
-        </Alert>
+        <div id="invoice-errors">
+          <Alert kind="error">
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {errors.map((e, i) => (
+                <li key={i}>{e}</li>
+              ))}
+            </ul>
+          </Alert>
+        </div>
       )}
 
       {isIssued && (
@@ -635,22 +696,27 @@ export default function InvoiceEditor() {
                 <div className="totals-box" aria-live="polite">
                   <div className="totals-row">
                     <span>Commission{commissionPct.trim() !== '' ? ` (${commissionPct.trim()}%)` : ''}</span>
-                    <span>{money(commissionPreview.commissionCents)}</span>
+                    <span>{commissionPreview.commissionCents !== null ? money(commissionPreview.commissionCents) : '—'}</span>
                   </div>
                   <div className="totals-row">
                     <span>Processing fee</span>
-                    <span>{money(commissionPreview.processingFeeCents)}</span>
+                    <span>{commissionPreview.processingFeeCents !== null ? money(commissionPreview.processingFeeCents) : '—'}</span>
                   </div>
-                  {commissionPreview.otherChargeCents > 0 && (
+                  {(commissionPreview.otherChargeCents ?? 0) > 0 && (
                     <div className="totals-row">
                       <span>Other charge{otherChargeDesc.trim() !== '' ? ` — ${otherChargeDesc.trim()}` : ''}</span>
-                      <span>{money(commissionPreview.otherChargeCents)}</span>
+                      <span>{money(commissionPreview.otherChargeCents ?? 0)}</span>
                     </div>
                   )}
                   <div className="totals-row grand">
                     <span>Total due</span>
-                    <span>{money(commissionPreview.totalCents)}</span>
+                    <span>{commissionPreview.totalCents !== null ? money(commissionPreview.totalCents) : '—'}</span>
                   </div>
+                  {commissionPreview.badFields.length > 0 && (
+                    <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>
+                      Check {commissionPreview.badFields.join(', ')} — not a valid amount.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -861,22 +927,34 @@ function CommissionPreviewBody({
   salePrice: string;
   commissionPct: string;
   otherChargeDesc: string;
-  commissionTotals: {
-    commissionCents: number;
-    processingFeeCents: number;
-    otherChargeCents: number;
-    totalCents: number;
-  } | null;
+  commissionTotals: CommissionPreviewData | null;
   paymentInstructions: string;
 }) {
   const pct = commissionPct.trim();
   const sale = salePrice.trim() || '0.00';
   const otherDesc = otherChargeDesc.trim();
   const showOther =
-    otherDesc !== '' || (commissionTotals !== null && commissionTotals.otherChargeCents > 0);
+    otherDesc !== '' || (commissionTotals !== null && (commissionTotals.otherChargeCents ?? 0) > 0);
   return (
     <>
-      {(agentName.trim() !== '' || secondAgentName.trim() !== '') && (
+      {commissionTotals && commissionTotals.badFields.length > 0 && (
+        <div
+          className="no-print"
+          style={{
+            marginBottom: 12,
+            background: '#fef3f2',
+            border: '1px solid #f3b8b3',
+            borderRadius: 8,
+            padding: '10px 12px',
+            fontSize: 13,
+            color: '#8f1d14',
+          }}
+        >
+          <strong>Can't calculate the totals</strong> — check{' '}
+          {commissionTotals.badFields.join(', ')}: it doesn't look like a valid amount. Fix it in
+          the form and the numbers will appear.
+        </div>
+      )}      {(agentName.trim() !== '' || secondAgentName.trim() !== '') && (
         <div style={{ marginBottom: 12, fontSize: 14 }}>
           {agentName.trim() !== '' && (
             <div>
@@ -909,26 +987,26 @@ function CommissionPreviewBody({
           <tr>
             <td>Real Estate Commission{pct !== '' ? ` (${pct}% of $${sale})` : ''}</td>
             <td style={{ textAlign: 'right' }}>
-              {commissionTotals ? money(commissionTotals.commissionCents) : '—'}
+              {commissionTotals?.commissionCents != null ? money(commissionTotals.commissionCents) : '—'}
             </td>
           </tr>
           <tr>
             <td>Processing Fee</td>
             <td style={{ textAlign: 'right' }}>
-              {commissionTotals ? money(commissionTotals.processingFeeCents) : '—'}
+              {commissionTotals?.processingFeeCents != null ? money(commissionTotals.processingFeeCents) : '—'}
             </td>
           </tr>
           {showOther && (
             <tr>
               <td>Other Charge{otherDesc !== '' ? ` — ${otherDesc}` : ''}</td>
               <td style={{ textAlign: 'right' }}>
-                {commissionTotals ? money(commissionTotals.otherChargeCents) : '—'}
+                {commissionTotals?.otherChargeCents != null ? money(commissionTotals.otherChargeCents) : '—'}
               </td>
             </tr>
           )}
         </tbody>
       </table>
-      {commissionTotals && (
+      {commissionTotals?.totalCents != null && (
         <div className="inv-totals">
           <div className="totals-row grand">
             <span>TOTAL</span>
@@ -1088,12 +1166,7 @@ function InvoicePreview({
   salePrice: string;
   commissionPct: string;
   otherChargeDesc: string;
-  commissionTotals: {
-    commissionCents: number;
-    processingFeeCents: number;
-    otherChargeCents: number;
-    totalCents: number;
-  } | null;
+  commissionTotals: CommissionPreviewData | null;
 }) {
   const isCommission = template === 'commission';
   return (
