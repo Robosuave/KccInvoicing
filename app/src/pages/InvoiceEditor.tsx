@@ -639,6 +639,29 @@ export default function InvoiceEditor() {
     markDirty();
   };
 
+  /* Commission invoices: Enter jumps to the next text field for fast keyboard flow.
+     Selects, textareas, and buttons keep their native behavior. */
+  const commissionEnterToNext = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key !== 'Enter') return;
+    const target = e.target as HTMLElement;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (target.type !== 'text' && target.type !== 'date' && target.type !== 'number') return;
+    const fields = Array.from(e.currentTarget.querySelectorAll<HTMLInputElement>('input')).filter(
+      (el) => !el.disabled && el.type !== 'hidden' && el.offsetParent !== null,
+    );
+    const idx = fields.indexOf(target);
+    if (idx >= 0 && idx < fields.length - 1) {
+      e.preventDefault();
+      const next = fields[idx + 1];
+      next.focus();
+      try {
+        if (next.type === 'text') next.select();
+      } catch {
+        /* select() unsupported for this input type — focus is enough */
+      }
+    }
+  };
+
   /* ---------- render ---------- */
 
   if (notConfigured) return <SetupRequired what="The invoice editor" />;
@@ -688,7 +711,11 @@ export default function InvoiceEditor() {
 
       <div className="editor-layout">
         <div className="no-print">
-          <fieldset disabled={isIssued} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+          <fieldset
+            disabled={isIssued}
+            style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+            onKeyDown={template === 'commission' ? commissionEnterToNext : undefined}
+          >
           <div className="card">
             <div className="form-row">
               {template !== 'commission' && (
