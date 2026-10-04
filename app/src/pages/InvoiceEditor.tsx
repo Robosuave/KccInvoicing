@@ -771,7 +771,19 @@ export default function InvoiceEditor() {
   return (
     <div>
       <div className="no-print" style={{ marginBottom: 12 }}>
-        <Button variant="secondary" size="sm" onClick={() => navigate('/invoices')}>
+        <Button
+          onClick={() => navigate('/invoices')}
+          style={{
+            background: '#7c3aed',
+            color: '#fff',
+            fontSize: 17,
+            fontWeight: 700,
+            padding: '14px 20px',
+            width: '100%',
+            borderRadius: 12,
+            border: 'none',
+          }}
+        >
           ← Back to invoices
         </Button>
       </div>
