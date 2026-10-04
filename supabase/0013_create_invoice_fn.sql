@@ -6,7 +6,18 @@
 -- check and inserts directly. The app will call this instead of a direct
 -- INSERT, restoring invoice creation immediately.
 
-create or replace function public.create_invoice(
+-- Drop any prior version (signature changed, so REPLACE wouldn't match).
+do $$
+declare
+  r record;
+begin
+  for r in select oid::regprocedure as sig from pg_proc where proname = 'create_invoice' loop
+    execute 'drop function if exists ' || r.sig || ' cascade';
+  end loop;
+end
+$$;
+
+create function public.create_invoice(
   p_business_id uuid,
   p_invoice_number text,
   p_invoice_date date,
