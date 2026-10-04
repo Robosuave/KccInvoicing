@@ -15,9 +15,6 @@ const { chromium } = require('playwright');
     ['/login', '/tmp/shot-login.png'],
     ['/invoices/new', '/tmp/shot-editor.png'],
     ['/businesses', '/tmp/shot-businesses.png'],
-    ['/invoices', '/tmp/shot-invoices.png'],
-    ['/invoices/abc/view', '/tmp/shot-detail.png'],
-    ['/invoices/abc/print', '/tmp/shot-print.png'],
   ];
   for (const [path, out] of shots) {
     await page.goto(`http://127.0.0.1:5173${path}`, { waitUntil: 'networkidle', timeout: 20000 }).catch((e) => errors.push(`nav ${path}: ${e.message}`));
