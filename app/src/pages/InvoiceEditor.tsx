@@ -7,6 +7,8 @@ import { listCustomers } from '../data/customers';
 import { listItems } from '../data/items';
 import { centsToDollars, dollarsToCents, multiplyQuantity, percentOf, pctToRate as strictPctToRate } from '../lib/money';
 import { getLogoUrl } from '../data/businesses';
+import IssuedPanels from '../components/IssuedPanels';
+import { generateAndStoreIssuedPdf, type InvoiceStyle } from '../pdf/service';
 
 /** Extract a human-readable message from anything thrown — Supabase/PostgREST
  *  errors are plain objects ({message, details, hint, code}), not Error instances. */
@@ -105,7 +107,7 @@ export default function InvoiceEditor() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { activeBusiness, notConfigured, setEditorDirty, onSaveDraftRef, loading: businessesLoading } = useBusiness();
+  const { activeBusiness, workspace, notConfigured, setEditorDirty, onSaveDraftRef, loading: businessesLoading } = useBusiness();
   const isNew = !id || id === 'new';
 
   const [draftId, setDraftId] = useState<string | null>(isNew ? null : (id as string));
@@ -517,9 +519,22 @@ export default function InvoiceEditor() {
         return;
       }
       setInvoiceStatus('issued');
+      // Generate and privately store the issued PDF from the frozen snapshot.
+      // Best-effort: printing still works if this fails; the panels offer a retry.
+      if (workspace && activeBusiness) {
+        try {
+          await generateAndStoreIssuedPdf(
+            workspace.id,
+            printId,
+            (activeBusiness.invoice_style as InvoiceStyle) || 'classic',
+          );
+        } catch (e) {
+          console.error('Issued PDF could not be stored:', e);
+        }
+      }
     }
     window.print();
-  }, [isIssued, doSave]);
+  }, [isIssued, doSave, workspace, activeBusiness]);
 
   // autosave
   useEffect(() => {
@@ -537,6 +552,18 @@ export default function InvoiceEditor() {
       onSaveDraftRef.current = null;
     };
   }, [doSave, onSaveDraftRef]);
+
+  /** Refresh issued/void state after panel actions (void, payments). */
+  const refreshIssuedState = useCallback(async () => {
+    if (!draftId) return;
+    try {
+      const { invoice } = await getDraft(draftId);
+      setInvoiceStatus(invoice.status);
+      setLoadedInvoice(invoice);
+    } catch {
+      /* panels already surfaced the error */
+    }
+  }, [draftId]);
 
   // warn before leaving with unsaved changes
   useEffect(() => {
@@ -957,6 +984,9 @@ export default function InvoiceEditor() {
             {previewEl}
           </div>
         </div>
+      )}
+      {isIssued && draftId && (
+        <IssuedPanels invoiceId={draftId} onChanged={refreshIssuedState} />
       )}
     </div>
   );

@@ -5,14 +5,18 @@ import type { Customer, Invoice } from '../db/types';
 import { createDraft, deleteDraft, getDraft, listInvoices } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listBusinessMembers } from '../data/team';
+import { isOverdue } from '../data/invoices';
+import { paymentStatusOf } from '../db/types';
 import { centsToDollars } from '../lib/money';
-import { Alert, Button, EmptyState, SetupRequired } from '../components/ui';
+import { Alert, Button, EmptyState, SetupRequired, TextField } from '../components/ui';
 
 export default function Invoices() {
   const { activeBusiness, notConfigured, isOwner, loading: businessesLoading } = useBusiness();
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [filter, setFilter] = useState<'all' | 'draft' | 'issued'>('all');
+  const [filter, setFilter] = useState<'all' | 'draft' | 'issued' | 'void'>('all');
+  const [search, setSearch] = useState('');
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const [customers, setCustomers] = useState<Record<string, Customer>>({});
   const [creatorEmails, setCreatorEmails] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -104,6 +108,23 @@ export default function Invoices() {
     }
   };
 
+  const q = search.trim().toLowerCase();
+  const visible = invoices.filter((d) => {
+    if (overdueOnly && !isOverdue(d)) return false;
+    if (!q) return true;
+    const hay = [
+      d.invoice_number ?? '',
+      d.po_number ?? '',
+      d.notes ?? '',
+      d.property_address ?? '',
+      d.agent_name ?? '',
+      d.customer_id ? customers[d.customer_id]?.name ?? '' : '',
+    ]
+      .join(' ')
+      .toLowerCase();
+    return hay.includes(q);
+  });
+
   return (
     <div>
       <h1 className="page-title">Invoices</h1>
@@ -116,17 +137,33 @@ export default function Invoices() {
         <Link className="btn btn-primary" to="/invoices/new">
           New invoice
         </Link>
+        <div style={{ flex: 1, minWidth: 200, maxWidth: 340 }}>
+          <TextField
+            placeholder="Search number, P.O., property, notes…"
+            aria-label="Search invoices"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <label className="checkbox-row" style={{ alignSelf: 'center' }}>
+          <input
+            type="checkbox"
+            checked={overdueOnly}
+            onChange={(e) => setOverdueOnly(e.target.checked)}
+          />
+          Overdue only
+        </label>
       </div>
 
       <div className="btn-row" style={{ marginBottom: 20 }} role="tablist" aria-label="Filter invoices">
-        {(['all', 'draft', 'issued'] as const).map((f) => (
+        {(['all', 'draft', 'issued', 'void'] as const).map((f) => (
           <Button
             key={f}
             variant={filter === f ? 'primary' : 'secondary'}
             size="sm"
             onClick={() => setFilter(f)}
           >
-            {f === 'all' ? 'All' : f === 'draft' ? 'Drafts' : 'Issued'}
+            {f === 'all' ? 'All' : f === 'draft' ? 'Drafts' : f === 'issued' ? 'Issued' : 'Void'}
           </Button>
         ))}
       </div>
@@ -134,13 +171,23 @@ export default function Invoices() {
       {error && <Alert kind="error">{error}</Alert>}
       {loading ? (
         <p>Loading…</p>
-      ) : invoices.length === 0 ? (
+      ) : visible.length === 0 ? (
         <EmptyState
-          title={filter === 'issued' ? 'No issued invoices' : filter === 'draft' ? 'No drafts' : 'No invoices'}
+          title={
+            q || overdueOnly
+              ? 'No invoices match'
+              : filter === 'issued'
+                ? 'No issued invoices'
+                : filter === 'draft'
+                  ? 'No drafts'
+                  : 'No invoices'
+          }
           body={
-            filter === 'issued'
-              ? 'Issued invoices appear here after you print / finalize a draft.'
-              : 'Drafts you save appear here. Invoice numbers are assigned automatically.'
+            q || overdueOnly
+              ? 'Try widening the search or clearing the overdue filter.'
+              : filter === 'issued'
+                ? 'Issued invoices appear here after you print / finalize a draft.'
+                : 'Drafts you save appear here. Invoice numbers are assigned automatically.'
           }
           action={
             <Link className="btn btn-primary" to="/invoices/new">
@@ -157,12 +204,13 @@ export default function Invoices() {
                 <th>Customer</th>
                 <th>Date</th>
                 <th>Total</th>
+                <th>Balance</th>
                 <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {invoices.map((d) => (
+              {visible.map((d) => (
                 <tr key={d.id}>
                   <td>
                     {d.invoice_number ? (
@@ -173,6 +221,11 @@ export default function Invoices() {
                     {d.template === 'commission' && (
                       <span className="badge" style={{ marginLeft: 8 }}>
                         Commission
+                      </span>
+                    )}
+                    {d.revision_no > 1 && (
+                      <span className="badge" style={{ marginLeft: 8 }}>
+                        Rev {d.revision_no}
                       </span>
                     )}
                     <div style={{ fontSize: 13, color: 'var(--muted)' }}>
@@ -189,9 +242,28 @@ export default function Invoices() {
                   <td>${centsToDollars(d.total_cents)}</td>
                   <td>
                     {d.status === 'issued' ? (
+                      <>${centsToDollars(Math.max(0, d.total_cents - d.amount_paid_cents))}</>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td>
+                    {d.status === 'issued' ? (
                       <span className="badge badge-issued">Issued</span>
+                    ) : d.status === 'void' ? (
+                      <span className="badge badge-void">Void</span>
                     ) : (
                       <span className="badge badge-draft">Draft</span>
+                    )}{' '}
+                    {d.status === 'issued' && (
+                      <span className="badge badge-draft">
+                        {paymentStatusOf(d.total_cents, d.amount_paid_cents).toUpperCase()}
+                      </span>
+                    )}
+                    {isOverdue(d) && (
+                      <div style={{ marginTop: 4 }}>
+                        <span className="badge badge-draft">OVERDUE</span>
+                      </div>
                     )}
                   </td>
                   <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
