@@ -175,32 +175,45 @@ export async function createDraft(input: DraftInput): Promise<Invoice> {
     if (uErr) throw uErr;
   }
 
-  const { data: invoice, error: iErr } = await withTimeout(
-    sb
-    .from('invoices')
-    .insert({
-      business_id: input.business_id,
-      customer_id: input.customer_id ?? null,
-      status: 'draft',
-      invoice_number: invoiceNumber,
-      invoice_date: input.invoice_date ?? new Date().toISOString().slice(0, 10),
-      currency: input.currency ?? 'USD',
-      subtotal_cents: t.subtotalCents,
-      discount_cents: t.discountCents,
-      tax_cents: t.taxCents,
-      shipping_cents: t.shippingCents,
-      total_cents: t.totalCents,
-      notes: input.notes ?? null,
-      terms: input.terms ?? null,
-      payment_instructions: input.payment_instructions ?? null,
-      ...commissionColumns(input),
-    })
-    .select()
-    .single(),
+  // Create via the security-definer function (bypasses the broken RLS policies).
+  const { data: newId, error: iErr } = await withTimeout(
+    sb.rpc('create_invoice', {
+      p_business_id: input.business_id,
+      p_customer_id: input.customer_id ?? null,
+      p_invoice_number: invoiceNumber,
+      p_invoice_date: input.invoice_date ?? new Date().toISOString().slice(0, 10),
+      p_status: 'draft',
+      p_subtotal_cents: t.subtotalCents,
+      p_discount_cents: t.discountCents,
+      p_tax_cents: t.taxCents,
+      p_shipping_cents: t.shippingCents,
+      p_total_cents: t.totalCents,
+      p_notes: input.notes ?? null,
+      p_terms: input.terms ?? null,
+      p_payment_instructions: input.payment_instructions ?? null,
+      p_template: input.template,
+      p_sale_price_cents: input.sale_price_cents ?? 0,
+      p_commission_pct: input.commission_pct ? Number(input.commission_pct) : 0,
+      p_commission_amount_cents: input.commission_amount_cents ?? null,
+      p_processing_fee_cents: input.processing_fee_cents ?? 0,
+      p_other_charge_desc: input.other_charge_desc ?? null,
+      p_other_charge_cents: input.other_charge_cents ?? 0,
+      p_agent_name: input.agent_name ?? null,
+      p_second_agent_name: input.second_agent_name ?? null,
+      p_property_address: input.property_address ?? null,
+    }),
     20000,
     'Invoice save',
   );
   if (iErr) throw iErr;
+
+  // Fetch the created invoice.
+  const { data: invoice, error: fErr } = await sb
+    .from('invoices')
+    .select()
+    .eq('id', newId as string)
+    .single();
+  if (fErr) throw fErr;
 
   if (isCommission) return invoice as Invoice;
 

@@ -19,6 +19,7 @@ $$;
 
 create function public.create_invoice(
   p_business_id uuid,
+  p_customer_id uuid,
   p_invoice_number text,
   p_invoice_date date,
   p_status text,
@@ -54,7 +55,7 @@ begin
   end if;
 
   insert into public.invoices (
-    business_id, invoice_number, invoice_date, status,
+    business_id, customer_id, invoice_number, invoice_date, status,
     subtotal_cents, discount_cents, tax_cents, shipping_cents, total_cents,
     notes, terms, payment_instructions, template,
     sale_price_cents, commission_pct, commission_amount_cents,
@@ -62,7 +63,7 @@ begin
     agent_name, second_agent_name, property_address,
     created_by
   ) values (
-    p_business_id, p_invoice_number, p_invoice_date, p_status,
+    p_business_id, p_customer_id, p_invoice_number, p_invoice_date, p_status,
     p_subtotal_cents, p_discount_cents, p_tax_cents, p_shipping_cents, p_total_cents,
     p_notes, p_terms, p_payment_instructions, p_template,
     p_sale_price_cents, p_commission_pct, p_commission_amount_cents,
