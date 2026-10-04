@@ -86,22 +86,22 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <h2>At a glance</h2>
-      <div className="stats stats-compact">
+      <h2 style={{ fontSize: 15, marginBottom: 8 }}>At a glance</h2>
+      <div className="stats stats-mini">
         <Stat label="Draft invoices" value={String(stats.drafts)} note={`Draft total ${centsToDollars(stats.draftTotal)}`} />
         <Stat label="Issued invoices" value={String(stats.issued)} note={`Billed total ${centsToDollars(stats.issuedTotal)}`} />
         <Stat label="Customers" value={String(stats.customers)} />
         <Stat label="Catalog items" value={String(stats.items)} />
       </div>
 
-      <div className="card">
-        <h2 style={{ marginTop: 0 }}>What each number means</h2>
-        <ul style={{ margin: 0, paddingLeft: 20, color: 'var(--muted)', fontSize: 14 }}>
+      <details className="card card-mini no-print">
+        <summary>What each number means</summary>
+        <ul style={{ margin: '8px 0 0', paddingLeft: 18, color: 'var(--muted)', fontSize: 12 }}>
           <li>Draft invoices are works in progress — they are not finalized yet.</li>
           <li>Draft total is the sum of draft amounts. It is not revenue.</li>
           <li>Issued invoices are finalized (printing / saving a PDF issues the invoice). Billed total is the sum of issued amounts.</li>
         </ul>
-      </div>
+      </details>
 
       {!statsLoading && (
         <div className="no-print" style={{ marginTop: 8 }}>

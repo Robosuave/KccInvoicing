@@ -230,6 +230,18 @@ textarea.input { min-height: 96px; resize: vertical; }
 .stats-compact .stat { padding: 12px 14px; }
 .stats-compact .stat .value { font-size: 22px; }
 .stats-compact .stat .label { font-size: 11px; }
+/* Extra-mini stats for the dashboard: 4 across, tiny footprint. */
+.stats-mini { grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+.stats-mini .stat { padding: 8px 10px; }
+.stats-mini .stat .value { font-size: 17px; margin-top: 2px; }
+.stats-mini .stat .label { font-size: 10px; }
+.stats-mini .stat .note { font-size: 10px; color: var(--muted); }
+/* Collapsed explainer card. */
+.card-mini { padding: 10px 12px; }
+.card-mini summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+@media (max-width: 640px) {
+  .stats-mini { grid-template-columns: repeat(2, 1fr); }
+}
 .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
 .stat .label { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
 .stat .value { font-size: 30px; font-weight: 700; margin-top: 4px; }
