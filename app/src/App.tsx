@@ -97,7 +97,12 @@ function Shell() {
           <div className="brand-name">{APP_NAME}</div>
           <div className="brand-sub">Phase 1</div>
         </div>
-        {NAV.filter((n) => !n.ownerOnly || isOwner).map((n) => (
+        {NAV.filter((n) => {
+          if (n.ownerOnly && !isOwner) return false;
+          // Commission businesses (Dania Realty) don't use line items.
+          if (n.to === '/items' && activeBusiness?.default_template === 'commission') return false;
+          return true;
+        }).map((n) => (
           <NavLink
             key={n.to}
             to={n.to}
