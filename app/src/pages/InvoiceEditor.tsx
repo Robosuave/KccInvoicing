@@ -1166,6 +1166,7 @@ function CommissionPreviewBody({
   commissionTotals,
   paymentInstructions,
   notes,
+  customer,
 }: {
   agentName: string;
   secondAgentName: string;
@@ -1176,6 +1177,7 @@ function CommissionPreviewBody({
   commissionTotals: CommissionPreviewData | null;
   paymentInstructions: string;
   notes: string;
+  customer: Customer | null;
 }) {
   const pct = commissionPct.trim();
   const sale = salePrice.trim() || '0.00';
@@ -1201,7 +1203,7 @@ function CommissionPreviewBody({
           {commissionTotals.badFields.join(', ')}: it doesn't look like a valid amount. Fix it in
           the form and the numbers will appear.
         </div>
-      )}      {propertyAddress.trim() !== '' && (
+      )}      {propertyAddress.trim() !== '' && customer == null && (
         <div style={{ marginBottom: 12, fontSize: 15 }}>
           <strong>Property:</strong> {propertyAddress.trim()}
         </div>
@@ -1264,19 +1266,41 @@ function CommissionPreviewBody({
           <div style={{ whiteSpace: 'pre-wrap', marginTop: 4, fontSize: 14 }}>{notes.trim()}</div>
         </div>
       )}
-      {paymentInstructions !== '' && (
-        <div
-          className="inv-wirebox"
-          style={{
-            marginTop: 16,
-            background: '#e7f3e7',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-            padding: 12,
-          }}
-        >
-          {!/^wire instructions/im.test(paymentInstructions) && <strong>WIRE INSTRUCTIONS</strong>}
-          <div style={{ whiteSpace: 'pre-wrap', marginTop: 6, fontSize: 14 }}>{paymentInstructions}</div>
+      {(paymentInstructions !== '' || customer) && (
+        <div className="inv-bottomcols">
+          {paymentInstructions !== '' && (
+            <div
+              className="inv-wirebox"
+              style={{
+                background: '#e7f3e7',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                padding: 12,
+              }}
+            >
+              {!/^wire instructions/im.test(paymentInstructions) && <strong>WIRE INSTRUCTIONS</strong>}
+              <div style={{ whiteSpace: 'pre-wrap', marginTop: 6, fontSize: 14 }}>{paymentInstructions}</div>
+            </div>
+          )}
+          {customer && (
+            <div className="inv-contactbox">
+              {propertyAddress.trim() !== '' && (
+                <div style={{ marginBottom: 8 }}>
+                  <strong>Property address</strong>
+                  <div>{propertyAddress.trim()}</div>
+                </div>
+              )}
+              {(customer.company || customer.name) && (
+                <div style={{ marginBottom: 8 }}>
+                  <strong>Company</strong>
+                  <div style={{ fontWeight: 600 }}>{customer.company || customer.name}</div>
+                  {customer.contact_person && <div>{customer.contact_person}</div>}
+                  {customer.phone && <div>{customer.phone}</div>}
+                  {customer.email && <div>{customer.email}</div>}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </>
@@ -1465,16 +1489,6 @@ function InvoicePreview({
           {invoiceNumber && <div style={{ fontSize: 15, fontWeight: 700 }}>#{invoiceNumber}</div>}
           {invoiceStatus === 'draft' && <span className="badge badge-draft">DRAFT</span>}
           <div style={{ fontSize: 20, fontWeight: 700, marginTop: 8 }}>Date: {invoiceDate || '—'}</div>
-          {isCommission && customer && (
-            <div style={{ marginTop: 4 }}>
-              {(customer.company || customer.name) && (
-                <div style={{ fontSize: 16, fontWeight: 600 }}>{customer.company || customer.name}</div>
-              )}
-              {customer.contact_person && <div style={{ fontSize: 14 }}>{customer.contact_person}</div>}
-              {customer.phone && <div style={{ fontSize: 14 }}>{customer.phone}</div>}
-              {customer.email && <div style={{ fontSize: 14 }}>{customer.email}</div>}
-            </div>
-          )}
         </div>
       </div>
 
@@ -1515,6 +1529,7 @@ function InvoicePreview({
           commissionTotals={commissionTotals}
           paymentInstructions={paymentInstructions}
           notes={notes}
+          customer={customer}
         />
       ) : (
         <StandardPreviewBody lines={lines} totals={totals} discountMode={discountMode} />
