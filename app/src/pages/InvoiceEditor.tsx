@@ -6,6 +6,7 @@ import { createDraft, getDraft, previewTotals, saveDraft, markIssued, type Draft
 import { listCustomers } from '../data/customers';
 import { listItems } from '../data/items';
 import { centsToDollars, dollarsToCents, multiplyQuantity, percentOf, pctToRate as strictPctToRate } from '../lib/money';
+import { getLogoUrl } from '../data/businesses';
 import {
   Alert,
   Button,
@@ -132,6 +133,21 @@ export default function InvoiceEditor() {
   const [saveMessage, setSaveMessage] = useState<string | undefined>();
   const [errors, setErrors] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  // Business logo for the invoice header (signed URL, refreshed when the business changes).
+  useEffect(() => {
+    let cancelled = false;
+    setLogoUrl(null);
+    const path = activeBusiness?.logo_path;
+    if (!path) return;
+    getLogoUrl(path).then((url) => {
+      if (!cancelled) setLogoUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBusiness?.id, activeBusiness?.logo_path]);
   const dirtyRef = useRef(false);
   const stateRef = useRef({});
 
@@ -587,7 +603,8 @@ export default function InvoiceEditor() {
       agentName={agentName} secondAgentName={secondAgentName}
       propertyAddress={propertyAddress}
       salePrice={salePrice} commissionPct={commissionPct}
-      otherChargeDesc={otherChargeDesc} commissionTotals={commissionPreview} invoiceStatus={invoiceStatus} />
+      otherChargeDesc={otherChargeDesc} commissionTotals={commissionPreview} invoiceStatus={invoiceStatus}
+      logoUrl={logoUrl} />
   );
 
   return (
@@ -1147,6 +1164,7 @@ function InvoicePreview({
   otherChargeDesc,
   commissionTotals,
   invoiceStatus,
+  logoUrl,
 }: {
   business: Business;
   customer: Customer | null;
@@ -1167,29 +1185,39 @@ function InvoicePreview({
   commissionPct: string;
   otherChargeDesc: string;
   commissionTotals: CommissionPreviewData | null;
+  logoUrl: string | null;
 }) {
   const isCommission = template === 'commission';
   return (
     <div className="invoice-preview" aria-label="Invoice preview">
       <div className="inv-head">
-        <div>
-          <h2>{business.display_name}</h2>
-          <div style={{ color: 'var(--muted)', fontSize: 13 }}>
-            {[business.address_line1, business.address_line2].filter(Boolean).join(', ')}
-            <br />
-            {[business.city, business.state, business.zip].filter(Boolean).join(', ')}
-            {business.phone && (
-              <>
-                <br />
-                {business.phone}
-              </>
-            )}
-            {business.email && (
-              <>
-                <br />
-                {business.email}
-              </>
-            )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {logoUrl && (
+            <img
+              src={logoUrl}
+              alt={`${business.display_name} logo`}
+              style={{ height: 64, width: 'auto', maxWidth: 200, objectFit: 'contain', flexShrink: 0 }}
+            />
+          )}
+          <div>
+            <h2>{business.display_name}</h2>
+            <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+              {[business.address_line1, business.address_line2].filter(Boolean).join(', ')}
+              <br />
+              {[business.city, business.state, business.zip].filter(Boolean).join(', ')}
+              {business.phone && (
+                <>
+                  <br />
+                  {business.phone}
+                </>
+              )}
+              {business.email && (
+                <>
+                  <br />
+                  {business.email}
+                </>
+              )}
+            </div>
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
