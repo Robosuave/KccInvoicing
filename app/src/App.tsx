@@ -86,7 +86,7 @@ function PendingSwitchModal() {
 
 function Shell() {
   const { activeBusiness, isOwner } = useBusiness();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
 
@@ -114,6 +114,21 @@ function Shell() {
           </NavLink>
         ))}
         <div className="sidebar-footer">
+          {user?.email && (
+            <div
+              title="Signed in as"
+              style={{
+                padding: '0 14px 8px',
+                fontSize: 12,
+                color: '#9fb3d1',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {user.email}
+            </div>
+          )}
           <button
             className="nav-link"
             style={{ background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer', color: '#dbe4f2' }}
@@ -135,7 +150,15 @@ function Shell() {
               {activeBusiness.display_name}
             </span>
           )}
-          <div style={{ marginLeft: 'auto' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+            {user?.email && (
+              <span
+                title="Signed in as"
+                style={{ fontSize: 12, color: '#5b6b85', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              >
+                {user.email}
+              </span>
+            )}
             <BusinessSwitcher />
           </div>
         </div>
