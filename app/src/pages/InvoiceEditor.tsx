@@ -128,6 +128,7 @@ export default function InvoiceEditor() {
   const [quickCompany, setQuickCompany] = useState('');
   const [quickContact, setQuickContact] = useState('');
   const [quickPhone, setQuickPhone] = useState('');
+  const [quickEmail, setQuickEmail] = useState('');
   const [quickError, setQuickError] = useState<string | null>(null);
   const [quickSaving, setQuickSaving] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
@@ -687,6 +688,7 @@ export default function InvoiceEditor() {
         company: companyName,
         contact_person: quickContact.trim() || null,
         phone: quickPhone.trim() || null,
+        email: quickEmail.trim() || null,
       });
       setCustomers((prev) => [...prev, created].sort((a, b) => (a.company || a.name).localeCompare(b.company || b.name)));
       setCustomerId(created.id);
@@ -695,6 +697,7 @@ export default function InvoiceEditor() {
       setQuickCompany('');
       setQuickContact('');
       setQuickPhone('');
+      setQuickEmail('');
     } catch (e) {
       setQuickError(e instanceof Error ? e.message : 'Could not create the company.');
     } finally {
@@ -789,6 +792,7 @@ export default function InvoiceEditor() {
                         setQuickCompany('');
                         setQuickContact('');
                         setQuickPhone('');
+                        setQuickEmail('');
                         setQuickError(null);
                         setQuickAddOpen(true);
                       }}
@@ -1063,6 +1067,17 @@ export default function InvoiceEditor() {
                     type="tel"
                     value={quickPhone}
                     onChange={(e) => setQuickPhone(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') quickAddCompany();
+                    }}
+                  />
+                </Field>
+                <Field label="Email" htmlFor="qc-email">
+                  <TextField
+                    id="qc-email"
+                    type="email"
+                    value={quickEmail}
+                    onChange={(e) => setQuickEmail(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') quickAddCompany();
                     }}
@@ -1457,6 +1472,7 @@ function InvoicePreview({
               )}
               {customer.contact_person && <div style={{ fontSize: 14 }}>{customer.contact_person}</div>}
               {customer.phone && <div style={{ fontSize: 14 }}>{customer.phone}</div>}
+              {customer.email && <div style={{ fontSize: 14 }}>{customer.email}</div>}
             </div>
           )}
         </div>
