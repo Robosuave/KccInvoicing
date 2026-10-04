@@ -290,7 +290,7 @@ export default function InvoiceEditor() {
     const isCommission = template === 'commission';
     return {
       business_id: activeBusiness.id,
-      customer_id: isCommission ? null : customerId || null,
+      customer_id: customerId || null,
       invoice_date: invoiceDate,
       currency: 'USD',
       template,
@@ -698,6 +698,18 @@ export default function InvoiceEditor() {
                     {customers.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
+                      </option>
+                    ))}
+                  </SelectField>
+                </Field>
+              )}
+              {template === 'commission' && (
+                <Field label="Company" htmlFor="inv-company" hint="Prints under the date on the invoice">
+                  <SelectField id="inv-company" value={customerId} onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => setCustomerId(e.target.value))}>
+                    <option value="">Choose a company…</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.company || c.name}
                       </option>
                     ))}
                   </SelectField>
@@ -1306,6 +1318,9 @@ function InvoicePreview({
           {invoiceNumber && <div style={{ fontSize: 15, fontWeight: 700 }}>#{invoiceNumber}</div>}
           {invoiceStatus === 'draft' && <span className="badge badge-draft">DRAFT</span>}
           <div style={{ fontSize: 20, fontWeight: 700, marginTop: 8 }}>Date: {invoiceDate || '—'}</div>
+          {isCommission && customer && (customer.company || customer.name) && (
+            <div style={{ fontSize: 16, fontWeight: 600, marginTop: 4 }}>{customer.company || customer.name}</div>
+          )}
         </div>
       </div>
 
