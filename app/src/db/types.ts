@@ -28,6 +28,7 @@ export interface Business {
   invoice_prefix: string;
   next_number: number;
   default_tax_rate: string; // numeric from Postgres
+  default_template: InvoiceTemplate;
   default_email_subject: string | null;
   default_email_message: string | null;
   archived_at: string | null;
