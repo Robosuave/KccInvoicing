@@ -119,6 +119,19 @@ export async function getDraft(id: string): Promise<{ invoice: Invoice; lines: I
   return { invoice: invoice as Invoice, lines: (lines ?? []) as InvoiceLine[] };
 }
 
+/** Rejects if the promise doesn't settle within ms — a hanging request
+ *  must never leave the UI stuck on "Saving…" forever. */
+function withTimeout<T>(p: PromiseLike<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out — please check your connection and try again.`)),
+      ms,
+    );
+  });
+  return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
+}
+
 /** Create a draft invoice with its lines and computed totals. */
 export async function createDraft(input: DraftInput): Promise<Invoice> {
   const sb = requireSupabase();
@@ -132,26 +145,38 @@ export async function createDraft(input: DraftInput): Promise<Invoice> {
   // can never grab the same number.
   let invoiceNumber: string;
   try {
-    const { data, error } = await sb.rpc('assign_invoice_number', { b_id: input.business_id });
+    const { data, error } = await withTimeout(
+      sb.rpc('assign_invoice_number', { b_id: input.business_id }),
+      15000,
+      'Invoice number assignment',
+    );
     if (error) throw error;
     invoiceNumber = data as string;
-  } catch {
+  } catch (e) {
+    // If the rpc itself timed out, don't silently fall through to a second
+    // hanging request — surface it.
+    if (e instanceof Error && /timed out/.test(e.message)) throw e;
     // Fallback for before migration 0007 is run (owner-only; has a small race).
-    const { data: biz, error: bErr } = await sb
-      .from('businesses')
-      .select('invoice_prefix, next_number')
-      .eq('id', input.business_id)
-      .single();
+    const { data: biz, error: bErr } = await withTimeout(
+      sb.from('businesses').select('invoice_prefix, next_number').eq('id', input.business_id).single(),
+      15000,
+      'Business lookup',
+    );
     if (bErr) throw bErr;
     invoiceNumber = `${(biz as { invoice_prefix: string }).invoice_prefix ?? ''}${(biz as { next_number: number }).next_number}`;
-    const { error: uErr } = await sb
-      .from('businesses')
-      .update({ next_number: (biz as { next_number: number }).next_number + 1 })
-      .eq('id', input.business_id);
+    const { error: uErr } = await withTimeout(
+      sb
+        .from('businesses')
+        .update({ next_number: (biz as { next_number: number }).next_number + 1 })
+        .eq('id', input.business_id),
+      15000,
+      'Invoice number update',
+    );
     if (uErr) throw uErr;
   }
 
-  const { data: invoice, error: iErr } = await sb
+  const { data: invoice, error: iErr } = await withTimeout(
+    sb
     .from('invoices')
     .insert({
       business_id: input.business_id,
@@ -171,7 +196,10 @@ export async function createDraft(input: DraftInput): Promise<Invoice> {
       ...commissionColumns(input),
     })
     .select()
-    .single();
+    .single(),
+    20000,
+    'Invoice save',
+  );
   if (iErr) throw iErr;
 
   if (isCommission) return invoice as Invoice;
