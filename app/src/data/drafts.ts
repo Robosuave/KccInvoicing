@@ -29,7 +29,9 @@ export interface DraftInput {
   shipping_cents?: number;
   notes?: string | null;
   terms?: string | null;
-  payment_instructions?: string | null;
+  // payment_instructions is owner-controlled server-side (migration 0016):
+  // the database trigger loads it from the business record and ignores any
+  // client-supplied value, so it is intentionally absent from DraftInput.
   template?: InvoiceTemplate;
   sale_price_cents?: number;
   commission_pct?: string;
@@ -192,7 +194,6 @@ export async function createDraft(input: DraftInput): Promise<Invoice> {
       total_cents: t.totalCents,
       notes: input.notes ?? null,
       terms: input.terms ?? null,
-      payment_instructions: input.payment_instructions ?? null,
       ...commissionColumns(input),
     })
     .select()
@@ -261,7 +262,6 @@ export async function saveDraft(
       total_cents: t.totalCents,
       notes: input.notes ?? null,
       terms: input.terms ?? null,
-      payment_instructions: input.payment_instructions ?? null,
       ...commissionColumns(input),
     })
     .eq('id', id)

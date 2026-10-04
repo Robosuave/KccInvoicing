@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
-import type { Business, Customer, Item, InvoiceTemplate, InvoiceStatus } from '../db/types';
+import type { Business, Customer, Invoice, Item, InvoiceTemplate, InvoiceStatus } from '../db/types';
 import { createDraft, getDraft, previewTotals, saveDraft, markIssued, type DraftInput } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listItems } from '../data/items';
@@ -129,7 +129,8 @@ export default function InvoiceEditor() {
   const [shipping, setShipping] = useState('');
   const [notes, setNotes] = useState('');
   const [terms, setTerms] = useState('');
-  const [paymentInstructions, setPaymentInstructions] = useState('');
+  /* The full invoice record as loaded (for the issued payment-instructions snapshot). */
+  const [loadedInvoice, setLoadedInvoice] = useState<Invoice | null>(null);
 
   /* commission template (Dania Realty) */
   const [template, setTemplate] = useState<InvoiceTemplate>('standard');
@@ -198,6 +199,7 @@ export default function InvoiceEditor() {
           return;
         }
         setDraftId(invoice.id);
+        setLoadedInvoice(invoice);
         setInvoiceStatus(invoice.status);
         setExpectedUpdatedAt(invoice.updated_at);
         setCustomerId(invoice.customer_id ?? '');
@@ -217,7 +219,6 @@ export default function InvoiceEditor() {
         );
         setNotes(invoice.notes ?? '');
         setTerms(invoice.terms ?? '');
-        setPaymentInstructions(invoice.payment_instructions ?? '');
         setTemplate(invoice.template ?? 'standard');
         setSalePrice(invoice.sale_price_cents ? centsToDollars(invoice.sale_price_cents) : '');
         setCommissionPct(invoice.commission_pct && Number(invoice.commission_pct) !== 0 ? String(Number(invoice.commission_pct)) : '');
@@ -244,7 +245,6 @@ export default function InvoiceEditor() {
     setTemplate(activeBusiness.default_template === 'commission' ? 'commission' : 'standard');
     setNotes((v) => v || activeBusiness.invoice_notes || '');
     setTerms((v) => v || activeBusiness.payment_terms || '');
-    setPaymentInstructions((v) => v || activeBusiness.payment_instructions || '');
     setInvoiceTaxPct((v) => v || (Number(activeBusiness.default_tax_rate) > 0 ? rateToPct(activeBusiness.default_tax_rate) : ''));
     const pre = searchParams.get('customer');
     if (pre) setCustomerId(pre);
@@ -272,6 +272,15 @@ export default function InvoiceEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId]);
 
+  /* Payment / wire instructions are owner-controlled (migration 0016) and
+     read-only here. Issued invoices show the snapshot frozen at issue time;
+     drafts show the business's current default. */
+  const displayPaymentInstructions =
+    loadedInvoice?.payment_instructions_snapshot ??
+    loadedInvoice?.payment_instructions ??
+    activeBusiness?.payment_instructions ??
+    '';
+
   /* ---------- draft input + validation ---------- */
 
   const toDraftInput = useCallback((): DraftInput => {
@@ -297,7 +306,6 @@ export default function InvoiceEditor() {
       shipping_cents: shipping.trim() ? dollarsToCents(shipping.trim()) : 0,
       notes: notes || null,
       terms: terms || null,
-      payment_instructions: paymentInstructions || null,
       lines: isCommission ? [] : lines.map((l) => ({
         item_id: l.itemId,
         description: l.description.trim(),
@@ -308,7 +316,7 @@ export default function InvoiceEditor() {
         tax_rate: l.taxRate.trim() ? pctToRate(l.taxRate) : undefined,
       })),
     };
-  }, [activeBusiness, customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, paymentInstructions, template, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge, agentName, secondAgentName, propertyAddress]);
+  }, [activeBusiness, customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, template, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge, agentName, secondAgentName, propertyAddress]);
 
   const validate = useCallback((): string[] => {
     const errs: string[] = [];
@@ -616,7 +624,7 @@ export default function InvoiceEditor() {
   const previewEl = (
     <InvoicePreview business={activeBusiness} customer={customer} lines={lines} totals={totals}
       invoiceDate={invoiceDate} invoiceNumber={invoiceNumber}
-      notes={notes} terms={terms} paymentInstructions={paymentInstructions}
+      notes={notes} terms={terms} paymentInstructions={displayPaymentInstructions}
       discountMode={discountMode} template={template}
       agentName={agentName} secondAgentName={secondAgentName}
       propertyAddress={propertyAddress}
@@ -881,9 +889,21 @@ export default function InvoiceEditor() {
             <Field
               label={template === 'commission' ? 'Wire instructions' : 'Payment instructions'}
               htmlFor="inv-pay"
-              hint={template === 'commission' ? 'Bank name, routing, account, and Zelle. Saved with the business for reuse.' : undefined}
+              hint="Set by the business owner under Businesses > Edit business. Read-only here."
             >
-              <TextArea id="inv-pay" rows={6} value={paymentInstructions} onChange={touch((e) => setPaymentInstructions(e.target.value))} />
+              <div
+                id="inv-pay"
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  padding: '10px 12px',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  background: 'var(--surface-muted, #f6f8fb)',
+                  minHeight: 44,
+                }}
+              >
+                {displayPaymentInstructions || <span style={{ color: 'var(--muted)' }}>None set for this business.</span>}
+              </div>
             </Field>
           </div>
           </fieldset>

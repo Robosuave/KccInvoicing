@@ -113,6 +113,7 @@ export interface Invoice {
   notes: string | null;
   terms: string | null;
   payment_instructions: string | null;
+  payment_instructions_snapshot: string | null;
   snapshot: Record<string, unknown> | null;
   issued_at: string | null;
   created_at: string;

@@ -63,7 +63,6 @@ export default function Invoices() {
         currency: invoice.currency,
         notes: invoice.notes,
         terms: invoice.terms,
-        payment_instructions: invoice.payment_instructions,
         template: invoice.template,
         sale_price_cents: invoice.sale_price_cents,
         commission_pct: invoice.commission_pct,
