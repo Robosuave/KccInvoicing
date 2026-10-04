@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useBusiness } from '../business/BusinessContext';
-import type { Business } from '../db/types';
+import type { Business, InvoiceTemplate } from '../db/types';
 import {
   archiveBusiness,
   createBusiness,
@@ -41,6 +41,7 @@ const EMPTY: Record<string, string> = {
   default_tax_rate: '0',
   default_email_subject: '',
   default_email_message: '',
+  default_template: 'standard',
 };
 
 function toForm(b?: Business): Record<string, string> {
@@ -66,6 +67,7 @@ function toForm(b?: Business): Record<string, string> {
     default_tax_rate: String(Number(b.default_tax_rate) * 100),
     default_email_subject: b.default_email_subject ?? '',
     default_email_message: b.default_email_message ?? '',
+    default_template: (b as { default_template?: string }).default_template ?? 'standard',
   };
 }
 
@@ -140,6 +142,7 @@ export default function Businesses() {
         default_tax_rate: String(Number(form.default_tax_rate || '0') / 100),
         default_email_subject: form.default_email_subject.trim() || null,
         default_email_message: form.default_email_message.trim() || null,
+        default_template: (form.default_template === 'commission' ? 'commission' : 'standard') as InvoiceTemplate,
       };
       let business: Business;
       if (editing === 'new') {
@@ -301,6 +304,12 @@ export default function Businesses() {
             </Field>
             <Field label="Default tax rate %" htmlFor="b-taxrate" hint="e.g. 7 for 7%">
               <TextField id="b-taxrate" inputMode="decimal" value={form.default_tax_rate} onChange={set('default_tax_rate')} />
+            </Field>
+            <Field label="Default invoice type" htmlFor="b-template" hint="Pre-selected when creating a new invoice.">
+              <SelectField id="b-template" value={form.default_template} onChange={set('default_template')}>
+                <option value="standard">Standard invoice (line items)</option>
+                <option value="commission">Commission / wire instructions</option>
+              </SelectField>
             </Field>
           </div>
           <Field label="Default invoice notes" htmlFor="b-notes">
