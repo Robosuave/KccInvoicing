@@ -21,7 +21,7 @@ create or replace function public.create_invoice(
   p_payment_instructions text,
   p_template text,
   p_sale_price_cents integer,
-  p_commission_pct text,
+  p_commission_pct numeric,
   p_commission_amount_cents integer,
   p_processing_fee_cents integer,
   p_other_charge_desc text,
