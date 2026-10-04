@@ -78,9 +78,11 @@ export default function Dashboard() {
           <Link className="btn btn-secondary" to="/customers">
             Manage customers
           </Link>
-          <Link className="btn btn-secondary" to="/items">
-            Manage items
-          </Link>
+          {activeBusiness?.default_template !== 'commission' && (
+            <Link className="btn btn-secondary" to="/items">
+              Manage items
+            </Link>
+          )}
         </div>
       </div>
 
