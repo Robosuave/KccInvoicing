@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
-import type { Business, Customer, Item } from '../db/types';
+import type { Business, Customer, Item, InvoiceTemplate } from '../db/types';
 import { createDraft, getDraft, previewTotals, saveDraft, type DraftInput } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listItems } from '../data/items';
-import { centsToDollars, dollarsToCents, multiplyQuantity } from '../lib/money';
+import { centsToDollars, dollarsToCents, multiplyQuantity, calculateCommissionTotals } from '../lib/money';
 import {
   Alert,
   Button,
@@ -85,6 +85,16 @@ export default function InvoiceEditor() {
   const [terms, setTerms] = useState('');
   const [paymentInstructions, setPaymentInstructions] = useState('');
 
+  /* commission template (Dania Realty) */
+  const [template, setTemplate] = useState<InvoiceTemplate>('standard');
+  const [salePrice, setSalePrice] = useState('');
+  const [commissionPct, setCommissionPct] = useState('');
+  const [processingFee, setProcessingFee] = useState('295.00');
+  const [otherChargeDesc, setOtherChargeDesc] = useState('');
+  const [otherCharge, setOtherCharge] = useState('');
+  const [agentName, setAgentName] = useState('');
+  const [secondAgentName, setSecondAgentName] = useState('');
+
   const [dirty, setDirty] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [saveMessage, setSaveMessage] = useState<string | undefined>();
@@ -143,6 +153,14 @@ export default function InvoiceEditor() {
         setNotes(invoice.notes ?? '');
         setTerms(invoice.terms ?? '');
         setPaymentInstructions(invoice.payment_instructions ?? '');
+        setTemplate(invoice.template ?? 'standard');
+        setSalePrice(invoice.sale_price_cents ? centsToDollars(invoice.sale_price_cents) : '');
+        setCommissionPct(invoice.commission_pct && Number(invoice.commission_pct) !== 0 ? String(Number(invoice.commission_pct)) : '');
+        setProcessingFee(centsToDollars(invoice.processing_fee_cents));
+        setOtherChargeDesc(invoice.other_charge_desc ?? '');
+        setOtherCharge(invoice.other_charge_cents ? centsToDollars(invoice.other_charge_cents) : '');
+        setAgentName(invoice.agent_name ?? '');
+        setSecondAgentName(invoice.second_agent_name ?? '');
         // discount mode is not stored in phase 1; default to none
       })
       .catch((e) => setLoadError(e instanceof Error ? e.message : 'Failed to load draft.'))
@@ -174,6 +192,7 @@ export default function InvoiceEditor() {
 
   const toDraftInput = useCallback((): DraftInput => {
     if (!activeBusiness) throw new Error('No business selected.');
+    const isCommission = template === 'commission';
     return {
       business_id: activeBusiness.id,
       customer_id: customerId || null,
@@ -183,13 +202,21 @@ export default function InvoiceEditor() {
       service_date: serviceDate || null,
       service_period: servicePeriod || null,
       currency: 'USD',
+      template,
+      sale_price_cents: isCommission && salePrice.trim() ? dollarsToCents(salePrice.trim()) : 0,
+      commission_pct: isCommission && commissionPct.trim() ? commissionPct.trim() : '0',
+      processing_fee_cents: isCommission && processingFee.trim() ? dollarsToCents(processingFee.trim()) : 0,
+      other_charge_desc: isCommission && otherChargeDesc.trim() ? otherChargeDesc.trim() : null,
+      other_charge_cents: isCommission && otherCharge.trim() ? dollarsToCents(otherCharge.trim()) : 0,
+      agent_name: isCommission && agentName.trim() ? agentName.trim() : null,
+      second_agent_name: isCommission && secondAgentName.trim() ? secondAgentName.trim() : null,
       invoice_discount_rate: discountMode === 'invoice' && invoiceDiscountPct.trim() ? pctToRate(invoiceDiscountPct) : undefined,
       invoice_tax_rate: useTax && invoiceTaxPct.trim() ? pctToRate(invoiceTaxPct) : undefined,
       shipping_cents: shipping.trim() ? dollarsToCents(shipping.trim()) : 0,
       notes: notes || null,
       terms: terms || null,
       payment_instructions: paymentInstructions || null,
-      lines: lines.map((l) => ({
+      lines: isCommission ? [] : lines.map((l) => ({
         item_id: l.itemId,
         description: l.description.trim(),
         quantity: l.quantity.trim() || '1',
@@ -199,12 +226,43 @@ export default function InvoiceEditor() {
         tax_rate: l.taxRate.trim() ? pctToRate(l.taxRate) : undefined,
       })),
     };
-  }, [activeBusiness, customerId, invoiceDate, dueDate, poNumber, serviceDate, servicePeriod, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, paymentInstructions]);
+  }, [activeBusiness, customerId, invoiceDate, dueDate, poNumber, serviceDate, servicePeriod, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, paymentInstructions, template, salePrice, commissionPct, processingFee, otherChargeDesc, otherCharge, agentName, secondAgentName]);
 
   const validate = useCallback((): string[] => {
     const errs: string[] = [];
     if (!customerId) errs.push('Choose a customer.');
     if (!invoiceDate) errs.push('Invoice date is required.');
+    if (template === 'commission') {
+      const amt = (label: string, v: string, opts?: { required?: boolean; positive?: boolean }) => {
+        const t = v.trim();
+        if (!t) {
+          if (opts?.required) errs.push(`${label} is required.`);
+          return;
+        }
+        try {
+          const c = dollarsToCents(t);
+          if (opts?.positive && c <= 0) errs.push(`${label} must be greater than zero.`);
+        } catch {
+          errs.push(`${label} must be a valid amount.`);
+        }
+      };
+      amt('Sale price', salePrice, { required: true, positive: true });
+      if (!commissionPct.trim()) {
+        errs.push('Commission % is required.');
+      } else if (!/^\d+(\.\d+)?$/.test(commissionPct.trim()) || Number(commissionPct) < 0) {
+        errs.push('Commission % must be a valid percent.');
+      }
+      amt('Processing fee', processingFee);
+      amt('Other charge', otherCharge);
+      if (otherCharge.trim() && !otherChargeDesc.trim()) errs.push('Other charge needs a description.');
+      try {
+        toDraftInput();
+        previewTotals(toDraftInput());
+      } catch (e) {
+        errs.push(e instanceof Error ? e.message : 'Totals could not be calculated.');
+      }
+      return errs;
+    }
     const nonEmpty = lines.filter((l) => l.description.trim() || l.unitPrice.trim());
     if (nonEmpty.length === 0) errs.push('Add at least one line item.');
     lines.forEach((l, i) => {
@@ -243,7 +301,7 @@ export default function InvoiceEditor() {
       errs.push(e instanceof Error ? e.message : 'Totals could not be calculated.');
     }
     return errs;
-  }, [customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, toDraftInput]);
+  }, [customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, toDraftInput, template, salePrice, commissionPct, processingFee, otherChargeDesc, otherCharge]);
 
   const totals = useMemo(() => {
     try {
@@ -252,6 +310,20 @@ export default function InvoiceEditor() {
       return null;
     }
   }, [toDraftInput]);
+
+  const commissionPreview = useMemo(() => {
+    if (template !== 'commission') return null;
+    try {
+      return calculateCommissionTotals(
+        salePrice.trim() ? dollarsToCents(salePrice.trim()) : 0,
+        commissionPct.trim() || '0',
+        processingFee.trim() ? dollarsToCents(processingFee.trim()) : 0,
+        otherCharge.trim() ? dollarsToCents(otherCharge.trim()) : 0,
+      );
+    } catch {
+      return null;
+    }
+  }, [template, salePrice, commissionPct, processingFee, otherCharge]);
 
   /* ---------- save ---------- */
 
@@ -447,7 +519,75 @@ export default function InvoiceEditor() {
           </div>
 
           <div className="card">
-            <h2 style={{ marginTop: 0 }}>Line items</h2>
+            <Field label="Invoice type" htmlFor="inv-template" hint="Standard = line-item invoice. Commission = Dania Realty commission / wire instruction form.">
+              <SelectField
+                id="inv-template"
+                value={template}
+                onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => setTemplate(e.target.value as InvoiceTemplate))}
+              >
+                <option value="standard">Standard invoice (line items)</option>
+                <option value="commission">Commission / wire instructions</option>
+              </SelectField>
+            </Field>
+          </div>
+
+          {template === 'commission' ? (
+            <div className="card">
+              <h2 style={{ marginTop: 0 }}>Commission &amp; fees</h2>
+              <div className="form-row">
+                <Field label="Agent name" htmlFor="com-agent">
+                  <TextField id="com-agent" value={agentName} onChange={touch((e) => setAgentName(e.target.value))} placeholder="Listing / selling agent" />
+                </Field>
+                <Field label="Second sales person" htmlFor="com-agent2" hint="If applicable">
+                  <TextField id="com-agent2" value={secondAgentName} onChange={touch((e) => setSecondAgentName(e.target.value))} />
+                </Field>
+              </div>
+              <div className="form-row">
+                <Field label="Sale price $ *" htmlFor="com-sale">
+                  <TextField id="com-sale" inputMode="decimal" value={salePrice} onChange={touch((e) => setSalePrice(e.target.value))} placeholder="0.00" />
+                </Field>
+                <Field label="Real estate commission % *" htmlFor="com-pct" hint="e.g. 3 for 3%">
+                  <TextField id="com-pct" inputMode="decimal" value={commissionPct} onChange={touch((e) => setCommissionPct(e.target.value))} placeholder="3" />
+                </Field>
+              </div>
+              <div className="form-row">
+                <Field label="Processing fee $" htmlFor="com-fee">
+                  <TextField id="com-fee" inputMode="decimal" value={processingFee} onChange={touch((e) => setProcessingFee(e.target.value))} placeholder="295.00" />
+                </Field>
+                <Field label="Other charge $" htmlFor="com-other">
+                  <TextField id="com-other" inputMode="decimal" value={otherCharge} onChange={touch((e) => setOtherCharge(e.target.value))} placeholder="0.00" />
+                </Field>
+              </div>
+              <Field label="Other charge description" htmlFor="com-otherdesc">
+                <TextField id="com-otherdesc" value={otherChargeDesc} onChange={touch((e) => setOtherChargeDesc(e.target.value))} placeholder="What the other charge is for" />
+              </Field>
+              {commissionPreview && (
+                <div className="totals-box" aria-live="polite">
+                  <div className="totals-row">
+                    <span>Commission{commissionPct.trim() !== '' ? ` (${commissionPct.trim()}%)` : ''}</span>
+                    <span>{money(commissionPreview.commissionCents)}</span>
+                  </div>
+                  <div className="totals-row">
+                    <span>Processing fee</span>
+                    <span>{money(commissionPreview.processingFeeCents)}</span>
+                  </div>
+                  {commissionPreview.otherChargeCents > 0 && (
+                    <div className="totals-row">
+                      <span>Other charge{otherChargeDesc.trim() !== '' ? ` — ${otherChargeDesc.trim()}` : ''}</span>
+                      <span>{money(commissionPreview.otherChargeCents)}</span>
+                    </div>
+                  )}
+                  <div className="totals-row grand">
+                    <span>Total due</span>
+                    <span>{money(commissionPreview.totalCents)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="card">
+                <h2 style={{ marginTop: 0 }}>Line items</h2>
             {lines.map((l, i) => (
               <div className="line-item" key={l.key}>
                 <div className="line-item-head">
@@ -554,6 +694,8 @@ export default function InvoiceEditor() {
               </div>
             )}
           </div>
+            </>
+          )}
 
           <div className="card">
             <h2 style={{ marginTop: 0 }}>Notes &amp; payment</h2>
@@ -563,8 +705,12 @@ export default function InvoiceEditor() {
             <Field label="Terms" htmlFor="inv-terms">
               <TextField id="inv-terms" value={terms} onChange={touch((e) => setTerms(e.target.value))} />
             </Field>
-            <Field label="Payment instructions" htmlFor="inv-pay">
-              <TextArea id="inv-pay" value={paymentInstructions} onChange={touch((e) => setPaymentInstructions(e.target.value))} />
+            <Field
+              label={template === 'commission' ? 'Wire instructions' : 'Payment instructions'}
+              htmlFor="inv-pay"
+              hint={template === 'commission' ? 'Bank name, routing, account, and Zelle. Saved with the business for reuse.' : undefined}
+            >
+              <TextArea id="inv-pay" rows={6} value={paymentInstructions} onChange={touch((e) => setPaymentInstructions(e.target.value))} />
             </Field>
           </div>
 
@@ -581,7 +727,10 @@ export default function InvoiceEditor() {
         <InvoicePreview business={activeBusiness} customer={customer} lines={lines} totals={totals}
           invoiceDate={invoiceDate} dueDate={dueDate} poNumber={poNumber}
           notes={notes} terms={terms} paymentInstructions={paymentInstructions}
-          discountMode={discountMode} />
+          discountMode={discountMode} template={template}
+          agentName={agentName} secondAgentName={secondAgentName}
+          salePrice={salePrice} commissionPct={commissionPct}
+          otherChargeDesc={otherChargeDesc} commissionTotals={commissionPreview} />
       </div>
     </div>
   );
@@ -591,56 +740,122 @@ export default function InvoiceEditor() {
  * Shared invoice rendering model — the editor preview, the PDF, and print
  * must all render from this same structure (spec §8).
  */
-function InvoicePreview({
-  business, customer, lines, totals, invoiceDate, dueDate, poNumber, notes, terms, paymentInstructions, discountMode,
+/** Commission / wire-instruction preview body (Dania Realty template). */
+function CommissionPreviewBody({
+  agentName,
+  secondAgentName,
+  salePrice,
+  commissionPct,
+  otherChargeDesc,
+  commissionTotals,
+  paymentInstructions,
 }: {
-  business: Business;
-  customer: Customer | null;
+  agentName: string;
+  secondAgentName: string;
+  salePrice: string;
+  commissionPct: string;
+  otherChargeDesc: string;
+  commissionTotals: {
+    commissionCents: number;
+    processingFeeCents: number;
+    otherChargeCents: number;
+    totalCents: number;
+  } | null;
+  paymentInstructions: string;
+}) {
+  const pct = commissionPct.trim();
+  const sale = salePrice.trim() || '0.00';
+  const otherDesc = otherChargeDesc.trim();
+  const showOther =
+    otherDesc !== '' || (commissionTotals !== null && commissionTotals.otherChargeCents > 0);
+  return (
+    <>
+      {(agentName.trim() !== '' || secondAgentName.trim() !== '') && (
+        <div style={{ marginBottom: 12, fontSize: 14 }}>
+          {agentName.trim() !== '' && (
+            <div>
+              <strong>Agent:</strong> {agentName.trim()}
+            </div>
+          )}
+          {secondAgentName.trim() !== '' && (
+            <div>
+              <strong>Second sales person:</strong> {secondAgentName.trim()}
+            </div>
+          )}
+        </div>
+      )}
+      <div style={{ marginBottom: 4 }}>
+        <strong>DESCRIPTION / COMMISSION &amp; FEES</strong>
+      </div>
+      <table className="inv-table">
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th style={{ textAlign: 'right' }}>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Real Estate Commission{pct !== '' ? ` (${pct}% of $${sale})` : ''}</td>
+            <td style={{ textAlign: 'right' }}>
+              {commissionTotals ? money(commissionTotals.commissionCents) : '—'}
+            </td>
+          </tr>
+          <tr>
+            <td>Processing Fee</td>
+            <td style={{ textAlign: 'right' }}>
+              {commissionTotals ? money(commissionTotals.processingFeeCents) : '—'}
+            </td>
+          </tr>
+          {showOther && (
+            <tr>
+              <td>Other Charge{otherDesc !== '' ? ` — ${otherDesc}` : ''}</td>
+              <td style={{ textAlign: 'right' }}>
+                {commissionTotals ? money(commissionTotals.otherChargeCents) : '—'}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      {commissionTotals && (
+        <div className="inv-totals">
+          <div className="totals-row grand">
+            <span>TOTAL</span>
+            <span>{money(commissionTotals.totalCents)}</span>
+          </div>
+        </div>
+      )}
+      {paymentInstructions !== '' && (
+        <div
+          style={{
+            marginTop: 16,
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: 12,
+          }}
+        >
+          <strong>WIRE INSTRUCTIONS</strong>
+          <div style={{ whiteSpace: 'pre-wrap', marginTop: 6, fontSize: 14 }}>{paymentInstructions}</div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Standard line-item preview body. */
+function StandardPreviewBody({
+  lines,
+  totals,
+  discountMode,
+}: {
   lines: LineState[];
   totals: ReturnType<typeof previewTotals> | null;
-  invoiceDate: string;
-  dueDate: string;
-  poNumber: string;
-  notes: string;
-  terms: string;
-  paymentInstructions: string;
   discountMode: DiscountMode;
 }) {
   const visible = lines.filter((l) => l.description.trim() || l.unitPrice.trim());
   return (
-    <div className="invoice-preview" aria-label="Invoice preview">
-      <div className="inv-head">
-        <div>
-          <h2>{business.display_name}</h2>
-          <div style={{ color: 'var(--muted)', fontSize: 13 }}>
-            {[business.address_line1, business.address_line2].filter(Boolean).join(', ')}
-            <br />
-            {[business.city, business.state, business.zip].filter(Boolean).join(', ')}
-            {business.phone && <><br />{business.phone}</>}
-            {business.email && <><br />{business.email}</>}
-          </div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: 2 }}>INVOICE</div>
-          <span className="badge badge-draft">DRAFT</span>
-          <div style={{ fontSize: 13, marginTop: 8 }}>Date: {invoiceDate || '—'}</div>
-          {dueDate && <div style={{ fontSize: 13 }}>Due: {dueDate}</div>}
-          {poNumber && <div style={{ fontSize: 13 }}>P.O. #{poNumber}</div>}
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 8 }}>
-        <strong>Bill to</strong>
-        <div>{customer ? customer.name : '—'}</div>
-        {customer && (
-          <div style={{ color: 'var(--muted)', fontSize: 13 }}>
-            {[customer.billing_line1, customer.billing_city, customer.billing_state, customer.billing_zip].filter(Boolean).join(', ')}
-            {customer.phone && <><br />{customer.phone}</>}
-            {customer.email && <><br />{customer.email}</>}
-          </div>
-        )}
-      </div>
-
+    <>
       <table className="inv-table">
         <thead>
           <tr>
@@ -653,44 +868,220 @@ function InvoicePreview({
         </thead>
         <tbody>
           {visible.length === 0 && (
-            <tr><td colSpan={5} style={{ color: 'var(--muted)' }}>No line items yet.</td></tr>
+            <tr>
+              <td colSpan={5} style={{ color: 'var(--muted)' }}>
+                No line items yet.
+              </td>
+            </tr>
           )}
           {visible.map((l, i) => {
             let amt = '—';
             try {
-              amt = money(multiplyQuantity(dollarsToCents(l.unitPrice.trim() || '0'), l.quantity.trim() || '1'));
+              amt = money(
+                multiplyQuantity(dollarsToCents(l.unitPrice.trim() || '0'), l.quantity.trim() || '1'),
+              );
             } catch {
               amt = '—';
             }
             return (
               <tr key={l.key}>
                 <td>{i + 1}</td>
-                <td style={{ whiteSpace: 'pre-wrap' }}>{l.description || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                <td style={{ textAlign: 'right' }}>{l.quantity} {l.unitLabel}</td>
-                <td style={{ textAlign: 'right' }}>{l.unitPrice ? `$${l.unitPrice}` : '—'}</td>
+                <td style={{ whiteSpace: 'pre-wrap' }}>
+                  {l.description || <span style={{ color: 'var(--muted)' }}>—</span>}
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  {l.quantity} {l.unitLabel}
+                </td>
+                <td style={{ textAlign: 'right' }}>{l.unitPrice !== '' ? `$${l.unitPrice}` : '—'}</td>
                 <td style={{ textAlign: 'right' }}>{amt}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
-
       {totals && (
         <div className="inv-totals">
-          <div className="totals-row"><span>Subtotal</span><span>{money(totals.subtotalCents)}</span></div>
-          {totals.discountCents > 0 && <div className="totals-row"><span>Discount{discountMode === 'invoice' ? '' : ' (lines)'}</span><span>−{money(totals.discountCents)}</span></div>}
+          <div className="totals-row">
+            <span>Subtotal</span>
+            <span>{money(totals.subtotalCents)}</span>
+          </div>
+          {totals.discountCents > 0 && (
+            <div className="totals-row">
+              <span>Discount{discountMode === 'invoice' ? '' : ' (lines)'}</span>
+              <span>−{money(totals.discountCents)}</span>
+            </div>
+          )}
           {totals.taxByRate.map((g) => (
-            <div className="totals-row" key={g.rate}><span>Tax {(Number(g.rate) * 100).toFixed(2)}%</span><span>{money(g.cents)}</span></div>
+            <div className="totals-row" key={g.rate}>
+              <span>Tax {(Number(g.rate) * 100).toFixed(2)}%</span>
+              <span>{money(g.cents)}</span>
+            </div>
           ))}
-          {totals.shippingCents > 0 && <div className="totals-row"><span>Shipping</span><span>{money(totals.shippingCents)}</span></div>}
-          <div className="totals-row grand"><span>Total due</span><span>{money(totals.totalCents)}</span></div>
+          {totals.shippingCents > 0 && (
+            <div className="totals-row">
+              <span>Shipping</span>
+              <span>{money(totals.shippingCents)}</span>
+            </div>
+          )}
+          <div className="totals-row grand">
+            <span>Total due</span>
+            <span>{money(totals.totalCents)}</span>
+          </div>
         </div>
       )}
+    </>
+  );
+}
 
-      {notes && <div style={{ marginTop: 20 }}><strong>Notes</strong><div style={{ whiteSpace: 'pre-wrap' }}>{notes}</div></div>}
-      {terms && <div style={{ marginTop: 12 }}><strong>Terms:</strong> {terms}</div>}
-      {paymentInstructions && <div style={{ marginTop: 12 }}><strong>Payment instructions</strong><div style={{ whiteSpace: 'pre-wrap' }}>{paymentInstructions}</div></div>}
-      <div style={{ marginTop: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Thank you for your business!</div>
+/**
+ * Shared invoice rendering model — the editor preview, the PDF, and print
+ * must all render from this same structure (spec §8).
+ */
+function InvoicePreview({
+  business,
+  customer,
+  lines,
+  totals,
+  invoiceDate,
+  dueDate,
+  poNumber,
+  notes,
+  terms,
+  paymentInstructions,
+  discountMode,
+  template,
+  agentName,
+  secondAgentName,
+  salePrice,
+  commissionPct,
+  otherChargeDesc,
+  commissionTotals,
+}: {
+  business: Business;
+  customer: Customer | null;
+  lines: LineState[];
+  totals: ReturnType<typeof previewTotals> | null;
+  invoiceDate: string;
+  dueDate: string;
+  poNumber: string;
+  notes: string;
+  terms: string;
+  paymentInstructions: string;
+  discountMode: DiscountMode;
+  template: InvoiceTemplate;
+  agentName: string;
+  secondAgentName: string;
+  salePrice: string;
+  commissionPct: string;
+  otherChargeDesc: string;
+  commissionTotals: {
+    commissionCents: number;
+    processingFeeCents: number;
+    otherChargeCents: number;
+    totalCents: number;
+  } | null;
+}) {
+  const isCommission = template === 'commission';
+  return (
+    <div className="invoice-preview" aria-label="Invoice preview">
+      <div className="inv-head">
+        <div>
+          <h2>{business.display_name}</h2>
+          <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+            {[business.address_line1, business.address_line2].filter(Boolean).join(', ')}
+            <br />
+            {[business.city, business.state, business.zip].filter(Boolean).join(', ')}
+            {business.phone && (
+              <>
+                <br />
+                {business.phone}
+              </>
+            )}
+            {business.email && (
+              <>
+                <br />
+                {business.email}
+              </>
+            )}
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: 2 }}>
+            {isCommission ? 'COMMISSION' : 'INVOICE'}
+          </div>
+          <span className="badge badge-draft">DRAFT</span>
+          <div style={{ fontSize: 13, marginTop: 8 }}>Date: {invoiceDate || '—'}</div>
+          {dueDate !== '' && <div style={{ fontSize: 13 }}>Due: {dueDate}</div>}
+          {poNumber !== '' && <div style={{ fontSize: 13 }}>P.O. #{poNumber}</div>}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 8 }}>
+        <strong>Bill to</strong>
+        <div>{customer ? customer.name : '—'}</div>
+        {customer && (
+          <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+            {[customer.billing_line1, customer.billing_city, customer.billing_state, customer.billing_zip]
+              .filter(Boolean)
+              .join(', ')}
+            {customer.phone && (
+              <>
+                <br />
+                {customer.phone}
+              </>
+            )}
+            {customer.email && (
+              <>
+                <br />
+                {customer.email}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {isCommission ? (
+        <CommissionPreviewBody
+          agentName={agentName}
+          secondAgentName={secondAgentName}
+          salePrice={salePrice}
+          commissionPct={commissionPct}
+          otherChargeDesc={otherChargeDesc}
+          commissionTotals={commissionTotals}
+          paymentInstructions={paymentInstructions}
+        />
+      ) : (
+        <StandardPreviewBody lines={lines} totals={totals} discountMode={discountMode} />
+      )}
+
+      {notes !== '' && (
+        <div style={{ marginTop: 20 }}>
+          <strong>Notes</strong>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{notes}</div>
+        </div>
+      )}
+      {terms !== '' && (
+        <div style={{ marginTop: 12 }}>
+          <strong>Terms:</strong> {terms}
+        </div>
+      )}
+      {!isCommission && paymentInstructions !== '' && (
+        <div style={{ marginTop: 12 }}>
+          <strong>Payment instructions</strong>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{paymentInstructions}</div>
+        </div>
+      )}
+      {isCommission ? (
+        <div style={{ marginTop: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+          Commission / Wire Instruction Form | {business.display_name}
+          <br />
+          Verify wire instructions before payment.
+        </div>
+      ) : (
+        <div style={{ marginTop: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+          Thank you for your business!
+        </div>
+      )}
     </div>
   );
 }
