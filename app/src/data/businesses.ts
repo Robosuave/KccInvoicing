@@ -101,3 +101,10 @@ export async function uploadLogo(
   if (error) throw error;
   return path;
 }
+
+export async function getBusiness(id: string): Promise<Business> {
+  const sb = requireSupabase();
+  const { data, error } = await sb.from('businesses').select('*').eq('id', id).single();
+  if (error) throw error;
+  return data as Business;
+}
