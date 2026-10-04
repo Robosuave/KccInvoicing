@@ -4,11 +4,14 @@
 -- so the owner can invite/remove agents and see the team lists.
 
 -- business_members: workspace members can read and manage.
+-- (DROP IF EXISTS guards make this safe to re-run after a partial apply.)
+drop policy if exists "business_members member read" on public.business_members;
 create policy "business_members member read" on public.business_members
   for select to authenticated using (exists (
     select 1 from public.businesses b
     where b.id = business_members.business_id
       and public.is_workspace_member(b.workspace_id)));
+drop policy if exists "business_members member manage" on public.business_members;
 create policy "business_members member manage" on public.business_members
   for all to authenticated
   using (exists (
@@ -21,17 +24,20 @@ create policy "business_members member manage" on public.business_members
       and public.is_workspace_member(b.workspace_id)));
 
 -- business_invites: workspace members can read, invite, and cancel.
+drop policy if exists "business_invites member read" on public.business_invites;
 create policy "business_invites member read" on public.business_invites
   for select to authenticated using (exists (
     select 1 from public.businesses b
     where b.id = business_invites.business_id
       and public.is_workspace_member(b.workspace_id)));
+drop policy if exists "business_invites member insert" on public.business_invites;
 create policy "business_invites member insert" on public.business_invites
   for insert to authenticated with check (exists (
     select 1 from public.businesses b
     where b.id = business_invites.business_id
       and public.is_workspace_member(b.workspace_id)));
-create policy "business_invites member delete" on public.business_invites
+drop policy if exists "business_invites member delete" on public.business_invites;
+create policy "business_invites member delete" on public.business_invites;
   for delete to authenticated using (exists (
     select 1 from public.businesses b
     where b.id = business_invites.business_id
