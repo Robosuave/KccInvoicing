@@ -303,6 +303,7 @@ textarea.input { min-height: 96px; resize: vertical; }
   }
   .invoice-preview h2 { font-size: 20px !important; }
   .inv-head { margin-bottom: 10px !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .inv-wirebox { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .inv-table { margin: 8px 0 !important; }
   .inv-table th, .inv-table td { padding: 5px 6px !important; }
   .inv-totals { width: 220px !important; }

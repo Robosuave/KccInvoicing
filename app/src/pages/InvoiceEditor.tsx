@@ -906,7 +906,7 @@ function CommissionPreviewBody({
           className="inv-wirebox"
           style={{
             marginTop: 16,
-            background: 'var(--card)',
+            background: '#e7f3e7',
             border: '1px solid var(--border)',
             borderRadius: 8,
             padding: 12,
