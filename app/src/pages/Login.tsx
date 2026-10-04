@@ -68,7 +68,7 @@ export default function Login() {
             />
           </Field>
           <Button type="submit" disabled={busy} style={{ width: '100%' }}>
-            {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create owner account'}
+            {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}
           </Button>
         </form>
         <p style={{ marginTop: 16, fontSize: 14 }}>
@@ -76,7 +76,7 @@ export default function Login() {
             <>
               No account yet?{' '}
               <button className="btn btn-ghost btn-sm" type="button" onClick={() => setMode('signup')}>
-                Create the owner account
+                Create an account
               </button>
             </>
           ) : (
