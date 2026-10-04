@@ -37,7 +37,7 @@ create policy "business_invites member insert" on public.business_invites
     where b.id = business_invites.business_id
       and public.is_workspace_member(b.workspace_id)));
 drop policy if exists "business_invites member delete" on public.business_invites;
-create policy "business_invites member delete" on public.business_invites;
+create policy "business_invites member delete" on public.business_invites
   for delete to authenticated using (exists (
     select 1 from public.businesses b
     where b.id = business_invites.business_id
