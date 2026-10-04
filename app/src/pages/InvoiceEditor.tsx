@@ -222,7 +222,7 @@ export default function InvoiceEditor() {
     const isCommission = template === 'commission';
     return {
       business_id: activeBusiness.id,
-      customer_id: customerId || null,
+      customer_id: isCommission ? null : customerId || null,
       invoice_date: invoiceDate,
       due_date: dueDate || null,
       po_number: poNumber || null,
@@ -257,7 +257,7 @@ export default function InvoiceEditor() {
 
   const validate = useCallback((): string[] => {
     const errs: string[] = [];
-    if (!customerId) errs.push('Choose a customer.');
+    if (template !== 'commission' && !customerId) errs.push('Choose a customer.');
     if (!invoiceDate) errs.push('Invoice date is required.');
     if (template === 'commission') {
       const amt = (label: string, v: string, opts?: { required?: boolean; positive?: boolean }) => {
@@ -519,16 +519,18 @@ export default function InvoiceEditor() {
         <div>
           <div className="card">
             <div className="form-row">
-              <Field label="Customer *" htmlFor="inv-cust">
-                <SelectField id="inv-cust" value={customerId} onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => setCustomerId(e.target.value))}>
-                  <option value="">Choose a customer…</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </SelectField>
-              </Field>
+              {template !== 'commission' && (
+                <Field label="Customer *" htmlFor="inv-cust">
+                  <SelectField id="inv-cust" value={customerId} onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => setCustomerId(e.target.value))}>
+                    <option value="">Choose a customer…</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </SelectField>
+                </Field>
+              )}
               <Field label="Invoice date *" htmlFor="inv-date">
                 <TextField id="inv-date" type="date" value={invoiceDate} onChange={touch((e) => setInvoiceDate(e.target.value))} />
               </Field>
@@ -1060,29 +1062,31 @@ function InvoicePreview({
         </div>
       </div>
 
-      <div style={{ marginBottom: 8 }}>
-        <strong>Bill to</strong>
-        <div>{customer ? customer.name : '—'}</div>
-        {customer && (
-          <div style={{ color: 'var(--muted)', fontSize: 13 }}>
-            {[customer.billing_line1, customer.billing_city, customer.billing_state, customer.billing_zip]
-              .filter(Boolean)
-              .join(', ')}
-            {customer.phone && (
-              <>
-                <br />
-                {customer.phone}
-              </>
-            )}
-            {customer.email && (
-              <>
-                <br />
-                {customer.email}
-              </>
-            )}
-          </div>
-        )}
-      </div>
+      {!isCommission && (
+        <div style={{ marginBottom: 8 }}>
+          <strong>Bill to</strong>
+          <div>{customer ? customer.name : '—'}</div>
+          {customer && (
+            <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+              {[customer.billing_line1, customer.billing_city, customer.billing_state, customer.billing_zip]
+                .filter(Boolean)
+                .join(', ')}
+              {customer.phone && (
+                <>
+                  <br />
+                  {customer.phone}
+                </>
+              )}
+              {customer.email && (
+                <>
+                  <br />
+                  {customer.email}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {isCommission ? (
         <CommissionPreviewBody
