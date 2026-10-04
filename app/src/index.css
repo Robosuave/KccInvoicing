@@ -292,12 +292,12 @@ textarea.input { min-height: 96px; resize: vertical; }
 }
 
 @media print {
-  .sidebar, .topbar, .no-print, .alert { display: none !important; }
+  .sidebar, .topbar, .no-print, .alert, .scrim { display: none !important; }
   .content { padding: 0; max-width: none; }
   .editor-layout { display: block !important; }
   .invoice-preview {
     position: static; box-shadow: none; border: none; padding: 0;
-    font-size: 12.5px; break-inside: avoid;
+    font-size: 12.5px;
   }
   .invoice-preview h2 { font-size: 20px !important; }
   .inv-head { margin-bottom: 10px !important; }
