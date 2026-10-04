@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
 import type { Customer, Invoice } from '../db/types';
-import { createDraft, deleteDraft, getDraft, listDrafts } from '../data/drafts';
+import { createDraft, deleteDraft, getDraft, listInvoices } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listBusinessMembers } from '../data/team';
 import { centsToDollars } from '../lib/money';
@@ -11,7 +11,8 @@ import { Alert, Button, EmptyState, SetupRequired } from '../components/ui';
 export default function Invoices() {
   const { activeBusiness, notConfigured, isOwner } = useBusiness();
   const navigate = useNavigate();
-  const [drafts, setDrafts] = useState<Invoice[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [filter, setFilter] = useState<'all' | 'draft' | 'issued'>('all');
   const [customers, setCustomers] = useState<Record<string, Customer>>({});
   const [creatorEmails, setCreatorEmails] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -21,8 +22,11 @@ export default function Invoices() {
     if (!activeBusiness) return;
     setLoading(true);
     try {
-      const [d, c] = await Promise.all([listDrafts(activeBusiness.id), listCustomers(activeBusiness.id)]);
-      setDrafts(d);
+      const [inv, c] = await Promise.all([
+        listInvoices(activeBusiness.id, filter === 'all' ? undefined : filter),
+        listCustomers(activeBusiness.id),
+      ]);
+      setInvoices(inv);
       setCustomers(Object.fromEntries(c.map((x) => [x.id, x])));
       // Owners see who created each invoice.
       if (isOwner) {
@@ -39,7 +43,7 @@ export default function Invoices() {
       }
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load drafts.');
+      setError(e instanceof Error ? e.message : 'Failed to load invoices.');
     } finally {
       setLoading(false);
     }
@@ -48,7 +52,7 @@ export default function Invoices() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeBusiness?.id]);
+  }, [activeBusiness?.id, filter]);
 
   if (notConfigured) return <SetupRequired what="Invoices" />;
   if (!activeBusiness) return <EmptyState title="No business selected" body="Create a business first." />;
@@ -103,8 +107,8 @@ export default function Invoices() {
     <div>
       <h1 className="page-title">Invoices</h1>
       <p className="page-sub">
-        Drafts for <strong>{activeBusiness.display_name}</strong>. Issuing, numbering, and history
-        arrive in Phase 2.
+        Invoices for <strong>{activeBusiness.display_name}</strong>. Drafts are works in progress;
+        issued invoices are finalized and read-only.
       </p>
 
       <div className="btn-row" style={{ marginBottom: 20 }}>
@@ -113,13 +117,30 @@ export default function Invoices() {
         </Link>
       </div>
 
+      <div className="btn-row" style={{ marginBottom: 20 }} role="tablist" aria-label="Filter invoices">
+        {(['all', 'draft', 'issued'] as const).map((f) => (
+          <Button
+            key={f}
+            variant={filter === f ? 'primary' : 'secondary'}
+            size="sm"
+            onClick={() => setFilter(f)}
+          >
+            {f === 'all' ? 'All' : f === 'draft' ? 'Drafts' : 'Issued'}
+          </Button>
+        ))}
+      </div>
+
       {error && <Alert kind="error">{error}</Alert>}
       {loading ? (
         <p>Loading…</p>
-      ) : drafts.length === 0 ? (
+      ) : invoices.length === 0 ? (
         <EmptyState
-          title="No drafts"
-          body="Drafts you save appear here. Invoice numbers are assigned automatically."
+          title={filter === 'issued' ? 'No issued invoices' : filter === 'draft' ? 'No drafts' : 'No invoices'}
+          body={
+            filter === 'issued'
+              ? 'Issued invoices appear here after you print / finalize a draft.'
+              : 'Drafts you save appear here. Invoice numbers are assigned automatically.'
+          }
           action={
             <Link className="btn btn-primary" to="/invoices/new">
               New invoice
@@ -131,7 +152,7 @@ export default function Invoices() {
           <table className="grid">
             <thead>
               <tr>
-                <th>Draft</th>
+                <th>Invoice</th>
                 <th>Customer</th>
                 <th>Date</th>
                 <th>Total</th>
@@ -140,12 +161,13 @@ export default function Invoices() {
               </tr>
             </thead>
             <tbody>
-              {drafts.map((d) => (
+              {invoices.map((d) => (
                 <tr key={d.id}>
                   <td>
-                    <strong>{d.draft_key}</strong>
-                    {d.invoice_number && (
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>Invoice #{d.invoice_number}</div>
+                    {d.invoice_number ? (
+                      <strong>Invoice #{d.invoice_number}</strong>
+                    ) : (
+                      <strong>{d.draft_key}</strong>
                     )}
                     {d.template === 'commission' && (
                       <span className="badge" style={{ marginLeft: 8 }}>
@@ -161,11 +183,15 @@ export default function Invoices() {
                       </div>
                     )}
                   </td>
-                  <td>{d.customer_id ? customers[d.customer_id]?.name ?? '—' : '—'}</td>
+                  <td>{d.customer_id ? customers[d.customer_id]?.name ?? '—' : d.property_address ?? '—'}</td>
                   <td style={{ fontSize: 14 }}>{d.invoice_date}</td>
                   <td>${centsToDollars(d.total_cents)}</td>
                   <td>
-                    <span className="badge badge-draft">Draft</span>
+                    {d.status === 'issued' ? (
+                      <span className="badge badge-issued">Issued</span>
+                    ) : (
+                      <span className="badge badge-draft">Draft</span>
+                    )}
                   </td>
                   <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                     <Link className="btn btn-secondary btn-sm" to={`/invoices/${d.id}`}>
@@ -174,9 +200,11 @@ export default function Invoices() {
                     <Button variant="ghost" size="sm" onClick={() => duplicate(d.id)}>
                       Duplicate
                     </Button>{' '}
-                    <Button variant="ghost" size="sm" onClick={() => remove(d.id)}>
-                      Delete
-                    </Button>
+                    {d.status === 'draft' && (
+                      <Button variant="ghost" size="sm" onClick={() => remove(d.id)}>
+                        Delete
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}

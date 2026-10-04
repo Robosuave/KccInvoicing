@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
 import { Alert, Button, EmptyState, SetupRequired, Stat } from '../components/ui';
-import { listDrafts } from '../data/drafts';
+import { listInvoices } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listItems } from '../data/items';
 import { centsToDollars } from '../lib/money';
 
 export default function Dashboard() {
   const { activeBusiness, notConfigured, loadError } = useBusiness();
-  const [stats, setStats] = useState({ drafts: 0, draftTotal: 0, customers: 0, items: 0 });
+  const [stats, setStats] = useState({ drafts: 0, draftTotal: 0, issued: 0, issuedTotal: 0, customers: 0, items: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,14 +19,17 @@ export default function Dashboard() {
     }
     setLoading(true);
     Promise.all([
-      listDrafts(activeBusiness.id),
+      listInvoices(activeBusiness.id, 'draft'),
+      listInvoices(activeBusiness.id, 'issued'),
       listCustomers(activeBusiness.id),
       listItems(activeBusiness.id),
     ])
-      .then(([drafts, customers, items]) => {
+      .then(([drafts, issued, customers, items]) => {
         setStats({
           drafts: drafts.length,
           draftTotal: drafts.reduce((a, d) => a + d.total_cents, 0),
+          issued: issued.length,
+          issuedTotal: issued.reduce((a, d) => a + d.total_cents, 0),
           customers: customers.length,
           items: items.length,
         });
@@ -67,6 +70,7 @@ export default function Dashboard() {
 
       <div className="stats">
         <Stat label="Draft invoices" value={String(stats.drafts)} note={`Draft total ${centsToDollars(stats.draftTotal)}`} />
+        <Stat label="Issued invoices" value={String(stats.issued)} note={`Billed total ${centsToDollars(stats.issuedTotal)}`} />
         <Stat label="Customers" value={String(stats.customers)} />
         <Stat label="Catalog items" value={String(stats.items)} />
       </div>
@@ -89,9 +93,9 @@ export default function Dashboard() {
       <div className="card">
         <h2 style={{ marginTop: 0 }}>What each number means</h2>
         <ul style={{ margin: 0, paddingLeft: 20, color: 'var(--muted)', fontSize: 14 }}>
-          <li>Draft invoices are works in progress — they are not issued and have no invoice number yet.</li>
+          <li>Draft invoices are works in progress — they are not finalized yet.</li>
           <li>Draft total is the sum of draft amounts. It is not revenue.</li>
-          <li>Issued invoices, payments, and reports arrive in Phase 2.</li>
+          <li>Issued invoices are finalized (printing / saving a PDF issues the invoice). Billed total is the sum of issued amounts.</li>
         </ul>
       </div>
 
@@ -99,7 +103,7 @@ export default function Dashboard() {
         <div className="no-print" style={{ marginTop: 8 }}>
           <Link to="/invoices">
             <Button variant="ghost" size="sm">
-              View all drafts →
+              View all invoices →
             </Button>
           </Link>
         </div>

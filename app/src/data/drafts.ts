@@ -97,13 +97,19 @@ function commissionColumns(input: DraftInput) {
 }
 
 export async function listDrafts(businessId: string): Promise<Invoice[]> {
+  return listInvoices(businessId, 'draft');
+}
+
+/** List invoices for a business, optionally filtered by status. */
+export async function listInvoices(businessId: string, status?: 'draft' | 'issued' | 'void'): Promise<Invoice[]> {
   const sb = requireSupabase();
-  const { data, error } = await sb
+  let q = sb
     .from('invoices')
     .select('*')
     .eq('business_id', businessId)
-    .eq('status', 'draft')
     .order('updated_at', { ascending: false });
+  if (status) q = q.eq('status', status);
+  const { data, error } = await q;
   if (error) throw error;
   return data as Invoice[];
 }
