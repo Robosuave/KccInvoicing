@@ -17,16 +17,26 @@ export async function ensureWorkspace(): Promise<Workspace> {
     return (memberships[0] as unknown as { workspaces: Workspace }).workspaces;
   }
 
-  const { data: ws, error: wErr } = await sb
+  // NOTE: the id is generated client-side so the owner membership can be
+  // inserted BEFORE the workspace is ever SELECTed. The RLS SELECT policy
+  // on workspaces requires membership (is_workspace_member), which cannot
+  // exist yet on first run — so insert().select().single() would always
+  // fail here with zero rows returned.
+  const wsId = crypto.randomUUID();
+  const { error: wErr } = await sb
     .from('workspaces')
-    .insert({ name: 'My Workspace' })
-    .select()
-    .single();
+    .insert({ id: wsId, name: 'My Workspace' });
   if (wErr) throw wErr;
   const { error: mmErr } = await sb
     .from('workspace_members')
-    .insert({ workspace_id: ws.id, user_id: user.id, role: 'owner' });
+    .insert({ workspace_id: wsId, user_id: user.id, role: 'owner' });
   if (mmErr) throw mmErr;
+  const { data: ws, error: wsErr } = await sb
+    .from('workspaces')
+    .select('*')
+    .eq('id', wsId)
+    .single();
+  if (wsErr) throw wsErr;
   return ws as Workspace;
 }
 
