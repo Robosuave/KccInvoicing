@@ -866,6 +866,7 @@ function CommissionPreviewBody({
       )}
       {paymentInstructions !== '' && (
         <div
+          className="inv-wirebox"
           style={{
             marginTop: 16,
             background: 'var(--card)',
@@ -1096,30 +1097,30 @@ function InvoicePreview({
       )}
 
       {notes !== '' && (
-        <div style={{ marginTop: 20 }}>
+        <div className="inv-section" style={{ marginTop: 20 }}>
           <strong>Notes</strong>
           <div style={{ whiteSpace: 'pre-wrap' }}>{notes}</div>
         </div>
       )}
       {terms !== '' && (
-        <div style={{ marginTop: 12 }}>
+        <div className="inv-section" style={{ marginTop: 12 }}>
           <strong>Terms:</strong> {terms}
         </div>
       )}
       {!isCommission && paymentInstructions !== '' && (
-        <div style={{ marginTop: 12 }}>
+        <div className="inv-section" style={{ marginTop: 12 }}>
           <strong>Payment instructions</strong>
           <div style={{ whiteSpace: 'pre-wrap' }}>{paymentInstructions}</div>
         </div>
       )}
       {isCommission ? (
-        <div style={{ marginTop: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+        <div className="inv-footer" style={{ marginTop: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
           Commission / Wire Instruction Form | {business.display_name}
           <br />
           Verify wire instructions before payment.
         </div>
       ) : (
-        <div style={{ marginTop: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+        <div className="inv-footer" style={{ marginTop: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
           Thank you for your business!
         </div>
       )}
