@@ -95,7 +95,7 @@ export default function InvoiceEditor() {
   const [salePrice, setSalePrice] = useState('');
   const [commissionPct, setCommissionPct] = useState('');
   const [commissionAmt, setCommissionAmt] = useState('');
-  /* true once the user types a $ directly — % changes clear it and resume auto-fill */
+  /* true once the user types a $ directly — % or sale-price changes clear it and resume auto-fill */
   const commissionAmtManual = useRef(false);
   const [processingFee, setProcessingFee] = useState('295.00');
   const [otherChargeDesc, setOtherChargeDesc] = useState('');
@@ -278,6 +278,7 @@ export default function InvoiceEditor() {
       if (!pctT && !commissionAmt.trim()) {
         errs.push('Enter a commission % or a commission amount.');
       }
+      if (!propertyAddress.trim()) errs.push('Property address is required.');
       amt('Processing fee', processingFee);
       amt('Other charge', otherCharge);
       if (otherCharge.trim() && !otherChargeDesc.trim()) errs.push('Other charge needs a description.');
@@ -564,7 +565,7 @@ export default function InvoiceEditor() {
               </div>
               <div className="form-row">
                 <Field label="Sale price $ *" htmlFor="com-sale">
-                  <TextField id="com-sale" inputMode="decimal" value={salePrice} onChange={touch((e) => setSalePrice(e.target.value))} placeholder="0.00" />
+                  <TextField id="com-sale" inputMode="decimal" value={salePrice} onChange={touch((e) => { commissionAmtManual.current = false; setSalePrice(e.target.value); })} placeholder="0.00" />
                 </Field>
                 <Field label="Real estate commission %" htmlFor="com-pct" hint="e.g. 3 for 3%">
                   <TextField id="com-pct" inputMode="decimal" value={commissionPct} onChange={touch((e) => { commissionAmtManual.current = false; setCommissionPct(e.target.value); })} placeholder="3" />
@@ -586,7 +587,7 @@ export default function InvoiceEditor() {
                   <TextField id="com-otherdesc" value={otherChargeDesc} onChange={touch((e) => setOtherChargeDesc(e.target.value))} placeholder="What the other charge is for" />
                 </Field>
               </div>
-              <Field label="Property address" htmlFor="com-prop" hint="From the HUD / closing statement">
+              <Field label="Property address *" htmlFor="com-prop" hint="From the HUD / closing statement">
                 <TextField id="com-prop" value={propertyAddress} onChange={touch((e) => setPropertyAddress(e.target.value))} placeholder="123 Main St, Hollywood, FL 33021" />
               </Field>
               {commissionPreview && (
