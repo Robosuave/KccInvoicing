@@ -78,8 +78,7 @@ export default function InvoiceEditor() {
 
   const [customerId, setCustomerId] = useState('');
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [dueDate, setDueDate] = useState('');
-  const [poNumber, setPoNumber] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
   const [lines, setLines] = useState<LineState[]>([newLine()]);
   const [discountMode, setDiscountMode] = useState<DiscountMode>('none');
   const [invoiceDiscountPct, setInvoiceDiscountPct] = useState('');
@@ -144,8 +143,7 @@ export default function InvoiceEditor() {
         setExpectedUpdatedAt(invoice.updated_at);
         setCustomerId(invoice.customer_id ?? '');
         setInvoiceDate(invoice.invoice_date);
-        setDueDate(invoice.due_date ?? '');
-        setPoNumber(invoice.po_number ?? '');
+        setInvoiceNumber(invoice.invoice_number ?? null);
         setLines(
           dbLines.map((l) => ({
             key: l.id,
@@ -224,8 +222,6 @@ export default function InvoiceEditor() {
       business_id: activeBusiness.id,
       customer_id: isCommission ? null : customerId || null,
       invoice_date: invoiceDate,
-      due_date: dueDate || null,
-      po_number: poNumber || null,
       currency: 'USD',
       template,
       sale_price_cents: isCommission && salePrice.trim() ? dollarsToCents(salePrice.trim()) : 0,
@@ -253,7 +249,7 @@ export default function InvoiceEditor() {
         tax_rate: l.taxRate.trim() ? pctToRate(l.taxRate) : undefined,
       })),
     };
-  }, [activeBusiness, customerId, invoiceDate, dueDate, poNumber, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, paymentInstructions, template, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge, agentName, secondAgentName, propertyAddress]);
+  }, [activeBusiness, customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, paymentInstructions, template, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge, agentName, secondAgentName, propertyAddress]);
 
   const validate = useCallback((): string[] => {
     const errs: string[] = [];
@@ -375,10 +371,12 @@ export default function InvoiceEditor() {
         if (draftId) {
           const updated = await saveDraft(draftId, input, expectedUpdatedAt);
           setExpectedUpdatedAt(updated.updated_at);
+          setInvoiceNumber(updated.invoice_number ?? null);
         } else {
           const created = await createDraft(input);
           setDraftId(created.id);
           setExpectedUpdatedAt(created.updated_at);
+          setInvoiceNumber(created.invoice_number ?? null);
           navigate(`/invoices/${created.id}`, { replace: true });
         }
         dirtyRef.current = false;
@@ -534,13 +532,7 @@ export default function InvoiceEditor() {
               <Field label="Invoice date *" htmlFor="inv-date">
                 <TextField id="inv-date" type="date" value={invoiceDate} onChange={touch((e) => setInvoiceDate(e.target.value))} />
               </Field>
-              <Field label="Due date" htmlFor="inv-due">
-                <TextField id="inv-due" type="date" value={dueDate} onChange={touch((e) => setDueDate(e.target.value))} />
-              </Field>
             </div>
-            <Field label="P.O. / reference #" htmlFor="inv-po">
-              <TextField id="inv-po" value={poNumber} onChange={touch((e) => setPoNumber(e.target.value))} />
-            </Field>
           </div>
 
           <div className="card">
@@ -758,13 +750,13 @@ export default function InvoiceEditor() {
               Print / Save PDF
             </Button>
             <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-              Drafts autosave. Invoice numbers are assigned at issuance (Phase 2).
+              Drafts autosave{invoiceNumber ? ` as invoice #${invoiceNumber}` : ''}.
             </span>
           </div>
         </div>
 
         <InvoicePreview business={activeBusiness} customer={customer} lines={lines} totals={totals}
-          invoiceDate={invoiceDate} dueDate={dueDate} poNumber={poNumber}
+          invoiceDate={invoiceDate} invoiceNumber={invoiceNumber}
           notes={notes} terms={terms} paymentInstructions={paymentInstructions}
           discountMode={discountMode} template={template}
           agentName={agentName} secondAgentName={secondAgentName}
@@ -990,8 +982,7 @@ function InvoicePreview({
   lines,
   totals,
   invoiceDate,
-  dueDate,
-  poNumber,
+  invoiceNumber,
   notes,
   terms,
   paymentInstructions,
@@ -1010,8 +1001,7 @@ function InvoicePreview({
   lines: LineState[];
   totals: ReturnType<typeof previewTotals> | null;
   invoiceDate: string;
-  dueDate: string;
-  poNumber: string;
+  invoiceNumber: string | null;
   notes: string;
   terms: string;
   paymentInstructions: string;
@@ -1058,10 +1048,9 @@ function InvoicePreview({
           <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: 2 }}>
             {isCommission ? 'COMMISSION' : 'INVOICE'}
           </div>
+          {invoiceNumber && <div style={{ fontSize: 15, fontWeight: 700 }}>#{invoiceNumber}</div>}
           <span className="badge badge-draft">DRAFT</span>
           <div style={{ fontSize: 13, marginTop: 8 }}>Date: {invoiceDate || '—'}</div>
-          {dueDate !== '' && <div style={{ fontSize: 13 }}>Due: {dueDate}</div>}
-          {poNumber !== '' && <div style={{ fontSize: 13 }}>P.O. #{poNumber}</div>}
         </div>
       </div>
 

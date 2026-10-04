@@ -45,12 +45,20 @@ export default function Invoices() {
         business_id: invoice.business_id,
         customer_id: invoice.customer_id,
         invoice_date: new Date().toISOString().slice(0, 10),
-        due_date: invoice.due_date,
-        po_number: invoice.po_number,
         currency: invoice.currency,
         notes: invoice.notes,
         terms: invoice.terms,
         payment_instructions: invoice.payment_instructions,
+        template: invoice.template,
+        sale_price_cents: invoice.sale_price_cents,
+        commission_pct: invoice.commission_pct,
+        commission_amount_cents: invoice.commission_amount_cents,
+        processing_fee_cents: invoice.processing_fee_cents,
+        other_charge_desc: invoice.other_charge_desc,
+        other_charge_cents: invoice.other_charge_cents,
+        agent_name: invoice.agent_name,
+        second_agent_name: invoice.second_agent_name,
+        property_address: invoice.property_address,
         lines: lines.map((l) => ({
           item_id: l.item_id,
           description: l.description,
@@ -97,7 +105,7 @@ export default function Invoices() {
       ) : drafts.length === 0 ? (
         <EmptyState
           title="No drafts"
-          body="Drafts you save appear here. Nothing is issued or numbered until Phase 2."
+          body="Drafts you save appear here. Invoice numbers are assigned automatically."
           action={
             <Link className="btn btn-primary" to="/invoices/new">
               New invoice
@@ -122,6 +130,9 @@ export default function Invoices() {
                 <tr key={d.id}>
                   <td>
                     <strong>{d.draft_key}</strong>
+                    {d.invoice_number && (
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>Invoice #{d.invoice_number}</div>
+                    )}
                     {d.template === 'commission' && (
                       <span className="badge" style={{ marginLeft: 8 }}>
                         Commission

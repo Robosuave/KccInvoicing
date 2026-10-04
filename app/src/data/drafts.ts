@@ -23,10 +23,6 @@ export interface DraftInput {
   business_id: string;
   customer_id?: string | null;
   invoice_date?: string;
-  due_date?: string | null;
-  po_number?: string | null;
-  service_date?: string | null;
-  service_period?: string | null;
   currency?: string;
   invoice_discount_rate?: string;
   invoice_tax_rate?: string;
@@ -130,17 +126,23 @@ export async function createDraft(input: DraftInput): Promise<Invoice> {
   if (!isCommission && input.lines.length === 0) throw new Error('Add at least one line item.');
   const t = totalsFor(input);
 
+  // Assign the business's next invoice number (e.g. Dania Realty starts at 501).
+  const { data: biz, error: bErr } = await sb
+    .from('businesses')
+    .select('invoice_prefix, next_number')
+    .eq('id', input.business_id)
+    .single();
+  if (bErr) throw bErr;
+  const invoiceNumber = `${(biz as { invoice_prefix: string }).invoice_prefix ?? ''}${(biz as { next_number: number }).next_number}`;
+
   const { data: invoice, error: iErr } = await sb
     .from('invoices')
     .insert({
       business_id: input.business_id,
       customer_id: input.customer_id ?? null,
       status: 'draft',
+      invoice_number: invoiceNumber,
       invoice_date: input.invoice_date ?? new Date().toISOString().slice(0, 10),
-      due_date: input.due_date ?? null,
-      po_number: input.po_number ?? null,
-      service_date: input.service_date ?? null,
-      service_period: input.service_period ?? null,
       currency: input.currency ?? 'USD',
       subtotal_cents: t.subtotalCents,
       discount_cents: t.discountCents,
@@ -155,6 +157,12 @@ export async function createDraft(input: DraftInput): Promise<Invoice> {
     .select()
     .single();
   if (iErr) throw iErr;
+
+  const { error: nErr } = await sb
+    .from('businesses')
+    .update({ next_number: (biz as { next_number: number }).next_number + 1 })
+    .eq('id', input.business_id);
+  if (nErr) throw nErr;
 
   if (isCommission) return invoice as Invoice;
 
@@ -207,10 +215,6 @@ export async function saveDraft(
     .update({
       customer_id: input.customer_id ?? null,
       invoice_date: input.invoice_date,
-      due_date: input.due_date ?? null,
-      po_number: input.po_number ?? null,
-      service_date: input.service_date ?? null,
-      service_period: input.service_period ?? null,
       currency: input.currency ?? 'USD',
       subtotal_cents: t.subtotalCents,
       discount_cents: t.discountCents,
