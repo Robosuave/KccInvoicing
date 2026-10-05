@@ -10,6 +10,7 @@ import {
 } from '../data/businesses';
 import {
   Alert,
+  BackButton,
   Button,
   EmptyState,
   Field,
@@ -184,6 +185,7 @@ export default function Businesses() {
 
   return (
     <div>
+      <BackButton />
       <h1 className="page-title">Businesses</h1>
       <p className="page-sub">
         Each business has its own header, numbering, customers, items, and templates. Active business:{' '}

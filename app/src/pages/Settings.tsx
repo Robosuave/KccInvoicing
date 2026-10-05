@@ -1,6 +1,6 @@
 import { useAuth } from '../auth/AuthContext';
 import { APP_NAME, isBackendConfigured } from '../lib/config';
-import { Alert, Button, SetupRequired } from '../components/ui';
+import { Alert, BackButton, Button, SetupRequired } from '../components/ui';
 
 export default function Settings() {
   const { signOut } = useAuth();
@@ -9,6 +9,7 @@ export default function Settings() {
 
   return (
     <div>
+      <BackButton />
       <h1 className="page-title">Application settings</h1>
       <p className="page-sub">App-level preferences. Business-specific defaults live under Businesses.</p>
 

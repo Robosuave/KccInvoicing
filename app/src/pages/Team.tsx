@@ -10,7 +10,7 @@ import {
   type BusinessInvite,
   type BusinessMember,
 } from '../data/team';
-import { Alert, Button, EmptyState, Field, TextField } from '../components/ui';
+import { Alert, BackButton, Button, EmptyState, Field, TextField } from '../components/ui';
 
 /** Link that drops a new agent straight onto account creation with their email prefilled. */
 export function inviteLinkFor(inviteEmail: string): string {
@@ -137,6 +137,7 @@ export default function Team() {
 
   return (
     <div>
+      <BackButton />
       <h1 style={{ marginTop: 0 }}>Team</h1>
       <p style={{ color: 'var(--muted)', maxWidth: 640 }}>
         Invite agents by email. An invited agent signs up with that email address and gets access

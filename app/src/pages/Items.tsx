@@ -5,6 +5,7 @@ import { archiveItem, createItem, listItems, updateItem } from '../data/items';
 import { centsToDollars, dollarsToCents } from '../lib/money';
 import {
   Alert,
+  BackButton,
   Button,
   EmptyState,
   Field,
@@ -145,6 +146,7 @@ export default function Items() {
 
   return (
     <div>
+      <BackButton />
       <h1 className="page-title">Products &amp; services</h1>
       <p className="page-sub">
         Reusable catalog for <strong>{activeBusiness.display_name}</strong>. Changing an item never
