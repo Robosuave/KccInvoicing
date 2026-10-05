@@ -77,7 +77,7 @@ function toForm(b?: Business): Record<string, string> {
 }
 
 export default function Businesses() {
-  const { workspace, businesses, activeBusiness, refresh, notConfigured, loading } = useBusiness();
+  const { workspace, businesses, activeBusiness, refresh, notConfigured, loading, isOwner } = useBusiness();
   const [editing, setEditing] = useState<Business | 'new' | null>(null);
   const [form, setForm] = useState<Record<string, string>>(EMPTY);
   const [formError, setFormError] = useState<string | null>(null);
@@ -192,18 +192,27 @@ export default function Businesses() {
         <strong>{activeBusiness?.display_name ?? 'none'}</strong>
       </p>
 
-      <div className="btn-row" style={{ marginBottom: 20 }}>
-        <Button onClick={openNew}>Add business</Button>
-      </div>
+      {isOwner && (
+        <div className="btn-row" style={{ marginBottom: 20 }}>
+          <Button onClick={openNew}>Add business</Button>
+        </div>
+      )}
 
       {loading ? (
         <p>Loading…</p>
       ) : businesses.length === 0 ? (
-        <EmptyState
-          title="No businesses yet"
-          body="Add your first business — for example, Kaleky Computer Consulting Inc. You can add Dania Realty Inc as a second business with its own invoice header."
-          action={<Button onClick={openNew}>Add business</Button>}
-        />
+        isOwner ? (
+          <EmptyState
+            title="No businesses yet"
+            body="Add your first business — for example, Kaleky Computer Consulting Inc. You can add Dania Realty Inc as a second business with its own invoice header."
+            action={<Button onClick={openNew}>Add business</Button>}
+          />
+        ) : (
+          <EmptyState
+            title="No business assigned"
+            body="Your account hasn't been linked to a business yet. Ask the owner to send you an invite."
+          />
+        )
       ) : (
         <div className="table-wrap">
           <table className="grid">
