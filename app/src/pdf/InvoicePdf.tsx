@@ -59,8 +59,8 @@ const styles = StyleSheet.create({
   footer: { position: 'absolute', bottom: 28, left: 48, right: 48, textAlign: 'center', fontSize: 9, color: '#5b6470' },
   accentBar: { height: 6, borderRadius: 3, marginBottom: 14 },
   wireBox: { marginTop: 14, backgroundColor: '#e7f3e7', borderWidth: 1, borderColor: '#b9d8b9', borderRadius: 6, padding: 12 },
-  wireTitle: { fontSize: 10, fontWeight: 'bold', marginBottom: 6 },
-  wireText: { fontSize: 10, fontWeight: 'bold', lineHeight: 1.5 },
+  wireTitle: { fontSize: 12, fontWeight: 'bold', marginBottom: 6 },
+  wireText: { fontSize: 12, fontWeight: 'bold', lineHeight: 1.5 },
   propLine: { fontSize: 11, marginBottom: 10 },
   agentLine: { fontSize: 10, marginBottom: 3 },
 });

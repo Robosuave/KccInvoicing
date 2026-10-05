@@ -1366,8 +1366,8 @@ function CommissionPreviewBody({
             padding: 12,
           }}
         >
-          {!/^wire instructions/im.test(paymentInstructions) && <strong>WIRE INSTRUCTIONS</strong>}
-          <div style={{ whiteSpace: 'pre-wrap', marginTop: 6, fontSize: 14 }}>{paymentInstructions}</div>
+          {!/^wire instructions/im.test(paymentInstructions) && <strong style={{ fontSize: 16 }}>WIRE INSTRUCTIONS</strong>}
+          <div style={{ whiteSpace: 'pre-wrap', marginTop: 6, fontSize: 16 }}>{paymentInstructions}</div>
         </div>
       )}
     </>
@@ -1643,8 +1643,6 @@ function InvoicePreview({
       {isCommission ? (
         <div className="inv-footer" style={{ marginTop: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
           Commission / Wire Instruction Form | {business.display_name}
-          <br />
-          Verify wire instructions before payment.
         </div>
       ) : (
         <div className="inv-footer" style={{ marginTop: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>

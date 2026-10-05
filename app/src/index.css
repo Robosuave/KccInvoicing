@@ -348,13 +348,13 @@ textarea.input { min-height: 96px; resize: vertical; }
   .inv-company-block > div { font-size: 11px !important; }
   .inv-company-block > div:first-child { font-size: 13px !important; }
   .inv-wirebox { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .inv-wirebox > div { font-size: 12px !important; font-weight: 600 !important; }
+  .inv-wirebox > div { font-size: 14px !important; font-weight: 600 !important; }
   .inv-table { margin: 6px 0 !important; font-size: 11px !important; }
   .inv-table th, .inv-table td { padding: 3px 5px !important; }
   .inv-totals { width: 200px !important; font-size: 12px !important; }
   .inv-section { margin-top: 6px !important; }
   .inv-wirebox { margin-top: 8px !important; padding: 6px 8px !important; }
-  .inv-wirebox strong { font-size: 12px !important; }
+  .inv-wirebox strong { font-size: 14px !important; }
   .inv-agentcols { gap: 10px; margin-bottom: 6px !important; font-size: 11px !important; }
   .inv-agentcols > div { font-size: 11px !important; }
   .inv-footer { margin-top: 8px !important; font-size: 10px !important; }
