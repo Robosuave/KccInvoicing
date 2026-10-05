@@ -231,7 +231,7 @@ textarea.input { min-height: 96px; resize: vertical; }
 .stats-compact .stat .value { font-size: 22px; }
 .stats-compact .stat .label { font-size: 11px; }
 /* Extra-mini stats for the dashboard: 4 across, tiny footprint. */
-.stats-mini { grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+.stats-mini { grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
 .stats-mini .stat { padding: 8px 10px; }
 .stats-mini .stat .value { font-size: 17px; margin-top: 2px; }
 .stats-mini .stat .label { font-size: 10px; }
