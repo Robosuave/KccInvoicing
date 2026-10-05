@@ -43,6 +43,7 @@ const EMPTY: Record<string, string> = {
   default_tax_rate: '0',
   default_email_subject: '',
   default_email_message: '',
+  email_from: '',
   default_template: 'standard',
   invoice_style: 'classic',
 };
@@ -71,6 +72,7 @@ function toForm(b?: Business): Record<string, string> {
     default_tax_rate: String(Number(b.default_tax_rate) * 100),
     default_email_subject: b.default_email_subject ?? '',
     default_email_message: b.default_email_message ?? '',
+    email_from: (b as { email_from?: string | null }).email_from ?? '',
     default_template: (b as { default_template?: string }).default_template ?? 'standard',
     invoice_style: (b as { invoice_style?: string }).invoice_style ?? 'classic',
   };
@@ -148,6 +150,7 @@ export default function Businesses() {
         default_tax_rate: String(Number(form.default_tax_rate || '0') / 100),
         default_email_subject: form.default_email_subject.trim() || null,
         default_email_message: form.default_email_message.trim() || null,
+        email_from: form.email_from.trim() || null,
         default_template: (form.default_template === 'commission' ? 'commission' : 'standard') as InvoiceTemplate,
         invoice_style: ['classic', 'modern', 'compact'].includes(form.invoice_style) ? form.invoice_style : 'classic',
       };
@@ -344,6 +347,13 @@ export default function Businesses() {
           </Field>
           <Field label="Default payment instructions" htmlFor="b-payinst" hint="For Dania Realty: wire instructions and Zelle.">
             <TextArea id="b-payinst" value={form.payment_instructions} onChange={set('payment_instructions')} />
+          </Field>
+          <Field
+            label="Email from address"
+            htmlFor="b-emailfrom"
+            hint="Invoices are sent from this address, e.g. billing@daniarealtyinc.com. Must use your verified domain."
+          >
+            <TextField id="b-emailfrom" value={form.email_from} onChange={set('email_from')} placeholder="billing@daniarealtyinc.com" />
           </Field>
           <div className="form-row">
             <Field label="Default email subject" htmlFor="b-esub">

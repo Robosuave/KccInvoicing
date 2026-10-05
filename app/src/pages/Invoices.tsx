@@ -8,6 +8,8 @@ import { listBusinessMembers } from '../data/team';
 import { isOverdue } from '../data/invoices';
 import { paymentStatusOf } from '../db/types';
 import { centsToDollars } from '../lib/money';
+import { emailStatusByInvoice, emailStatusLabel } from '../data/email';
+import type { InvoiceEmail } from '../db/types';
 import { Alert, BackButton, Button, EmptyState, SetupRequired, TextField } from '../components/ui';
 
 export default function Invoices() {
@@ -19,6 +21,7 @@ export default function Invoices() {
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [customers, setCustomers] = useState<Record<string, Customer>>({});
   const [creatorEmails, setCreatorEmails] = useState<Record<string, string>>({});
+  const [emailByInvoice, setEmailByInvoice] = useState<Record<string, InvoiceEmail>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +35,7 @@ export default function Invoices() {
       ]);
       setInvoices(inv);
       setCustomers(Object.fromEntries(c.map((x) => [x.id, x])));
+      emailStatusByInvoice(inv.map((i) => i.id)).then(setEmailByInvoice).catch(() => setEmailByInvoice({}));
       // Owners see who created each invoice.
       if (isOwner) {
         try {
@@ -265,6 +269,13 @@ export default function Invoices() {
                       <span className="badge badge-draft">
                         {paymentStatusOf(d.total_cents, d.amount_paid_cents).toUpperCase()}
                       </span>
+                    )}
+                    {emailByInvoice[d.id] && (
+                      <div style={{ marginTop: 4 }}>
+                        <span className={`badge ${emailByInvoice[d.id].status === 'bounced' || emailByInvoice[d.id].status === 'failed' ? 'badge-void' : 'badge-issued'}`}>
+                          ✉ {emailStatusLabel(emailByInvoice[d.id].status)}
+                        </span>
+                      </div>
                     )}
                     {isOverdue(d) && (
                       <div style={{ marginTop: 4 }}>

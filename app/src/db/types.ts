@@ -33,6 +33,7 @@ export interface Business {
   invoice_style: string;
   default_email_subject: string | null;
   default_email_message: string | null;
+  email_from: string | null;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
@@ -180,4 +181,22 @@ export function paymentStatusOf(totalCents: number, paidCents: number): 'unpaid'
   if (paidCents <= 0) return 'unpaid';
   if (paidCents < totalCents) return 'partial';
   return 'paid';
+}
+
+export interface InvoiceEmail {
+  id: string;
+  invoice_id: string;
+  business_id: string;
+  to_email: string;
+  from_email: string;
+  subject: string;
+  status: 'queued' | 'sent' | 'delivered' | 'opened' | 'bounced' | 'failed';
+  provider: string;
+  provider_message_id: string | null;
+  error: string | null;
+  created_by: string | null;
+  created_at: string;
+  sent_at: string | null;
+  delivered_at: string | null;
+  opened_at: string | null;
 }

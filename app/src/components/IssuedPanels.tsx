@@ -6,6 +6,8 @@ import { getInvoice, isOverdue, listRevisionChain, voidInvoice, createRevision }
 import { listPayments, recordPayment, reversePayment, newIdempotencyKey } from '../data/payments';
 import { listAuditEvents } from '../data/audit';
 import { getCustomer } from '../data/customers';
+import { listEmailsForInvoice, sendInvoiceEmail, emailStatusLabel } from '../data/email';
+import type { InvoiceEmail } from '../db/types';
 import { balanceDue } from '../lib/money';
 import { paymentStatusOf, type AuditEvent, type Invoice, type Payment, type PaymentMethod } from '../db/types';
 import { downloadReceiptPdf, renderReceiptPdfBlob, storeReceiptPdf } from '../pdf/service';
@@ -53,6 +55,12 @@ export default function IssuedPanels({ invoiceId, onChanged }: { invoiceId: stri
   const [voidReason, setVoidReason] = useState('');
   const [revOpen, setRevOpen] = useState(false);
   const [revReason, setRevReason] = useState('');
+  const [emails, setEmails] = useState<InvoiceEmail[]>([]);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailTo, setEmailTo] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!workspace || !activeBusiness) return;
@@ -66,16 +74,18 @@ export default function IssuedPanels({ invoiceId, onChanged }: { invoiceId: stri
       }
       // Payments / audit / revisions are optional — their tables may not exist
       // yet (pre-0018). A missing table must not block the invoice or PDF download.
-      const [pays, events, revChain] = await Promise.all([
+      const [pays, events, revChain, emailRows] = await Promise.all([
         listPayments(invoiceId).catch(() => []),
         listAuditEvents(invoiceId).catch(() => []),
         listRevisionChain(invoiceId).catch(() => []),
+        listEmailsForInvoice(invoiceId).catch(() => []),
       ]);
       setInvoice(inv);
       setSnapshot(snap);
       setPayments(pays);
       setAudit(events);
       setChain(revChain);
+      setEmails(emailRows);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load invoice data.');
@@ -85,6 +95,55 @@ export default function IssuedPanels({ invoiceId, onChanged }: { invoiceId: stri
   }, [invoiceId, workspace, activeBusiness]);
 
   useEffect(() => { load(); }, [load]);
+
+  const emailConfigured = Boolean((activeBusiness?.email_from || '').trim());
+
+  const openEmailModal = async () => {
+    setEmailError(null);
+    // Prefill recipient from the customer when available.
+    let to = '';
+    try {
+      if (invoice?.customer_id) {
+        const c = await getCustomer(invoice.customer_id).catch(() => null);
+        to = c?.email ?? '';
+      }
+    } catch { /* non-critical */ }
+    setEmailTo(to);
+    setEmailSubject(
+      activeBusiness?.default_email_subject ||
+      `Invoice #${invoice?.invoice_number ?? ''} from ${activeBusiness?.display_name ?? ''}`.trim(),
+    );
+    setEmailMessage(
+      activeBusiness?.default_email_message ||
+      `Hello,\n\nPlease find attached invoice #${invoice?.invoice_number ?? ''}.\n\nThank you,\n${activeBusiness?.display_name ?? ''}`,
+    );
+    setEmailOpen(true);
+  };
+
+  const doSendEmail = async () => {
+    setEmailError(null);
+    if (!emailTo.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTo.trim())) {
+      setEmailError('Enter a valid recipient email address.');
+      return;
+    }
+    setBusy('email');
+    try {
+      await sendInvoiceEmail({
+        invoice_id: invoiceId,
+        to: emailTo.trim(),
+        subject: emailSubject.trim(),
+        message: emailMessage.trim(),
+      });
+      setEmailOpen(false);
+      const rows = await listEmailsForInvoice(invoiceId).catch(() => []);
+      setEmails(rows);
+      onChanged();
+    } catch (e) {
+      setEmailError(e instanceof Error ? e.message : 'Could not send the email.');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   if (loading) return <p>Loading invoice details…</p>;
   if (error || !invoice || !snapshot || !workspace || !activeBusiness) {
@@ -203,11 +262,81 @@ export default function IssuedPanels({ invoiceId, onChanged }: { invoiceId: stri
         </div>
         <div className="btn-row" style={{ marginTop: 12 }}>
           <Button size="sm" variant="secondary" onClick={() => window.print()}>Print</Button>
-          <Button size="sm" variant="secondary" disabled title="Email arrives in Phase 4">
-            Email invoice (Phase 4)
-          </Button>
+          {!isVoid && emailConfigured && (
+            <Button size="sm" onClick={openEmailModal}>Email invoice</Button>
+          )}
         </div>
+        {!isVoid && !emailConfigured && isOwner && (
+          <p style={{ fontSize: 14, color: 'var(--muted)', margin: '12px 0 0' }}>
+            Email isn't set up yet — add a from address under{' '}
+            <Link to="/businesses">Businesses &gt; Edit business</Link>.
+          </p>
+        )}
       </div>
+
+      {!isVoid && (
+        <div className="card">
+          <div className="btn-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ margin: 0 }}>Email</h2>
+            {emailConfigured && (
+              <Button size="sm" variant="secondary" onClick={openEmailModal}>Send email</Button>
+            )}
+          </div>
+          {emails.length === 0 ? (
+            <p style={{ color: 'var(--muted)' }}>
+              {emailConfigured
+                ? 'This invoice has not been emailed yet.'
+                : 'Email delivery tracking will appear here once email is set up.'}
+            </p>
+          ) : (
+            <div className="table-wrap">
+              <table className="grid">
+                <thead>
+                  <tr><th>To</th><th>Sent</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  {emails.map((em) => (
+                    <tr key={em.id}>
+                      <td>{em.to_email}</td>
+                      <td style={{ fontSize: 14 }}>{new Date(em.created_at).toLocaleString()}</td>
+                      <td>
+                        <span className={`badge ${em.status === 'bounced' || em.status === 'failed' ? 'badge-void' : em.status === 'opened' || em.status === 'delivered' ? 'badge-issued' : 'badge-draft'}`}>
+                          {emailStatusLabel(em.status)}
+                        </span>
+                        {em.error && <div style={{ fontSize: 13, color: 'var(--muted)' }}>{em.error}</div>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {emailOpen && (
+        <Modal title={`Email invoice #${invoice.invoice_number}`} onClose={() => setEmailOpen(false)}>
+          <Field label="To *" htmlFor="email-to">
+            <TextField id="email-to" value={emailTo} onChange={(e) => setEmailTo(e.target.value)} placeholder="client@example.com" />
+          </Field>
+          <Field label="Subject" htmlFor="email-subject">
+            <TextField id="email-subject" value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} />
+          </Field>
+          <Field label="Message" htmlFor="email-message">
+            <TextArea id="email-message" value={emailMessage} onChange={(e) => setEmailMessage(e.target.value)} rows={5} />
+          </Field>
+          <p style={{ fontSize: 14, color: 'var(--muted)' }}>
+            Sends from {activeBusiness.email_from} with the finalized PDF attached.
+          </p>
+          {emailError && <Alert kind="error">{emailError}</Alert>}
+          <div className="btn-row">
+            <Button onClick={doSendEmail} disabled={busy === 'email'}>
+              {busy === 'email' ? 'Sending…' : 'Send email'}
+            </Button>
+            <Button variant="secondary" onClick={() => setEmailOpen(false)}>Cancel</Button>
+          </div>
+        </Modal>
+      )}
 
       {!isVoid && (
         <div className="card">
