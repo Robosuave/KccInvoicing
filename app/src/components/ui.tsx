@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 /* ---------- buttons ---------- */
 
@@ -13,6 +14,30 @@ export function Button({ variant = 'primary', size = 'md', className = '', ...re
       className={['btn', `btn-${variant}`, size === 'sm' ? 'btn-sm' : '', className].filter(Boolean).join(' ')}
       {...rest}
     />
+  );
+}
+
+/** Big violet full-width back button for mobile. Goes to the Dashboard by default. */
+export function BackButton({ to = '/' }: { to?: string }) {
+  const navigate = useNavigate();
+  return (
+    <div className="no-print" style={{ marginBottom: 12 }}>
+      <Button
+        onClick={() => navigate(to)}
+        style={{
+          background: '#7c3aed',
+          color: '#fff',
+          fontSize: 17,
+          fontWeight: 700,
+          padding: '14px 20px',
+          width: '100%',
+          borderRadius: 12,
+          border: 'none',
+        }}
+      >
+        ← Back
+      </Button>
+    </div>
   );
 }
 

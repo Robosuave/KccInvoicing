@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
 import type { Business, Customer, Invoice, Item, InvoiceTemplate, InvoiceStatus } from '../db/types';
 import { createDraft, getDraft, previewTotals, saveDraft, markIssued, type DraftInput } from '../data/drafts';
@@ -30,6 +30,7 @@ function formatSaveError(e: unknown): string {
 }
 import {
   Alert,
+  BackButton,
   Button,
   EmptyState,
   Field,
@@ -108,7 +109,6 @@ interface CommissionPreviewData {
 export default function InvoiceEditor() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const { activeBusiness, workspace, notConfigured, setEditorDirty, onSaveDraftRef, loading: businessesLoading } = useBusiness();
   const isNew = !id || id === 'new';
 
@@ -796,23 +796,7 @@ export default function InvoiceEditor() {
 
   return (
     <div>
-      <div className="no-print" style={{ marginBottom: 12 }}>
-        <Button
-          onClick={() => navigate('/')}
-          style={{
-            background: '#7c3aed',
-            color: '#fff',
-            fontSize: 17,
-            fontWeight: 700,
-            padding: '14px 20px',
-            width: '100%',
-            borderRadius: 12,
-            border: 'none',
-          }}
-        >
-          ← Back
-        </Button>
-      </div>
+      <BackButton />
       <div className="btn-row no-print" style={{ marginBottom: 16 }}>
         {actionButtons}
       </div>

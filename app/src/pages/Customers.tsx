@@ -12,6 +12,7 @@ import {
 import { formatPhone, isValidPhone, PHONE_HINT } from '../lib/phone';
 import {
   Alert,
+  BackButton,
   Button,
   EmptyState,
   Field,
@@ -196,6 +197,7 @@ export default function Customers() {
 
   return (
     <div>
+      <BackButton />
       <h1 className="page-title">Customers</h1>
       <p className="page-sub">
         Customers belong to <strong>{activeBusiness.display_name}</strong>. Editing a customer never

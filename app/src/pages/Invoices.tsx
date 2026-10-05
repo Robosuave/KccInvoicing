@@ -8,7 +8,7 @@ import { listBusinessMembers } from '../data/team';
 import { isOverdue } from '../data/invoices';
 import { paymentStatusOf } from '../db/types';
 import { centsToDollars } from '../lib/money';
-import { Alert, Button, EmptyState, SetupRequired, TextField } from '../components/ui';
+import { Alert, BackButton, Button, EmptyState, SetupRequired, TextField } from '../components/ui';
 
 export default function Invoices() {
   const { activeBusiness, notConfigured, isOwner, loading: businessesLoading } = useBusiness();
@@ -127,23 +127,7 @@ export default function Invoices() {
 
   return (
     <div>
-      <div className="no-print" style={{ marginBottom: 12 }}>
-        <Button
-          onClick={() => navigate('/')}
-          style={{
-            background: '#7c3aed',
-            color: '#fff',
-            fontSize: 17,
-            fontWeight: 700,
-            padding: '14px 20px',
-            width: '100%',
-            borderRadius: 12,
-            border: 'none',
-          }}
-        >
-          ← Back
-        </Button>
-      </div>
+      <BackButton />
       <h1 className="page-title">Invoices</h1>
       <p className="page-sub">
         Invoices for <strong>{activeBusiness.display_name}</strong>. Drafts are works in progress;
