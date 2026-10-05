@@ -43,11 +43,14 @@ export async function renderInvoicePdfBlob(
         return await pdf(InvoicePdf({ snapshot, style, pageSize })).toBlob();
       } catch (retryErr) {
         console.error('Invoice PDF render failed (with and without logo):', firstErr, retryErr);
+        const msg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+        throw new Error(`PDF render failed: ${msg}`);
       }
     } else {
       console.error('Invoice PDF render failed:', firstErr);
+      const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+      throw new Error(`PDF render failed: ${msg}`);
     }
-    throw new Error('Could not generate the invoice PDF.');
   }
 }
 
