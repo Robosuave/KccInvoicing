@@ -884,14 +884,32 @@ export default function InvoiceEditor() {
             <div className="form-row">
               {template !== 'commission' && (
                 <Field label="Customer *" htmlFor="inv-cust" error={fieldError('customer')}>
-                  <SelectField id="inv-cust" value={customerId} onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => setCustomerId(e.target.value))}>
-                    <option value="">Choose a customer…</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </SelectField>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <SelectField id="inv-cust" value={customerId} onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => setCustomerId(e.target.value))}>
+                        <option value="">Choose a customer…</option>
+                        {customers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </SelectField>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setQuickCompany('');
+                        setQuickContact('');
+                        setQuickPhone('');
+                        setQuickEmail('');
+                        setQuickError(null);
+                        setQuickAddOpen(true);
+                      }}
+                      aria-label="Add a new customer"
+                    >
+                      + New
+                    </Button>
+                  </div>
                 </Field>
               )}
               {template === 'commission' && (
