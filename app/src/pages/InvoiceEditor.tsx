@@ -9,7 +9,10 @@ import { centsToDollars, dollarsToCents, multiplyQuantity, percentOf, pctToRate 
 import { formatPhone, isValidPhone, PHONE_HINT } from '../lib/phone';
 import { getLogoUrl } from '../data/businesses';
 import IssuedPanels from '../components/IssuedPanels';
-import { generateAndStoreIssuedPdf, type InvoiceStyle } from '../pdf/service';
+import { generateAndStoreIssuedPdf, downloadIssuedPdf, type InvoiceStyle } from '../pdf/service';
+import { getInvoice } from '../data/invoices';
+import { getCustomer } from '../data/customers';
+import { asSnapshot, buildLiveSnapshot } from '../lib/snapshot';
 
 /** Extract a human-readable message from anything thrown — Supabase/PostgREST
  *  errors are plain objects ({message, details, hint, code}), not Error instances. */
@@ -525,6 +528,11 @@ export default function InvoiceEditor() {
 
   /** Print / Save PDF. Finalizes the invoice (draft -> issued) on first print. */
   const doPrint = useCallback(async () => {
+    // iPad/iPhone: the iOS print dialog can't save as PDF reliably, so download
+    // the generated PDF file directly instead of opening window.print().
+    const isIOS =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     if (!isIssued) {
       const printId = await doSave(true);
       if (!printId) return;
@@ -548,9 +556,54 @@ export default function InvoiceEditor() {
           console.error('Issued PDF could not be stored:', e);
         }
       }
+      if (isIOS && workspace && activeBusiness) {
+        // Download the just-generated PDF directly.
+        try {
+          const { invoice: inv, lines: ln } = await getInvoice(printId);
+          let snap = asSnapshot(inv.snapshot);
+          if (!snap) {
+            const customer = inv.customer_id
+              ? await getCustomer(inv.customer_id).catch(() => null)
+              : null;
+            snap = buildLiveSnapshot({ invoice: inv, business: activeBusiness, customer, lines: ln });
+          }
+          await downloadIssuedPdf(
+            inv,
+            snap,
+            workspace.id,
+            (activeBusiness.invoice_style as InvoiceStyle) || 'classic',
+          );
+          return;
+        } catch (e) {
+          setErrors([e instanceof Error ? e.message : 'Could not download the PDF.']);
+          return;
+        }
+      }
+    } else if (isIOS && workspace && activeBusiness && draftId) {
+      // Already issued: download the stored PDF directly on iOS.
+      try {
+        const { invoice: inv, lines: ln } = await getInvoice(draftId);
+        let snap = asSnapshot(inv.snapshot);
+        if (!snap) {
+          const customer = inv.customer_id
+            ? await getCustomer(inv.customer_id).catch(() => null)
+            : null;
+          snap = buildLiveSnapshot({ invoice: inv, business: activeBusiness, customer, lines: ln });
+        }
+        await downloadIssuedPdf(
+          inv,
+          snap,
+          workspace.id,
+          (activeBusiness.invoice_style as InvoiceStyle) || 'classic',
+        );
+        return;
+      } catch (e) {
+        setErrors([e instanceof Error ? e.message : 'Could not download the PDF.']);
+        return;
+      }
     }
     window.print();
-  }, [isIssued, doSave, workspace, activeBusiness]);
+  }, [isIssued, doSave, workspace, activeBusiness, draftId]);
 
   // autosave
   useEffect(() => {
