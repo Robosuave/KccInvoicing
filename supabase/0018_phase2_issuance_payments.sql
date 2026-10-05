@@ -132,7 +132,7 @@ create trigger invoices_freeze_snapshot
 
 -- ============ payments ============
 
-create table public.payments (
+create table if not exists public.payments (
   id uuid primary key default gen_random_uuid(),
   invoice_id uuid not null references public.invoices(id) on delete restrict,
   business_id uuid not null references public.businesses(id) on delete cascade,
@@ -154,18 +154,18 @@ create index payments_business_idx on public.payments(business_id);
 
 alter table public.payments enable row level security;
 
-create policy "payments member select"
-  on public.payments for select to authenticated
+drop policy if exists "payments member select" on public.payments;
+create policy "payments member select" for select to authenticated
   using (exists (
     select 1 from public.businesses b
     where b.id = payments.business_id and public.is_workspace_member(b.workspace_id)));
-create policy "payments member insert"
-  on public.payments for insert to authenticated
+drop policy if exists "payments member insert" on public.payments;
+create policy "payments member insert" for insert to authenticated
   with check (exists (
     select 1 from public.businesses b
     where b.id = payments.business_id and public.is_workspace_member(b.workspace_id)));
-create policy "payments member update"
-  on public.payments for update to authenticated
+drop policy if exists "payments member update" on public.payments;
+create policy "payments member update" for update to authenticated
   using (exists (
     select 1 from public.businesses b
     where b.id = payments.business_id and public.is_workspace_member(b.workspace_id)))
@@ -199,7 +199,7 @@ create trigger payments_refresh_paid
 
 -- ============ audit trail (append-only) ============
 
-create table public.audit_events (
+create table if not exists public.audit_events (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete cascade,
   invoice_id uuid references public.invoices(id) on delete set null,
@@ -213,13 +213,13 @@ create index audit_business_idx on public.audit_events(business_id);
 
 alter table public.audit_events enable row level security;
 
-create policy "audit member select"
-  on public.audit_events for select to authenticated
+drop policy if exists "audit member select" on public.audit_events;
+create policy "audit member select" for select to authenticated
   using (exists (
     select 1 from public.businesses b
     where b.id = audit_events.business_id and public.is_workspace_member(b.workspace_id)));
-create policy "audit member insert"
-  on public.audit_events for insert to authenticated
+drop policy if exists "audit member insert" on public.audit_events;
+create policy "audit member insert" for insert to authenticated
   with check (exists (
     select 1 from public.businesses b
     where b.id = audit_events.business_id and public.is_workspace_member(b.workspace_id)));
@@ -254,20 +254,20 @@ values ('issued-pdfs', 'issued-pdfs', false),
 on conflict (id) do nothing;
 
 -- Object paths are <workspace_id>/<business_id>/... ; first segment is the workspace.
-create policy "issued-pdfs member read"
-  on storage.objects for select to authenticated
+drop policy if exists "issued-pdfs member read" on storage.objects;
+create policy "issued-pdfs member read" for select to authenticated
   using (bucket_id = 'issued-pdfs'
     and public.is_workspace_member((storage.foldername(name))[1]::uuid));
-create policy "issued-pdfs member write"
-  on storage.objects for insert to authenticated
+drop policy if exists "issued-pdfs member write" on storage.objects;
+create policy "issued-pdfs member write" for insert to authenticated
   with check (bucket_id = 'issued-pdfs'
     and public.is_workspace_member((storage.foldername(name))[1]::uuid));
 
-create policy "receipts member read"
-  on storage.objects for select to authenticated
+drop policy if exists "receipts member read" on storage.objects;
+create policy "receipts member read" for select to authenticated
   using (bucket_id = 'payment-receipts'
     and public.is_workspace_member((storage.foldername(name))[1]::uuid));
-create policy "receipts member write"
-  on storage.objects for insert to authenticated
+drop policy if exists "receipts member write" on storage.objects;
+create policy "receipts member write" for insert to authenticated
   with check (bucket_id = 'payment-receipts'
     and public.is_workspace_member((storage.foldername(name))[1]::uuid));
