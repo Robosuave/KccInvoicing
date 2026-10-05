@@ -8,7 +8,7 @@ import { listAuditEvents } from '../data/audit';
 import { getCustomer } from '../data/customers';
 import { balanceDue } from '../lib/money';
 import { paymentStatusOf, type AuditEvent, type Invoice, type Payment, type PaymentMethod } from '../db/types';
-import { downloadIssuedPdf, downloadReceiptPdf, renderReceiptPdfBlob, storeReceiptPdf, type InvoiceStyle } from '../pdf/service';
+import { downloadReceiptPdf, renderReceiptPdfBlob, storeReceiptPdf } from '../pdf/service';
 import {
   Alert, Button, Field, Modal, SelectField, TextArea, TextField,
 } from './ui';
@@ -91,38 +91,10 @@ export default function IssuedPanels({ invoiceId, onChanged }: { invoiceId: stri
     return <Alert kind="error">{error ?? 'Could not load invoice details.'}</Alert>;
   }
 
-  const style = (activeBusiness.invoice_style as InvoiceStyle) || 'classic';
   const balance = Math.max(0, invoice.total_cents - invoice.amount_paid_cents);
   const payStatus = paymentStatusOf(invoice.total_cents, invoice.amount_paid_cents);
   const overdue = isOverdue(invoice);
   const isVoid = invoice.status === 'void';
-
-  const doDownloadPdf = async () => {
-    setBusy('pdf');
-    try {
-      await downloadIssuedPdf(invoice, snapshot, workspace.id, style);
-    } catch (e) {
-      console.error('PDF download failed:', e);
-      // Fallback: render the PDF directly in the browser, bypassing storage.
-      try {
-        const { renderInvoicePdfBlob } = await import('../pdf/service');
-        const blob = await renderInvoicePdfBlob(snapshot, style);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Invoice-${invoice.invoice_number}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-      } catch (e2) {
-        console.error('PDF fallback failed:', e2);
-        alert(e2 instanceof Error ? e2.message : 'PDF download failed.');
-      }
-    } finally {
-      setBusy(null);
-    }
-  };
 
   const doRecordPayment = async () => {
     setPayError(null);
@@ -230,17 +202,11 @@ export default function IssuedPanels({ invoiceId, onChanged }: { invoiceId: stri
           </div>
         </div>
         <div className="btn-row" style={{ marginTop: 12 }}>
-          <Button size="sm" onClick={doDownloadPdf} disabled={busy === 'pdf'}>
-            {busy === 'pdf' ? 'Working…' : 'Download PDF'}
-          </Button>
           <Button size="sm" variant="secondary" onClick={() => window.print()}>Print</Button>
           <Button size="sm" variant="secondary" disabled title="Email arrives in Phase 4">
             Email invoice (Phase 4)
           </Button>
         </div>
-        <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 0 }}>
-          Downloads use the privately stored issued copy — never a regeneration.
-        </p>
       </div>
 
       {!isVoid && (
