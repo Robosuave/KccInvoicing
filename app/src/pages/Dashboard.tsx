@@ -91,7 +91,7 @@ export default function Dashboard() {
         <Stat label="Draft invoices" value={String(stats.drafts)} note={`Draft total ${centsToDollars(stats.draftTotal)}`} />
         <Stat label="Issued invoices" value={String(stats.issued)} note={`Billed total ${centsToDollars(stats.issuedTotal)}`} />
         <Stat label="Customers" value={String(stats.customers)} />
-        <Stat label="Catalog items" value={String(stats.items)} />
+        <Stat label="Products & services" value={String(stats.items)} />
       </div>
 
       <details className="card card-mini no-print">
