@@ -65,10 +65,16 @@ export default function Dashboard() {
       <h1 className="page-title">Dashboard</h1>
       <p className="page-sub">
         {activeBusiness ? (
-          <>
-            Showing <strong>{activeBusiness.display_name}</strong>. Switch businesses anytime from the
-            top bar — each business keeps its own data.
-          </>
+          isOwner ? (
+            <>
+              Showing <strong>{activeBusiness.display_name}</strong>. Switch businesses anytime from the
+              top bar — each business keeps its own data.
+            </>
+          ) : (
+            <>
+              Showing <strong>{activeBusiness.display_name}</strong>.
+            </>
+          )
         ) : (
           'Loading…'
         )}
