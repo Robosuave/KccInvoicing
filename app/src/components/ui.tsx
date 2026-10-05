@@ -53,7 +53,7 @@ interface FieldProps {
 
 export function Field({ label, hint, error, children, htmlFor }: FieldProps) {
   return (
-    <div className="field">
+    <div className={'field' + (error ? ' field-invalid' : '')}>
       <label htmlFor={htmlFor}>{label}</label>
       {children}
       {hint && !error && <div className="hint">{hint}</div>}
