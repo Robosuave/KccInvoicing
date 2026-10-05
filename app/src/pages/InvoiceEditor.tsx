@@ -860,7 +860,7 @@ export default function InvoiceEditor() {
                 </Field>
               )}
               {template === 'commission' && (
-                <Field label="Company" htmlFor="inv-company" hint="Prints under the date on the invoice">
+                <Field label="Company" htmlFor="inv-company" hint="Choose the title company or law firm — prints under the date on the invoice">
                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <SelectField
