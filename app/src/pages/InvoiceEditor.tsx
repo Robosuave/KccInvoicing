@@ -9,7 +9,7 @@ import { centsToDollars, dollarsToCents, multiplyQuantity, percentOf, pctToRate 
 import { formatPhone, isValidPhone, PHONE_HINT } from '../lib/phone';
 import { getLogoUrl } from '../data/businesses';
 import IssuedPanels from '../components/IssuedPanels';
-import { generateAndStoreIssuedPdf, downloadIssuedPdf, type InvoiceStyle } from '../pdf/service';
+import { generateAndStoreIssuedPdf, renderInvoicePdfBlob, type InvoiceStyle } from '../pdf/service';
 import { getInvoice } from '../data/invoices';
 import { getCustomer } from '../data/customers';
 import { asSnapshot, buildLiveSnapshot } from '../lib/snapshot';
@@ -557,7 +557,7 @@ export default function InvoiceEditor() {
         }
       }
       if (isIOS && workspace && activeBusiness) {
-        // Download the just-generated PDF directly.
+        // Download the just-generated PDF directly (render in-browser, bypass storage).
         try {
           const { invoice: inv, lines: ln } = await getInvoice(printId);
           let snap = asSnapshot(inv.snapshot);
@@ -567,20 +567,25 @@ export default function InvoiceEditor() {
               : null;
             snap = buildLiveSnapshot({ invoice: inv, business: activeBusiness, customer, lines: ln });
           }
-          await downloadIssuedPdf(
-            inv,
-            snap,
-            workspace.id,
-            (activeBusiness.invoice_style as InvoiceStyle) || 'classic',
-          );
+          const style = (activeBusiness.invoice_style as InvoiceStyle) || 'classic';
+          const blob = await renderInvoicePdfBlob(snap, style);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Invoice-${inv.invoice_number}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
           return;
         } catch (e) {
+          console.error('iOS PDF download failed:', e);
           setErrors([e instanceof Error ? e.message : 'Could not download the PDF.']);
           return;
         }
       }
     } else if (isIOS && workspace && activeBusiness && draftId) {
-      // Already issued: download the stored PDF directly on iOS.
+      // Already issued: render and download the PDF directly on iOS.
       try {
         const { invoice: inv, lines: ln } = await getInvoice(draftId);
         let snap = asSnapshot(inv.snapshot);
@@ -590,14 +595,19 @@ export default function InvoiceEditor() {
             : null;
           snap = buildLiveSnapshot({ invoice: inv, business: activeBusiness, customer, lines: ln });
         }
-        await downloadIssuedPdf(
-          inv,
-          snap,
-          workspace.id,
-          (activeBusiness.invoice_style as InvoiceStyle) || 'classic',
-        );
+        const style = (activeBusiness.invoice_style as InvoiceStyle) || 'classic';
+        const blob = await renderInvoicePdfBlob(snap, style);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Invoice-${inv.invoice_number}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
         return;
       } catch (e) {
+        console.error('iOS PDF download failed:', e);
         setErrors([e instanceof Error ? e.message : 'Could not download the PDF.']);
         return;
       }
