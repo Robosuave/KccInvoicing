@@ -17,6 +17,18 @@ export async function ensureWorkspace(): Promise<Workspace> {
     return (memberships[0] as unknown as { workspaces: Workspace }).workspaces;
   }
 
+  // Agents invited via business_members don't need their own workspace —
+  // return their assigned business's workspace instead of creating orphans.
+  const { data: bizMemberships } = await sb
+    .from('business_members')
+    .select('business_id, businesses!inner(workspace_id, workspaces(id, name, created_at))')
+    .eq('user_id', user.id)
+    .limit(1);
+  if (bizMemberships && bizMemberships.length > 0) {
+    const ws = (bizMemberships[0] as unknown as { businesses: { workspaces: Workspace } }).businesses.workspaces;
+    return ws;
+  }
+
   // NOTE: the id is generated client-side so the owner membership can be
   // inserted BEFORE the workspace is ever SELECTed. The RLS SELECT policy
   // on workspaces requires membership (is_workspace_member), which cannot
