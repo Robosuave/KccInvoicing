@@ -155,17 +155,20 @@ create index payments_business_idx on public.payments(business_id);
 alter table public.payments enable row level security;
 
 drop policy if exists "payments member select" on public.payments;
-create policy "payments member select" for select to authenticated
+create policy "payments member select"
+  on public.payments for select to authenticated
   using (exists (
     select 1 from public.businesses b
     where b.id = payments.business_id and public.is_workspace_member(b.workspace_id)));
 drop policy if exists "payments member insert" on public.payments;
-create policy "payments member insert" for insert to authenticated
+create policy "payments member insert"
+  on public.payments for insert to authenticated
   with check (exists (
     select 1 from public.businesses b
     where b.id = payments.business_id and public.is_workspace_member(b.workspace_id)));
 drop policy if exists "payments member update" on public.payments;
-create policy "payments member update" for update to authenticated
+create policy "payments member update"
+  on public.payments for update to authenticated
   using (exists (
     select 1 from public.businesses b
     where b.id = payments.business_id and public.is_workspace_member(b.workspace_id)))
@@ -214,12 +217,14 @@ create index audit_business_idx on public.audit_events(business_id);
 alter table public.audit_events enable row level security;
 
 drop policy if exists "audit member select" on public.audit_events;
-create policy "audit member select" for select to authenticated
+create policy "audit member select"
+  on public.audit_events for select to authenticated
   using (exists (
     select 1 from public.businesses b
     where b.id = audit_events.business_id and public.is_workspace_member(b.workspace_id)));
 drop policy if exists "audit member insert" on public.audit_events;
-create policy "audit member insert" for insert to authenticated
+create policy "audit member insert"
+  on public.audit_events for insert to authenticated
   with check (exists (
     select 1 from public.businesses b
     where b.id = audit_events.business_id and public.is_workspace_member(b.workspace_id)));
@@ -255,19 +260,23 @@ on conflict (id) do nothing;
 
 -- Object paths are <workspace_id>/<business_id>/... ; first segment is the workspace.
 drop policy if exists "issued-pdfs member read" on storage.objects;
-create policy "issued-pdfs member read" for select to authenticated
+create policy "issued-pdfs member read"
+  on storage.objects for select to authenticated
   using (bucket_id = 'issued-pdfs'
     and public.is_workspace_member((storage.foldername(name))[1]::uuid));
 drop policy if exists "issued-pdfs member write" on storage.objects;
-create policy "issued-pdfs member write" for insert to authenticated
+create policy "issued-pdfs member write"
+  on storage.objects for insert to authenticated
   with check (bucket_id = 'issued-pdfs'
     and public.is_workspace_member((storage.foldername(name))[1]::uuid));
 
 drop policy if exists "receipts member read" on storage.objects;
-create policy "receipts member read" for select to authenticated
+create policy "receipts member read"
+  on storage.objects for select to authenticated
   using (bucket_id = 'payment-receipts'
     and public.is_workspace_member((storage.foldername(name))[1]::uuid));
 drop policy if exists "receipts member write" on storage.objects;
-create policy "receipts member write" for insert to authenticated
+create policy "receipts member write"
+  on storage.objects for insert to authenticated
   with check (bucket_id = 'payment-receipts'
     and public.is_workspace_member((storage.foldername(name))[1]::uuid));
