@@ -71,7 +71,7 @@ export default function Login() {
           {mode === 'signup' &&
             (searchParams.get('email')
               ? 'You\u2019ve been invited to the team — Just enter your email address and choose a password below, then click Create account.'
-              : 'Create your account. Team members: sign up with the email address the invite was sent to.')}
+              : 'Just enter your email address and choose a password below, then click Create account.')}
           {mode === 'forgot' && 'Enter your account email and we\u2019ll send you a link to reset your password.'}
         </p>
         {(error || authError) && <Alert kind="error">{error ?? authError}</Alert>}
