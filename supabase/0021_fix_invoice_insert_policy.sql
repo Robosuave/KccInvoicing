@@ -1,13 +1,20 @@
--- 0021: fix the 0020 INSERT policy (it broke invoice creation).
+-- 0021 (revised): fix the invoice INSERT policy.
 --
--- The 0020 "invoices member insert" policy used a businesses join that fails
--- the WITH CHECK. Restore the exact 0014 INSERT policy (proven working):
--- any workspace member can insert; the trigger stamps created_by automatically.
+-- The invoices table has NO workspace_id column (it links via business_id),
+-- so the 0014-style policy referencing workspace_id can never be created.
+-- This version checks workspace membership via the businesses join directly,
+-- inlining the membership test instead of calling the helper function.
 
 drop policy if exists "invoices member insert" on public.invoices;
 
 create policy "invoices member insert"
   on public.invoices for insert to authenticated
-  with check (public.is_workspace_member(workspace_id));
+  with check (exists (
+    select 1
+    from public.businesses b
+    join public.workspace_members m on m.workspace_id = b.workspace_id
+    where b.id = business_id
+      and m.user_id = auth.uid()
+  ));
 
 notify pgrst, 'reload schema';
