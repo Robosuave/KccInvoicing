@@ -82,11 +82,23 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         .single();
       setIsOwner(membership?.role === 'owner');
       const list = await listBusinesses(ws.id);
-      setBusinesses(list);
+      // Agents only see their assigned businesses
+      let visibleList = list;
+      if (membership?.role !== 'owner') {
+        const { data: bizMembers } = await sb
+          .from('business_members')
+          .select('business_id')
+          .eq('user_id', user.id);
+        if (bizMembers && bizMembers.length > 0) {
+          const allowedIds = new Set(bizMembers.map((m) => m.business_id));
+          visibleList = list.filter((b) => allowedIds.has(b.id));
+        }
+      }
+      setBusinesses(visibleList);
       setNotConfigured(false);
       setActiveBusinessId((prev) => {
-        if (prev && list.some((b) => b.id === prev)) return prev;
-        return list[0]?.id ?? null;
+        if (prev && visibleList.some((b) => b.id === prev)) return prev;
+        return visibleList[0]?.id ?? null;
       });
     } catch (e) {
       if (e instanceof BackendNotConfiguredError) {
