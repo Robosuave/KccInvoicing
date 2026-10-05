@@ -149,7 +149,6 @@ export default function InvoiceEditor() {
 
   /* commission template (Dania Realty) */
   const [template, setTemplate] = useState<InvoiceTemplate>('standard');
-  const templateTouched = useRef(false);
   const [salePrice, setSalePrice] = useState('');
   const [commissionPct, setCommissionPct] = useState('');
   const [commissionAmt, setCommissionAmt] = useState('');
@@ -259,7 +258,6 @@ export default function InvoiceEditor() {
   useEffect(() => {
     if (!isNew || !activeBusiness) return;
     // A business switch is a new context: re-apply that business's default template.
-    templateTouched.current = false;
     setTemplate(activeBusiness.default_template === 'commission' ? 'commission' : 'standard');
     setNotes((v) => v || activeBusiness.invoice_notes || '');
     setTerms((v) => v || activeBusiness.payment_terms || '');
@@ -965,23 +963,8 @@ export default function InvoiceEditor() {
             </div>
           </div>
 
-          {activeBusiness.default_template === 'commission' && (
-            <div className="card">
-              <Field label="Invoice type" htmlFor="inv-template" hint="Standard = line-item invoice. Commission = Dania Realty commission / wire instruction form.">
-                <SelectField
-                  id="inv-template"
-                  value={template}
-                  onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => {
-                    templateTouched.current = true;
-                    setTemplate(e.target.value as InvoiceTemplate);
-                  })}
-                >
-                  <option value="standard">Standard invoice (line items)</option>
-                  <option value="commission">Commission / wire instructions</option>
-                </SelectField>
-              </Field>
-            </div>
-          )}
+          {/* Invoice type is fixed per business (Businesses > Edit business > Default invoice template):
+              Dania Realty always uses the commission form, Kaleky Computer Consulting always uses standard. */}
 
           {template === 'commission' ? (
             <div className="card">
