@@ -64,10 +64,12 @@ export default function IssuedPanels({ invoiceId, onChanged }: { invoiceId: stri
         const customer = inv.customer_id ? await getCustomer(inv.customer_id).catch(() => null) : null;
         snap = buildLiveSnapshot({ invoice: inv, business: activeBusiness, customer, lines: ln });
       }
+      // Payments / audit / revisions are optional — their tables may not exist
+      // yet (pre-0018). A missing table must not block the invoice or PDF download.
       const [pays, events, revChain] = await Promise.all([
-        listPayments(invoiceId),
-        listAuditEvents(invoiceId),
-        listRevisionChain(invoiceId),
+        listPayments(invoiceId).catch(() => []),
+        listAuditEvents(invoiceId).catch(() => []),
+        listRevisionChain(invoiceId).catch(() => []),
       ]);
       setInvoice(inv);
       setSnapshot(snap);

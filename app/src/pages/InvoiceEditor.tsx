@@ -6,6 +6,7 @@ import { createDraft, getDraft, previewTotals, saveDraft, markIssued, type Draft
 import { listCustomers, createCustomer } from '../data/customers';
 import { listItems } from '../data/items';
 import { centsToDollars, dollarsToCents, multiplyQuantity, percentOf, pctToRate as strictPctToRate } from '../lib/money';
+import { formatPhone, isValidPhone, PHONE_HINT } from '../lib/phone';
 import { getLogoUrl } from '../data/businesses';
 import IssuedPanels from '../components/IssuedPanels';
 import { generateAndStoreIssuedPdf, type InvoiceStyle } from '../pdf/service';
@@ -719,6 +720,10 @@ export default function InvoiceEditor() {
       setQuickError('Company name is required.');
       return;
     }
+    if (quickPhone.trim() !== '' && !isValidPhone(quickPhone)) {
+      setQuickError(`Phone number format is not valid — ${PHONE_HINT}.`);
+      return;
+    }
     if (!activeBusiness) return;
     setQuickSaving(true);
     setQuickError(null);
@@ -728,7 +733,7 @@ export default function InvoiceEditor() {
         name: companyName,
         company: companyName,
         contact_person: quickContact.trim() || null,
-        phone: quickPhone.trim() || null,
+        phone: quickPhone.trim() ? formatPhone(quickPhone) : null,
         email: quickEmail.trim() || null,
       });
       setCustomers((prev) => [...prev, created].sort((a, b) => (a.company || a.name).localeCompare(b.company || b.name)));
@@ -1516,6 +1521,7 @@ function InvoicePreview({
             <img
               src={logoUrl}
               alt={`${business.display_name} logo`}
+              className="inv-logo"
               style={{ height: 72, width: 'auto', maxWidth: 260, objectFit: 'contain' }}
             />
           )}
@@ -1546,14 +1552,14 @@ function InvoicePreview({
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: isCommission ? 20 : 26, fontWeight: 800, letterSpacing: isCommission ? 1 : 2 }}>
+          <div className="inv-title" style={{ fontSize: isCommission ? 20 : 26, fontWeight: 800, letterSpacing: isCommission ? 1 : 2 }}>
             {isCommission ? 'COMMISSION / WIRE INSTRUCTIONS' : 'INVOICE'}
           </div>
           {invoiceNumber && <div style={{ fontSize: 15, fontWeight: 700 }}>#{invoiceNumber}</div>}
           {invoiceStatus === 'draft' && <span className="badge badge-draft">DRAFT</span>}
-          <div style={{ fontSize: 20, fontWeight: 700, marginTop: 8 }}>Date: {invoiceDate || '—'}</div>
+          <div className="inv-date-line" style={{ fontSize: 20, fontWeight: 700, marginTop: 8 }}>Date: {invoiceDate || '—'}</div>
           {isCommission && customer && (
-            <div style={{ marginTop: 4 }}>
+            <div className="inv-company-block" style={{ marginTop: 4 }}>
               {(customer.company || customer.name) && (
                 <div style={{ fontSize: 16, fontWeight: 600 }}>{customer.company || customer.name}</div>
               )}

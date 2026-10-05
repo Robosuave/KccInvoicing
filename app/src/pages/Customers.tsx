@@ -9,6 +9,7 @@ import {
   listCustomers,
   updateCustomer,
 } from '../data/customers';
+import { formatPhone, isValidPhone, PHONE_HINT } from '../lib/phone';
 import {
   Alert,
   Button,
@@ -137,6 +138,10 @@ export default function Customers() {
       setFormError(isCommission ? 'Company name is required.' : 'Customer name is required.');
       return;
     }
+    if (form.phone.trim() !== '' && !isValidPhone(form.phone)) {
+      setFormError(`Phone number format is not valid — ${PHONE_HINT}.`);
+      return;
+    }
     setSaving(true);
     setFormError(null);
     try {
@@ -151,7 +156,7 @@ export default function Customers() {
         billing_state: orNull(form.billing_state),
         billing_zip: orNull(form.billing_zip),
         email: orNull(form.email),
-        phone: orNull(form.phone),
+        phone: form.phone.trim() ? formatPhone(form.phone) : null,
         shipping_line1: orNull(form.shipping_line1),
         shipping_line2: orNull(form.shipping_line2),
         shipping_city: orNull(form.shipping_city),
