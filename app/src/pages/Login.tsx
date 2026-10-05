@@ -70,7 +70,7 @@ export default function Login() {
           {mode === 'signin' && 'Sign in to your invoice desk.'}
           {mode === 'signup' &&
             (searchParams.get('email')
-              ? 'You\u2019ve been invited to the team — create your account below with your invited email address.'
+              ? 'You\u2019ve been invited to the team — Just enter your email address and choose a password below, then click Create account.'
               : 'Create your account. Team members: sign up with the email address the invite was sent to.')}
           {mode === 'forgot' && 'Enter your account email and we\u2019ll send you a link to reset your password.'}
         </p>
