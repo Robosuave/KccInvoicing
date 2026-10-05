@@ -166,6 +166,8 @@ export default function InvoiceEditor() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [saveMessage, setSaveMessage] = useState<string | undefined>();
   const [errors, setErrors] = useState<string[]>([]);
+  const [invalidFields, setInvalidFields] = useState<Set<string>>(new Set());
+  const fieldError = (key: string) => (invalidFields.has(key) ? 'This field is required.' : undefined);
   const [showPreview, setShowPreview] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
@@ -333,45 +335,48 @@ export default function InvoiceEditor() {
     };
   }, [activeBusiness, customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, template, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge, agentName, secondAgentName, propertyAddress]);
 
-  const validate = useCallback((): string[] => {
+  const validate = useCallback((): { errors: string[]; invalid: string[] } => {
     const errs: string[] = [];
-    if (template !== 'commission' && !customerId) errs.push('Choose a customer.');
-    if (!invoiceDate) errs.push('Invoice date is required.');
+    const invalid: string[] = [];
+    if (template !== 'commission' && !customerId) { errs.push('Choose a customer.'); invalid.push('customer'); }
+    if (!invoiceDate) { errs.push('Invoice date is required.'); invalid.push('invoiceDate'); }
     if (template === 'commission') {
-      const amt = (label: string, v: string, opts?: { required?: boolean; positive?: boolean }) => {
+      const amt = (label: string, v: string, fieldKey: string, opts?: { required?: boolean; positive?: boolean }) => {
         const t = v.trim();
         if (!t) {
-          if (opts?.required) errs.push(`${label} is required.`);
+          if (opts?.required) { errs.push(`${label} is required.`); invalid.push(fieldKey); }
           return;
         }
         try {
           const c = dollarsToCents(t);
-          if (opts?.positive && c <= 0) errs.push(`${label} must be greater than zero.`);
+          if (opts?.positive && c <= 0) { errs.push(`${label} must be greater than zero.`); invalid.push(fieldKey); }
         } catch {
-          errs.push(`${label} must be a valid amount.`);
+          errs.push(`${label} must be a valid amount.`); invalid.push(fieldKey);
         }
       };
-      amt('Sale price', salePrice, { required: true, positive: true });
+      amt('Sale price', salePrice, 'salePrice', { required: true, positive: true });
       const pctT = commissionPct.trim();
       if (pctT && (!/^\d+(\.\d+)?$/.test(pctT) || Number(pctT) < 0)) {
         errs.push('Commission % must be a valid percent.');
+        invalid.push('commissionPct');
       }
-      amt('Commission amount', commissionAmt);
+      amt('Commission amount', commissionAmt, 'commissionAmt');
       if (!pctT && !commissionAmt.trim()) {
         errs.push('Enter a commission % or a commission amount.');
+        invalid.push('commissionPct', 'commissionAmt');
       }
-      if (!propertyAddress.trim()) errs.push('Property address is required.');
-      if (!agentName.trim()) errs.push('Agent name is required.');
-      amt('Processing fee', processingFee);
-      amt('Other charge', otherCharge);
-      if (otherCharge.trim() && !otherChargeDesc.trim()) errs.push('Other charge needs a description.');
+      if (!propertyAddress.trim()) { errs.push('Property address is required.'); invalid.push('propertyAddress'); }
+      if (!agentName.trim()) { errs.push('Agent name is required.'); invalid.push('agentName'); }
+      amt('Processing fee', processingFee, 'processingFee');
+      amt('Other charge', otherCharge, 'otherCharge');
+      if (otherCharge.trim() && !otherChargeDesc.trim()) { errs.push('Other charge needs a description.'); invalid.push('otherChargeDesc'); }
       try {
         toDraftInput();
         previewTotals(toDraftInput());
       } catch (e) {
         errs.push(e instanceof Error ? e.message : 'Totals could not be calculated.');
       }
-      return errs;
+      return { errors: errs, invalid };
     }
     const nonEmpty = lines.filter((l) => l.description.trim() || l.unitPrice.trim());
     if (nonEmpty.length === 0) errs.push('Add at least one line item.');
@@ -410,7 +415,7 @@ export default function InvoiceEditor() {
     } catch (e) {
       errs.push(e instanceof Error ? e.message : 'Totals could not be calculated.');
     }
-    return errs;
+    return { errors: errs, invalid };
   }, [customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, toDraftInput, template, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge]);
 
   const totals = useMemo(() => {
@@ -473,10 +478,11 @@ export default function InvoiceEditor() {
   const doSave = useCallback(
     async (manual: boolean): Promise<string | null> => {
       if (isIssued) return null; // finalized invoices are read-only
-      const errs = validate();
+      const { errors: errs, invalid } = validate();
       if (errs.length > 0) {
         if (manual) {
           setErrors(errs);
+          setInvalidFields(new Set(invalid));
           // The user is often scrolled down at the preview — bring the errors into view.
           requestAnimationFrame(() => {
             document.getElementById('invoice-errors')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -485,6 +491,7 @@ export default function InvoiceEditor() {
         return null;
       }
       setErrors([]);
+      setInvalidFields(new Set());
       setSaveStatus('saving');
       setSaveMessage(undefined);
       try {
@@ -848,7 +855,7 @@ export default function InvoiceEditor() {
           <div className="card">
             <div className="form-row">
               {template !== 'commission' && (
-                <Field label="Customer *" htmlFor="inv-cust">
+                <Field label="Customer *" htmlFor="inv-cust" error={fieldError('customer')}>
                   <SelectField id="inv-cust" value={customerId} onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => setCustomerId(e.target.value))}>
                     <option value="">Choose a customer…</option>
                     {customers.map((c) => (
@@ -906,7 +913,7 @@ export default function InvoiceEditor() {
                   </div>
                 </Field>
               )}
-              <Field label="Invoice date *" htmlFor="inv-date">
+              <Field label="Invoice date *" htmlFor="inv-date" error={fieldError('invoiceDate')}>
                 <TextField id="inv-date" type="date" value={invoiceDate} onChange={touch((e) => setInvoiceDate(e.target.value))} />
               </Field>
             </div>
@@ -931,11 +938,11 @@ export default function InvoiceEditor() {
           {template === 'commission' ? (
             <div className="card">
               <h2 style={{ marginTop: 0 }}>Commission &amp; fees</h2>
-              <Field label="Property address *" htmlFor="com-prop" hint="From the HUD / closing statement">
+              <Field label="Property address *" htmlFor="com-prop" error={fieldError('propertyAddress')} hint="From the HUD / closing statement">
                 <TextField id="com-prop" enterKeyHint="next" value={propertyAddress} onChange={touch((e) => setPropertyAddress(e.target.value))} placeholder="123 Main St, Hollywood, FL 33021" />
               </Field>
               <div className="form-row">
-                <Field label="Agent name *" htmlFor="com-agent">
+                <Field label="Agent name *" htmlFor="com-agent" error={fieldError('agentName')}>
                   <TextField id="com-agent" enterKeyHint="next" value={agentName} onChange={touch((e) => setAgentName(e.target.value))} placeholder="Listing / selling agent" />
                 </Field>
                 <Field label="Second sales person" htmlFor="com-agent2" hint="If applicable">
@@ -943,15 +950,15 @@ export default function InvoiceEditor() {
                 </Field>
               </div>
               <div className="form-row">
-                <Field label="Sale price $ *" htmlFor="com-sale">
+                <Field label="Sale price $ *" htmlFor="com-sale" error={fieldError('salePrice')}>
                   <TextField id="com-sale" inputMode="decimal" enterKeyHint="next" value={salePrice} onChange={touch((e) => { commissionAmtManual.current = false; setSalePrice(e.target.value); })} placeholder="0.00" />
                 </Field>
-                <Field label="Real estate commission %" htmlFor="com-pct" hint="e.g. 3 for 3%">
+                <Field label="Real estate commission %" htmlFor="com-pct" error={fieldError('commissionPct')} hint="e.g. 3 for 3%">
                   <TextField id="com-pct" inputMode="decimal" enterKeyHint="next" value={commissionPct} onChange={touch((e) => { commissionAmtManual.current = false; setCommissionPct(e.target.value); })} />
                 </Field>
               </div>
               <div className="form-row">
-                <Field label="Commission amount $ *" htmlFor="com-amt" hint="Auto-filled from % — edit to override">
+                <Field label="Commission amount $ *" htmlFor="com-amt" error={fieldError('commissionAmt')} hint="Auto-filled from % — edit to override">
                   <TextField id="com-amt" inputMode="decimal" tabIndex={-1} value={commissionAmt} onChange={touch((e) => { commissionAmtManual.current = true; setCommissionAmt(e.target.value); })} placeholder="0.00" />
                 </Field>
                 <Field label="Processing fee $" htmlFor="com-fee">
@@ -962,7 +969,7 @@ export default function InvoiceEditor() {
                 <Field label="Other charge $" htmlFor="com-other">
                   <TextField id="com-other" inputMode="decimal" enterKeyHint="next" value={otherCharge} onChange={touch((e) => setOtherCharge(e.target.value))} placeholder="0.00" />
                 </Field>
-                <Field label="Other charge description" htmlFor="com-otherdesc">
+                <Field label="Other charge description" htmlFor="com-otherdesc" error={fieldError('otherChargeDesc')}>
                   <TextField id="com-otherdesc" enterKeyHint="done" value={otherChargeDesc} onChange={touch((e) => setOtherChargeDesc(e.target.value))} placeholder="What the other charge is for" />
                 </Field>
               </div>
