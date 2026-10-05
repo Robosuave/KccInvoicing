@@ -36,7 +36,7 @@ const NAV = [
   { to: '/items', label: 'Products & services' },
   { to: '/businesses', label: 'Businesses', ownerOnly: true },
   { to: '/team', label: 'Team', ownerOnly: true },
-  { to: '/settings', label: 'Settings' },
+  { to: '/settings', label: 'Settings', ownerOnly: true },
 ];
 
 function BusinessSwitcher() {

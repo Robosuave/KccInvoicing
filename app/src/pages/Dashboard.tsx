@@ -8,7 +8,7 @@ import { listItems } from '../data/items';
 import { centsToDollars } from '../lib/money';
 
 export default function Dashboard() {
-  const { activeBusiness, notConfigured, loadError, loading: businessesLoading } = useBusiness();
+  const { activeBusiness, notConfigured, loadError, loading: businessesLoading, isOwner } = useBusiness();
   const [stats, setStats] = useState({ drafts: 0, draftTotal: 0, issued: 0, issuedTotal: 0, customers: 0, items: 0 });
   const [statsLoading, setStatsLoading] = useState(true);
 
@@ -42,7 +42,7 @@ export default function Dashboard() {
   if (loadError) return <Alert kind="error">{loadError}</Alert>;
   if (businessesLoading) return <p>Loading…</p>;
   if (!activeBusiness) {
-    return (
+    return isOwner ? (
       <EmptyState
         title="No business yet"
         body="Create your first business to start invoicing. Each business gets its own header, numbering, customers, and items."
@@ -51,6 +51,11 @@ export default function Dashboard() {
             Create a business
           </Link>
         }
+      />
+    ) : (
+      <EmptyState
+        title="No business assigned"
+        body="Your account hasn't been linked to a business yet. Ask the owner to send you an invite."
       />
     );
   }
@@ -72,8 +77,8 @@ export default function Dashboard() {
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Quick actions</h2>
         <div className="btn-row">
-          <Link className="btn btn-primary" to="/invoices/new">
-            New invoice
+          <Link className="btn btn-primary" to="/invoices/new" style={{ fontSize: 16, padding: '12px 20px' }}>
+            + New Commission Invoice
           </Link>
           <Link className="btn btn-secondary" to="/customers">
             Manage customers

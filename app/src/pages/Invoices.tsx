@@ -140,7 +140,7 @@ export default function Invoices() {
         </Link>
         <div style={{ flex: 1, minWidth: 200, maxWidth: 340 }}>
           <TextField
-            placeholder="Search number, P.O., property, notes…"
+            placeholder="Search address, invoice #, agent…"
             aria-label="Search invoices"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -214,7 +214,9 @@ export default function Invoices() {
               {visible.map((d) => (
                 <tr key={d.id}>
                   <td>
-                    {d.invoice_number ? (
+                    {d.template === 'commission' && d.property_address ? (
+                      <strong>{d.property_address}</strong>
+                    ) : d.invoice_number ? (
                       <strong>Invoice #{d.invoice_number}</strong>
                     ) : (
                       <strong>{d.draft_key}</strong>
@@ -223,6 +225,9 @@ export default function Invoices() {
                       <span className="badge" style={{ marginLeft: 8 }}>
                         Commission
                       </span>
+                    )}
+                    {d.template === 'commission' && d.invoice_number && (
+                      <div style={{ fontSize: 13, color: 'var(--muted)' }}>#{d.invoice_number}</div>
                     )}
                     {d.revision_no > 1 && (
                       <span className="badge" style={{ marginLeft: 8 }}>

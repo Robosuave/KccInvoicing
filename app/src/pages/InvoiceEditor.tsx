@@ -165,6 +165,7 @@ export default function InvoiceEditor() {
   const [dirty, setDirty] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [saveMessage, setSaveMessage] = useState<string | undefined>();
+  const [toast, setToast] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [invalidFields, setInvalidFields] = useState<Set<string>>(new Set());
   const fieldError = (key: string) => (invalidFields.has(key) ? 'This field is required.' : undefined);
@@ -547,6 +548,12 @@ export default function InvoiceEditor() {
         return;
       }
       setInvoiceStatus('issued');
+      // Show confirmation toast
+      try {
+        const issued = await getDraft(printId);
+        setToast(`Invoice #${issued.invoice?.invoice_number ?? ''} issued`.trim());
+        setTimeout(() => setToast(null), 4000);
+      } catch { /* non-critical */ }
       // Generate and privately store the issued PDF from the frozen snapshot.
       // Best-effort: printing still works if this fails; the panels offer a retry.
       if (workspace && activeBusiness) {
@@ -828,6 +835,27 @@ export default function InvoiceEditor() {
         </h1>
         <SaveStatusIndicator status={saveStatus} message={saveMessage} />
       </div>
+
+      {toast && (
+        <div
+          role="status"
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: '#166534',
+            color: '#fff',
+            padding: '12px 24px',
+            borderRadius: 8,
+            fontWeight: 600,
+            zIndex: 100,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          }}
+        >
+          ✓ {toast}
+        </div>
+      )}
 
       {errors.length > 0 && (
         <div id="invoice-errors">
