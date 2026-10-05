@@ -114,29 +114,30 @@ function Shell() {
             {n.label}
           </NavLink>
         ))}
-        <div className="sidebar-footer">
-          {user?.email && (
-            <div
-              title="Signed in as"
-              style={{
-                padding: '0 14px 8px',
-                fontSize: 12,
-                color: '#9fb3d1',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {user.email}
-            </div>
-          )}
-          <button
-            className="nav-link"
-            style={{ background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer', color: '#dbe4f2' }}
-            onClick={() => signOut()}
+        {user?.email && (
+          <div
+            title="Signed in as"
+            style={{
+              padding: '12px 14px 4px',
+              fontSize: 12,
+              fontWeight: 600,
+              color: '#9fb3d1',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
           >
-            Sign out
-          </button>
+            {user.email}
+          </div>
+        )}
+        <button
+          className="nav-link"
+          style={{ background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer', color: '#dbe4f2' }}
+          onClick={() => signOut()}
+        >
+          Sign out
+        </button>
+        <div className="sidebar-footer">
           <div style={{ padding: '10px 14px 0' }}>Data stays in your database</div>
         </div>
       </aside>
