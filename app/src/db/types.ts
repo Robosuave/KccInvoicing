@@ -127,6 +127,7 @@ export interface Invoice {
   revision_of: string | null;
   revision_no: number;
   issued_pdf_path: string | null;
+  timesheet_path: string | null;
   tax_breakdown: { rate: string; cents: number }[];
   created_at: string;
   updated_at: string;

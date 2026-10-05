@@ -34,6 +34,8 @@ export interface SendInvoiceEmailInput {
   to: string;
   subject?: string;
   message?: string;
+  /** Attach the invoice's timesheet PDF when one is stored. Defaults to true. */
+  include_timesheet?: boolean;
 }
 
 /** Calls the send-invoice-email edge function. Throws with the server's message on failure. */
