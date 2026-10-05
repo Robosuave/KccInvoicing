@@ -1155,7 +1155,6 @@ export default function InvoiceEditor() {
             <Field
               label={template === 'commission' ? 'Wire instructions' : 'Payment instructions'}
               htmlFor="inv-pay"
-              hint="Set by the business owner under Businesses > Edit business. Read-only here."
             >
               <div
                 id="inv-pay"
