@@ -36,10 +36,16 @@ export async function renderInvoicePdfBlob(
   const logoUrl = await resolveLogoUrl(snapshot);
   try {
     return await pdf(InvoicePdf({ snapshot, style, pageSize, logoUrl })).toBlob();
-  } catch {
+  } catch (firstErr) {
     // A logo fetch failure must not block issuance — retry without the logo.
     if (logoUrl) {
-      return await pdf(InvoicePdf({ snapshot, style, pageSize })).toBlob();
+      try {
+        return await pdf(InvoicePdf({ snapshot, style, pageSize })).toBlob();
+      } catch (retryErr) {
+        console.error('Invoice PDF render failed (with and without logo):', firstErr, retryErr);
+      }
+    } else {
+      console.error('Invoice PDF render failed:', firstErr);
     }
     throw new Error('Could not generate the invoice PDF.');
   }

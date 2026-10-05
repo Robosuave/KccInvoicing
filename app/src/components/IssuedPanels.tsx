@@ -102,7 +102,23 @@ export default function IssuedPanels({ invoiceId, onChanged }: { invoiceId: stri
     try {
       await downloadIssuedPdf(invoice, snapshot, workspace.id, style);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'PDF download failed.');
+      console.error('PDF download failed:', e);
+      // Fallback: render the PDF directly in the browser, bypassing storage.
+      try {
+        const { renderInvoicePdfBlob } = await import('../pdf/service');
+        const blob = await renderInvoicePdfBlob(snapshot, style);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Invoice-${invoice.invoice_number}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      } catch (e2) {
+        console.error('PDF fallback failed:', e2);
+        alert(e2 instanceof Error ? e2.message : 'PDF download failed.');
+      }
     } finally {
       setBusy(null);
     }
