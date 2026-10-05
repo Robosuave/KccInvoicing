@@ -262,6 +262,9 @@ textarea.input { min-height: 96px; resize: vertical; }
 }
 .line-item-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .line-item-head strong { font-size: 14px; }
+/* Tighter field spacing inside line items (standard invoices). */
+.line-item .field { margin-bottom: 10px; }
+.line-item .form-row { gap: 10px; }
 
 .totals-box { background: var(--surface-2); border-radius: var(--radius); padding: 16px 18px; }
 .totals-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 15px; }

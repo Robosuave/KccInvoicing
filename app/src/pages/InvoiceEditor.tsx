@@ -1035,7 +1035,12 @@ export default function InvoiceEditor() {
           ) : (
             <>
               <div className="card">
-                <h2 style={{ marginTop: 0 }}>Line items</h2>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <h2 style={{ margin: 0 }}>Line items</h2>
+                  <Button variant="secondary" size="sm" onClick={() => addLine()}>
+                    + Add line item
+                  </Button>
+                </div>
             {lines.map((l, i) => (
               <div className="line-item" key={l.key}>
                 <div className="line-item-head">
