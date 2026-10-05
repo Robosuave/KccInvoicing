@@ -798,7 +798,7 @@ export default function InvoiceEditor() {
     <div>
       <div className="no-print" style={{ marginBottom: 12 }}>
         <Button
-          onClick={() => navigate('/invoices')}
+          onClick={() => navigate('/')}
           style={{
             background: '#7c3aed',
             color: '#fff',
@@ -810,7 +810,7 @@ export default function InvoiceEditor() {
             border: 'none',
           }}
         >
-          ← Back to invoices
+          ← Back
         </Button>
       </div>
       <div className="btn-row no-print" style={{ marginBottom: 16 }}>
