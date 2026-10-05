@@ -84,7 +84,7 @@ export default function Dashboard() {
         <h2 style={{ marginTop: 0 }}>Quick actions</h2>
         <div className="btn-row">
           <Link className="btn btn-primary" to="/invoices/new" style={{ fontSize: 16, padding: '12px 20px' }}>
-            + New Commission Invoice
+            {activeBusiness.default_template === 'commission' ? '+ New Commission Invoice' : '+ New Invoice'}
           </Link>
           <Link className="btn btn-secondary" to="/customers">
             Manage customers
