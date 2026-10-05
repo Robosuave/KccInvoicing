@@ -965,21 +965,23 @@ export default function InvoiceEditor() {
             </div>
           </div>
 
-          <div className="card">
-            <Field label="Invoice type" htmlFor="inv-template" hint="Standard = line-item invoice. Commission = Dania Realty commission / wire instruction form.">
-              <SelectField
-                id="inv-template"
-                value={template}
-                onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => {
-                  templateTouched.current = true;
-                  setTemplate(e.target.value as InvoiceTemplate);
-                })}
-              >
-                <option value="standard">Standard invoice (line items)</option>
-                <option value="commission">Commission / wire instructions</option>
-              </SelectField>
-            </Field>
-          </div>
+          {activeBusiness.default_template === 'commission' && (
+            <div className="card">
+              <Field label="Invoice type" htmlFor="inv-template" hint="Standard = line-item invoice. Commission = Dania Realty commission / wire instruction form.">
+                <SelectField
+                  id="inv-template"
+                  value={template}
+                  onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => {
+                    templateTouched.current = true;
+                    setTemplate(e.target.value as InvoiceTemplate);
+                  })}
+                >
+                  <option value="standard">Standard invoice (line items)</option>
+                  <option value="commission">Commission / wire instructions</option>
+                </SelectField>
+              </Field>
+            </div>
+          )}
 
           {template === 'commission' ? (
             <div className="card">
