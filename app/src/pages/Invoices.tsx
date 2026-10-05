@@ -127,6 +127,23 @@ export default function Invoices() {
 
   return (
     <div>
+      <div className="no-print" style={{ marginBottom: 12 }}>
+        <Button
+          onClick={() => navigate('/')}
+          style={{
+            background: '#7c3aed',
+            color: '#fff',
+            fontSize: 17,
+            fontWeight: 700,
+            padding: '14px 20px',
+            width: '100%',
+            borderRadius: 12,
+            border: 'none',
+          }}
+        >
+          ← Back
+        </Button>
+      </div>
       <h1 className="page-title">Invoices</h1>
       <p className="page-sub">
         Invoices for <strong>{activeBusiness.display_name}</strong>. Drafts are works in progress;
