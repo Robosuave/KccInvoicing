@@ -302,6 +302,7 @@ textarea.input { min-height: 96px; resize: vertical; }
   /* Make room in the top bar for the Log off button on phones. */
   .topbar { padding: 10px 12px; gap: 8px; }
   .topbar-email { display: none; }
+  .active-business-pill { display: none; }
 }
 
 /* ---------- accessibility ---------- */

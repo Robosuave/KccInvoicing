@@ -156,7 +156,7 @@ function Shell() {
               <span
                 className="topbar-email"
                 title="Signed in as"
-                style={{ fontSize: 12, color: '#5b6b85', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
               >
                 {user.email}
               </span>
