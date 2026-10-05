@@ -34,13 +34,30 @@ export async function renderInvoicePdfBlob(
   pageSize: PdfPageSize = 'LETTER',
 ): Promise<Blob> {
   const logoUrl = await resolveLogoUrl(snapshot);
+  const renderWith = async (url: string | undefined) => {
+    const element = InvoicePdf({ snapshot, style, pageSize, logoUrl: url });
+    const instance = pdf(element);
+    // Ensure the reconciler has flushed: on some Safari/React versions the
+    // initial updateContainer doesn't synchronously set container.document.
+    const container = (instance as unknown as { container: { document: unknown } }).container;
+    if (!container.document) {
+      const update = (instance as unknown as { updateContainer: (doc: unknown) => void }).updateContainer;
+      update(element);
+      // Yield to let the scheduler flush.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    if (!container.document) {
+      throw new Error('PDF renderer did not produce a document.');
+    }
+    return instance.toBlob();
+  };
   try {
-    return await pdf(InvoicePdf({ snapshot, style, pageSize, logoUrl })).toBlob();
+    return await renderWith(logoUrl);
   } catch (firstErr) {
     // A logo fetch failure must not block issuance — retry without the logo.
     if (logoUrl) {
       try {
-        return await pdf(InvoicePdf({ snapshot, style, pageSize })).toBlob();
+        return await renderWith(undefined);
       } catch (retryErr) {
         console.error('Invoice PDF render failed (with and without logo):', firstErr, retryErr);
         const msg = retryErr instanceof Error ? retryErr.message : String(retryErr);
