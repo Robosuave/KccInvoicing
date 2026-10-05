@@ -4,7 +4,6 @@ import { useBusiness } from '../business/BusinessContext';
 import type { Customer } from '../db/types';
 import {
   archiveCustomer,
-  copyCustomerToBusiness,
   createCustomer,
   listCustomers,
   updateCustomer,
@@ -71,7 +70,7 @@ function toForm(c?: Customer): Record<string, string> {
 const orNull = (v: string) => (v.trim() ? v.trim() : null);
 
 export default function Customers() {
-  const { activeBusiness, businesses, notConfigured, requestSwitch, loading: businessesLoading } = useBusiness();
+  const { activeBusiness, notConfigured, loading: businessesLoading } = useBusiness();
   const [list, setList] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -80,8 +79,6 @@ export default function Customers() {
   const [form, setForm] = useState<Record<string, string>>(EMPTY);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [copying, setCopying] = useState<Customer | null>(null);
-  const [copyTarget, setCopyTarget] = useState('');
 
   // Dania Realty (commission template) keeps customers minimal: company-led,
   // no shipping address, payment terms, or tax-exempt flag.
@@ -184,17 +181,6 @@ export default function Customers() {
     await load(search);
   };
 
-  const doCopy = async () => {
-    if (!copying || !copyTarget) return;
-    try {
-      await copyCustomerToBusiness(copying.id, copyTarget);
-      setCopying(null);
-      await requestSwitch(copyTarget);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Copy failed.');
-    }
-  };
-
   return (
     <div>
       <BackButton />
@@ -261,9 +247,6 @@ export default function Customers() {
                     </Link>{' '}
                     <Button variant="secondary" size="sm" onClick={() => openEdit(c)}>
                       Edit
-                    </Button>{' '}
-                    <Button variant="ghost" size="sm" onClick={() => { setCopying(c); setCopyTarget(''); }}>
-                      Copy to…
                     </Button>{' '}
                     <Button variant="ghost" size="sm" onClick={() => doArchive(c)}>
                       Archive
@@ -373,34 +356,6 @@ export default function Customers() {
         </Modal>
       )}
 
-      {copying && (
-        <Modal title={`Copy ${copying.name} to another business`} onClose={() => setCopying(null)}>
-          <p>
-            This creates a separate copy under the other business. The two copies are independent —
-            nothing is shared silently.
-          </p>
-          <Field label="Target business" htmlFor="copy-target">
-            <SelectField id="copy-target" value={copyTarget} onChange={(e) => setCopyTarget(e.target.value)}>
-              <option value="">Choose a business…</option>
-              {businesses
-                .filter((b) => b.id !== activeBusiness.id)
-                .map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.display_name}
-                  </option>
-                ))}
-            </SelectField>
-          </Field>
-          <div className="btn-row">
-            <Button onClick={doCopy} disabled={!copyTarget}>
-              Copy customer
-            </Button>
-            <Button variant="secondary" onClick={() => setCopying(null)}>
-              Cancel
-            </Button>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }
