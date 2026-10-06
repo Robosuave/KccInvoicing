@@ -481,7 +481,7 @@ export default function InvoiceEditor() {
 
   const emailConfigured = Boolean((activeBusiness?.email_from || '').trim());
   const [emailSignal, setEmailSignal] = useState(0);
-  const ts = useTimesheet(draftId);
+  const ts = useTimesheet(draftId, undefined, setExpectedUpdatedAt);
 
   const doSave = useCallback(
     async (manual: boolean): Promise<string | null> => {

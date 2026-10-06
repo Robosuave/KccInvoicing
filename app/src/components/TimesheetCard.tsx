@@ -30,6 +30,7 @@ export interface TimesheetState {
 export function useTimesheet(
   invoiceId: string | null,
   onTimesheetChange?: (path: string | null) => void,
+  onUpdatedAt?: (updatedAt: string) => void,
 ): TimesheetState {
   const { workspace } = useBusiness();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -82,8 +83,9 @@ export function useTimesheet(
       try {
         const kb = Math.max(1, Math.round(file.size / 1024));
         setStatus(`Picked "${file.name}" (${kb} KB) — uploading…`);
-        const path = await uploadTimesheet(workspace.id, invoice, file, setStatus);
+        const { path, updatedAt } = await uploadTimesheet(workspace.id, invoice, file, setStatus);
         applyPath(path);
+        onUpdatedAt?.(updatedAt);
         setStatus(null);
       } catch (e) {
         setStatus(null);
@@ -92,7 +94,7 @@ export function useTimesheet(
         setBusy(false);
       }
     },
-    [invoice, workspace, applyPath],
+    [invoice, workspace, applyPath, onUpdatedAt],
   );
 
   const removeFile = useCallback(async () => {
@@ -101,14 +103,15 @@ export function useTimesheet(
     setError(null);
     setBusy(true);
     try {
-      await removeTimesheet(workspace.id, invoice);
+      const { updatedAt } = await removeTimesheet(workspace.id, invoice);
       applyPath(null);
+      onUpdatedAt?.(updatedAt);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not remove the timesheet.');
     } finally {
       setBusy(false);
     }
-  }, [invoice, workspace, attached, applyPath]);
+  }, [invoice, workspace, attached, applyPath, onUpdatedAt]);
 
   const notePickerOpened = useCallback(() => {
     setError(null);

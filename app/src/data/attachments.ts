@@ -11,14 +11,15 @@ function timesheetPath(workspaceId: string, invoice: Invoice): string {
 
 /**
  * Uploads a timesheet PDF for an invoice and links it on the invoice record.
- * Replaces any existing timesheet. Returns the storage path.
+ * Replaces any existing timesheet. Returns the storage path and the invoice's
+ * new updated_at (attaching bumps it, so editors must re-sync their save guard).
  */
 export async function uploadTimesheet(
   workspaceId: string,
   invoice: Invoice,
   file: File,
   onStep?: (msg: string) => void,
-): Promise<string> {
+): Promise<{ path: string; updatedAt: string }> {
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
   if (!isPdf) throw new Error(`The timesheet must be a PDF file (that file came through as ${file.type || 'an unknown type'}).`);
   if (file.size > MAX_BYTES) throw new Error('The timesheet PDF must be under 10 MB.');
@@ -33,10 +34,12 @@ export async function uploadTimesheet(
   if (upErr) throw upErr;
 
   onStep?.('Saving to the invoice…');
-  const { error: dbErr } = await sb
+  const { data: updated, error: dbErr } = await sb
     .from('invoices')
     .update({ timesheet_path: path })
-    .eq('id', invoice.id);
+    .eq('id', invoice.id)
+    .select('updated_at')
+    .single();
   if (dbErr) throw dbErr;
 
   await logAuditEvent(invoice.business_id, invoice.id, 'timesheet_attached', {
@@ -44,24 +47,28 @@ export async function uploadTimesheet(
     filename: file.name,
   }).catch(() => { /* audit is non-critical */ });
 
-  return path;
+  return { path, updatedAt: (updated as { updated_at: string }).updated_at };
 }
 
 /** Removes the timesheet file and clears it from the invoice record. */
-export async function removeTimesheet(workspaceId: string, invoice: Invoice): Promise<void> {
+export async function removeTimesheet(workspaceId: string, invoice: Invoice): Promise<{ updatedAt: string }> {
   const sb = requireSupabase();
   const path = invoice.timesheet_path ?? timesheetPath(workspaceId, invoice);
   const { error: rmErr } = await sb.storage.from(BUCKET).remove([path]);
   if (rmErr) throw rmErr;
-  const { error: dbErr } = await sb
+  const { data: updated, error: dbErr } = await sb
     .from('invoices')
     .update({ timesheet_path: null })
-    .eq('id', invoice.id);
+    .eq('id', invoice.id)
+    .select('updated_at')
+    .single();
   if (dbErr) throw dbErr;
 
   await logAuditEvent(invoice.business_id, invoice.id, 'timesheet_removed', {
     invoice_number: invoice.invoice_number,
   }).catch(() => { /* audit is non-critical */ });
+
+  return { updatedAt: (updated as { updated_at: string }).updated_at };
 }
 
 /** Short-lived download URL for a stored timesheet. */
