@@ -1279,7 +1279,7 @@ export default function InvoiceEditor() {
           <div className="card">
             <h2 style={{ marginTop: 0 }}>Notes &amp; payment</h2>
             <Field label="Notes / comments" htmlFor="inv-notes">
-              <TextArea id="inv-notes" value={notes} onChange={touch((e) => setNotes(e.target.value))} />
+              <TextArea id="inv-notes" value={notes} onChange={touch((e) => setNotes(e.target.value))} style={{ minHeight: 54 }} />
             </Field>
             <Field
               label={template === 'commission' ? 'Wire instructions' : 'Payment instructions'}
