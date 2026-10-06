@@ -349,7 +349,7 @@ export default function IssuedPanels({ invoiceId, onChanged, openEmailSignal }: 
           <Field label="Message" htmlFor="email-message">
             <TextArea id="email-message" value={emailMessage} onChange={(e) => setEmailMessage(e.target.value)} rows={5} />
           </Field>
-          {invoice.timesheet_path && (
+          {ts.attachedPath ? (
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 15, margin: '4px 0 12px' }}>
               <input
                 type="checkbox"
@@ -358,10 +358,17 @@ export default function IssuedPanels({ invoiceId, onChanged, openEmailSignal }: 
               />
               Include timesheet PDF
             </label>
+          ) : (
+            <div style={{ margin: '4px 0 12px' }}>
+              <TimesheetAttachButton ts={ts} />
+              <p style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0 0' }}>
+                Attach your timesheet PDF here to send it with this email.
+              </p>
+            </div>
           )}
           <p style={{ fontSize: 14, color: 'var(--muted)' }}>
             Sends from {activeBusiness.email_from} with the finalized PDF attached
-            {invoice.timesheet_path && includeTimesheet ? ' plus your timesheet' : ''}.
+            {ts.attachedPath && includeTimesheet ? ' plus your timesheet' : ''}.
           </p>
           {emailError && <Alert kind="error">{emailError}</Alert>}
           <div className="btn-row">
