@@ -384,9 +384,11 @@ export default function InvoiceEditor() {
     if (nonEmpty.length === 0) errs.push('Add at least one line item.');
     lines.forEach((l, i) => {
       if (!l.description.trim() && !l.unitPrice.trim()) return; // empty row is ignored
-      if (!l.description.trim()) errs.push(`Line ${i + 1}: description is required.`);
-      if (!/^\d+(\.\d+)?$/.test(l.quantity.trim()) || Number(l.quantity) <= 0)
+      if (!l.description.trim()) { errs.push(`Line ${i + 1}: description is required.`); invalid.push(`desc-${l.key}`); }
+      if (!/^\d+(\.\d+)?$/.test(l.quantity.trim()) || Number(l.quantity) <= 0) {
         errs.push(`Line ${i + 1}: quantity must be a positive number.`);
+        invalid.push(`qty-${l.key}`);
+      }
       try {
         dollarsToCents(l.unitPrice.trim() || '0');
       } catch {
@@ -1163,7 +1165,7 @@ export default function InvoiceEditor() {
                     </SelectField>
                   </Field>
                 )}
-                <Field label="Description *" htmlFor={`desc-${l.key}`}>
+                <Field label="Description *" htmlFor={`desc-${l.key}`} error={fieldError(`desc-${l.key}`)}>
                   <TextArea
                     id={`desc-${l.key}`}
                     rows={2}
@@ -1173,7 +1175,7 @@ export default function InvoiceEditor() {
                   />
                 </Field>
                 <div className="form-row">
-                  <Field label="Quantity *" htmlFor={`qty-${l.key}`}>
+                  <Field label="Quantity *" htmlFor={`qty-${l.key}`} error={fieldError(`qty-${l.key}`)}>
                     <TextField id={`qty-${l.key}`} inputMode="decimal" enterKeyHint="next" value={l.quantity} onChange={(e) => updateLine(l.key, { quantity: e.target.value })} />
                   </Field>
                   <Field label="Unit" htmlFor={`unit-${l.key}`}>
