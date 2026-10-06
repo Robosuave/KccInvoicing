@@ -17,6 +17,7 @@ export default function TimesheetCard({ invoiceId, onTimesheetChange }: {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
@@ -38,13 +39,24 @@ export default function TimesheetCard({ invoiceId, onTimesheetChange }: {
   };
 
   const doUpload = async (file: File | undefined) => {
-    if (!file || !invoice || !workspace) return;
+    if (!file) {
+      setError('The picker did not return a file. Please tap Attach PDF and choose the PDF again.');
+      return;
+    }
+    if (!invoice || !workspace) {
+      setError('The invoice is still loading. Wait a moment and try again.');
+      return;
+    }
     setError(null);
     setBusy(true);
     try {
-      const path = await uploadTimesheet(workspace.id, invoice, file);
+      const kb = Math.max(1, Math.round(file.size / 1024));
+      setStatus(`Picked "${file.name}" (${kb} KB) — starting upload…`);
+      const path = await uploadTimesheet(workspace.id, invoice, file, setStatus);
       applyPath(path);
+      setStatus(null);
     } catch (e) {
+      setStatus(null);
       setError(e instanceof Error ? e.message : 'Upload failed.');
     } finally {
       setBusy(false);
@@ -123,6 +135,9 @@ export default function TimesheetCard({ invoiceId, onTimesheetChange }: {
         }}
         onChange={(e) => { doUpload(e.target.files?.[0]); e.target.value = ''; }}
       />
+      {status && (
+        <p style={{ fontSize: 14, color: 'var(--muted)', margin: '8px 0 0' }}>{status}</p>
+      )}
       {error && <Alert kind="error">{error}</Alert>}
     </div>
   );

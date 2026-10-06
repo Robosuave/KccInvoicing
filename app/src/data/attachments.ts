@@ -17,6 +17,7 @@ export async function uploadTimesheet(
   workspaceId: string,
   invoice: Invoice,
   file: File,
+  onStep?: (msg: string) => void,
 ): Promise<string> {
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
   if (!isPdf) throw new Error(`The timesheet must be a PDF file (that file came through as ${file.type || 'an unknown type'}).`);
@@ -25,11 +26,13 @@ export async function uploadTimesheet(
 
   const sb = requireSupabase();
   const path = timesheetPath(workspaceId, invoice);
+  onStep?.('Uploading to storage…');
   const { error: upErr } = await sb.storage
     .from(BUCKET)
     .upload(path, file, { contentType: 'application/pdf', upsert: true });
   if (upErr) throw upErr;
 
+  onStep?.('Saving to the invoice…');
   const { error: dbErr } = await sb
     .from('invoices')
     .update({ timesheet_path: path })
