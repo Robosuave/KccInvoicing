@@ -1176,6 +1176,7 @@ export default function InvoiceEditor() {
                   <TextArea
                     id={`desc-${l.key}`}
                     rows={2}
+                    style={{ minHeight: 54 }}
                     value={l.description}
                     onChange={(e) => updateLine(l.key, { description: e.target.value, itemId: null })}
                     placeholder="What was done or provided"
