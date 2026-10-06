@@ -1186,16 +1186,22 @@ export default function InvoiceEditor() {
                     placeholder="What was done or provided"
                   />
                 </Field>
-                <div className="form-row">
-                  <Field label="Quantity *" htmlFor={`qty-${l.key}`} error={fieldError(`qty-${l.key}`) ?? (qtyNeedsNumber(l) ? 'Enter a quantity.' : undefined)}>
-                    <TextField id={`qty-${l.key}`} inputMode="decimal" enterKeyHint="next" value={l.quantity} onChange={(e) => updateLine(l.key, { quantity: e.target.value })} />
-                  </Field>
-                  <Field label="Unit" htmlFor={`unit-${l.key}`}>
-                    <TextField id={`unit-${l.key}`} value={l.unitLabel} onChange={(e) => updateLine(l.key, { unitLabel: e.target.value })} />
-                  </Field>
-                  <Field label="Unit price $ *" htmlFor={`price-${l.key}`}>
-                    <TextField id={`price-${l.key}`} inputMode="decimal" value={l.unitPrice} onChange={(e) => updateLine(l.key, { unitPrice: e.target.value })} placeholder="0.00" />
-                  </Field>
+                <div className="line-amounts">
+                  <div style={{ flex: '0 0 64px', minWidth: 0 }}>
+                    <Field label="Quantity *" htmlFor={`qty-${l.key}`} error={fieldError(`qty-${l.key}`) ?? (qtyNeedsNumber(l) ? 'Enter a quantity.' : undefined)}>
+                      <TextField id={`qty-${l.key}`} inputMode="decimal" enterKeyHint="next" value={l.quantity} onChange={(e) => updateLine(l.key, { quantity: e.target.value })} />
+                    </Field>
+                  </div>
+                  <div style={{ flex: '0 0 76px', minWidth: 0 }}>
+                    <Field label="Unit" htmlFor={`unit-${l.key}`}>
+                      <TextField id={`unit-${l.key}`} value={l.unitLabel} onChange={(e) => updateLine(l.key, { unitLabel: e.target.value })} />
+                    </Field>
+                  </div>
+                  <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                    <Field label="Unit price $ *" htmlFor={`price-${l.key}`}>
+                      <TextField id={`price-${l.key}`} inputMode="decimal" value={l.unitPrice} onChange={(e) => updateLine(l.key, { unitPrice: e.target.value })} placeholder="0.00" />
+                    </Field>
+                  </div>
                 </div>
                 {discountMode === 'lines' && (
                   <div className="form-row">
