@@ -659,7 +659,7 @@ export default function InvoiceEditor() {
     markDirty();
     setTimeout(() => {
       const targetId = catalog.length > 0 ? `cat-${nl.key}` : `qty-${nl.key}`;
-      document.getElementById(targetId)?.focus();
+      focusOrReveal(targetId);
     }, 50);
   };
 
@@ -767,6 +767,26 @@ export default function InvoiceEditor() {
   const blankDefaultQty = (key: string) => {
     const line = lines.find((x) => x.key === key);
     if (line && line.quantity === '1') updateLine(key, { quantity: '' });
+  };
+  /* iPad / touch fix: a programmatic .focus() fired after a native <select>
+     pick (or a setTimeout) runs detached from the user's tap, so on iPadOS
+     Safari the field gets focus WITHOUT the on-screen keyboard — and tapping
+     the already-focused field won't summon it either, leaving the user unable
+     to type (seen on the quantity field). On coarse-pointer devices, scroll
+     the target into view instead and let the user's own tap focus it, which
+     always brings the keyboard up. */
+  const focusOrReveal = (id: string) => {
+    const el = document.getElementById(id) as HTMLElement | null;
+    if (!el) return;
+    const coarse =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(pointer: coarse)').matches;
+    if (coarse) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      el.focus({ preventScroll: true });
+    }
   };
   const standardEnterToNext = (e: React.KeyboardEvent<HTMLElement>) => {
     if (e.key !== 'Enter') return;
@@ -961,7 +981,7 @@ export default function InvoiceEditor() {
                               const first = lines[0];
                               const targetId = catalog.length > 0 ? `cat-${first.key}` : `qty-${first.key}`;
                               if (catalog.length === 0) blankDefaultQty(first.key);
-                              document.getElementById(targetId)?.focus({ preventScroll: true });
+                              focusOrReveal(targetId);
                             });
                           }
                         }}
@@ -1008,7 +1028,7 @@ export default function InvoiceEditor() {
                           if (!viaArrows) {
                             // Option picked from the dropdown: move straight to Property address.
                             requestAnimationFrame(() => {
-                              document.getElementById('com-prop')?.focus();
+                              focusOrReveal('com-prop');
                             });
                           }
                         }}
@@ -1149,7 +1169,7 @@ export default function InvoiceEditor() {
                             // Blank the untouched default quantity, then jump to it.
                             blankDefaultQty(l.key);
                             requestAnimationFrame(() => {
-                              document.getElementById(`qty-${l.key}`)?.focus({ preventScroll: true });
+                              focusOrReveal(`qty-${l.key}`);
                             });
                           }
                         }
