@@ -764,6 +764,13 @@ export default function InvoiceEditor() {
     }
   };
 
+  /* Live check: a non-empty line needs a positive quantity — flagged red immediately. */
+  const qtyNeedsNumber = (l: LineState) => {
+    if (!l.description.trim() && !l.unitPrice.trim()) return false; // empty row is ignored
+    const q = l.quantity.trim();
+    return !/^\d+(\.\d+)?$/.test(q) || Number(q) <= 0;
+  };
+
   /* Standard invoice Enter flow: invoice date -> catalog item -> quantity,
      skipping description / unit / unit price (auto-filled from the catalog). */
   const blankDefaultQty = (key: string) => {
@@ -1175,7 +1182,7 @@ export default function InvoiceEditor() {
                   />
                 </Field>
                 <div className="form-row">
-                  <Field label="Quantity *" htmlFor={`qty-${l.key}`} error={fieldError(`qty-${l.key}`)}>
+                  <Field label="Quantity *" htmlFor={`qty-${l.key}`} error={fieldError(`qty-${l.key}`) ?? (qtyNeedsNumber(l) ? 'Enter a quantity.' : undefined)}>
                     <TextField id={`qty-${l.key}`} inputMode="decimal" enterKeyHint="next" value={l.quantity} onChange={(e) => updateLine(l.key, { quantity: e.target.value })} />
                   </Field>
                   <Field label="Unit" htmlFor={`unit-${l.key}`}>
