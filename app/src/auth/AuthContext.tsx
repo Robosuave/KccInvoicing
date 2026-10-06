@@ -23,14 +23,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
-    sb.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null);
+    // Never leave the app stuck on "Loading…": the session check must settle
+    // even if it rejects or hangs (e.g. flaky mobile network).
+    let loadingSettled = false;
+    const finishLoading = (u: User | null) => {
+      if (loadingSettled) return;
+      loadingSettled = true;
+      clearTimeout(timer);
+      setUser(u);
       setLoading(false);
-    });
+    };
+    const timer = setTimeout(() => finishLoading(null), 10000);
+    sb.auth.getSession().then(
+      ({ data }) => finishLoading(data.session?.user ?? null),
+      () => finishLoading(null),
+    );
     const { data: sub } = sb.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      finishLoading(session?.user ?? null);
     });
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      clearTimeout(timer);
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
