@@ -1187,17 +1187,17 @@ export default function InvoiceEditor() {
                   />
                 </Field>
                 <div className="line-amounts">
-                  <div style={{ flex: '0 0 52px', minWidth: 0 }}>
+                  <div style={{ flex: '0 0 48px', minWidth: 0 }}>
                     <Field label="Quantity *" htmlFor={`qty-${l.key}`} error={fieldError(`qty-${l.key}`) ?? (qtyNeedsNumber(l) ? 'Enter a quantity.' : undefined)}>
                       <TextField id={`qty-${l.key}`} inputMode="decimal" enterKeyHint="next" value={l.quantity} onChange={(e) => updateLine(l.key, { quantity: e.target.value })} />
                     </Field>
                   </div>
-                  <div style={{ flex: '0 0 52px', minWidth: 0 }}>
+                  <div style={{ flex: '0 0 44px', minWidth: 0 }}>
                     <Field label="Unit" htmlFor={`unit-${l.key}`}>
                       <TextField id={`unit-${l.key}`} value={l.unitLabel} onChange={(e) => updateLine(l.key, { unitLabel: e.target.value })} />
                     </Field>
                   </div>
-                  <div style={{ flex: '0 0 110px', minWidth: 0 }}>
+                  <div style={{ flex: '0 0 88px', minWidth: 0 }}>
                     <Field label="Unit price $ *" htmlFor={`price-${l.key}`}>
                       <TextField id={`price-${l.key}`} inputMode="decimal" value={l.unitPrice} onChange={(e) => updateLine(l.key, { unitPrice: e.target.value })} placeholder="0.00" />
                     </Field>
