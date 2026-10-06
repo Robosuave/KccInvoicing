@@ -819,11 +819,6 @@ export default function InvoiceEditor() {
 
   const actionButtons = (
     <>
-      {!isIssued && (
-        <Button onClick={() => doSave(true)} disabled={saveStatus === 'saving'}>
-          {saveStatus === 'saving' ? 'Saving…' : draftId ? 'Save draft' : 'Create draft'}
-        </Button>
-      )}
       <Button variant="secondary" onClick={() => setShowPreview(true)}>
         Preview
       </Button>
