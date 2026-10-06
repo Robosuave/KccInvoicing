@@ -31,7 +31,7 @@ function money(cents: number): string {
  * Renders the PDF from the server-frozen snapshot (or a live-data fallback for
  * invoices issued before migration 0018).
  */
-export default function IssuedPanels({ invoiceId, onChanged }: { invoiceId: string; onChanged: () => void }) {
+export default function IssuedPanels({ invoiceId, onChanged, openEmailSignal }: { invoiceId: string; onChanged: () => void; openEmailSignal?: number }) {
   const navigate = useNavigate();
   const { workspace, activeBusiness, isOwner } = useBusiness();
 
@@ -125,6 +125,18 @@ export default function IssuedPanels({ invoiceId, onChanged }: { invoiceId: stri
     setIncludeTimesheet(true);
     setEmailOpen(true);
   };
+
+  // Lets a parent (e.g. the draft editor's "Email invoice" button) open the
+  // email dialog right after finalizing. Fires once per signal value, and only
+  // once the invoice data has loaded.
+  const emailSignalFired = useRef(0);
+  useEffect(() => {
+    if (!openEmailSignal || openEmailSignal <= emailSignalFired.current) return;
+    if (!invoice || !emailConfigured || invoice.status === 'void') return;
+    emailSignalFired.current = openEmailSignal;
+    openEmailModal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openEmailSignal, invoice, emailConfigured]);
 
   const doSendEmail = async () => {
     setEmailError(null);
@@ -391,7 +403,19 @@ export default function IssuedPanels({ invoiceId, onChanged }: { invoiceId: stri
             ref={tsFileRef}
             type="file"
             accept="application/pdf,.pdf"
-            style={{ display: 'none' }}
+            // Visually hidden but still rendered: some mobile browsers won't
+            // open the picker for a display:none input triggered by script.
+            style={{
+              position: 'absolute',
+              width: 1,
+              height: 1,
+              padding: 0,
+              margin: -1,
+              overflow: 'hidden',
+              clip: 'rect(0, 0, 0, 0)',
+              whiteSpace: 'nowrap',
+              border: 0,
+            }}
             onChange={(e) => { doUploadTimesheet(e.target.files?.[0]); e.target.value = ''; }}
           />
           {tsError && <Alert kind="error">{tsError}</Alert>}

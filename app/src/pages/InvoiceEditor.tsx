@@ -474,6 +474,9 @@ export default function InvoiceEditor() {
 
   /* ---------- save ---------- */
 
+  const emailConfigured = Boolean((activeBusiness?.email_from || '').trim());
+  const [emailSignal, setEmailSignal] = useState(0);
+
   const doSave = useCallback(
     async (manual: boolean): Promise<string | null> => {
       if (isIssued) return null; // finalized invoices are read-only
@@ -529,6 +532,39 @@ export default function InvoiceEditor() {
     [validate, toDraftInput, draftId, expectedUpdatedAt, setEditorDirty, isIssued],
   );
 
+  /** Save + finalize (draft -> issued). Returns the invoice id, or null on failure. */
+  const finalizeInvoice = useCallback(async (): Promise<string | null> => {
+    const printId = await doSave(true);
+    if (!printId) return null;
+    try {
+      await markIssued(printId);
+    } catch (e) {
+      setErrors([e instanceof Error ? e.message : 'Could not finalize the invoice.']);
+      return null;
+    }
+    setInvoiceStatus('issued');
+    // Show confirmation toast
+    try {
+      const issued = await getDraft(printId);
+      setToast(`Invoice #${issued.invoice?.invoice_number ?? ''} issued`.trim());
+      setTimeout(() => setToast(null), 4000);
+    } catch { /* non-critical */ }
+    // Generate and privately store the issued PDF from the frozen snapshot.
+    // Best-effort: emailing still works if this fails; the panels offer a retry.
+    if (workspace && activeBusiness) {
+      try {
+        await generateAndStoreIssuedPdf(
+          workspace.id,
+          printId,
+          (activeBusiness.invoice_style as InvoiceStyle) || 'classic',
+        );
+      } catch (e) {
+        console.error('Issued PDF could not be stored:', e);
+      }
+    }
+    return printId;
+  }, [doSave, workspace, activeBusiness]);
+
   /** Print / Save PDF. Finalizes the invoice (draft -> issued) on first print. */
   const doPrint = useCallback(async () => {
     // iPad/iPhone: the iOS print dialog can't save as PDF reliably, so download
@@ -537,34 +573,8 @@ export default function InvoiceEditor() {
       /iPad|iPhone|iPod/.test(navigator.userAgent) ||
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     if (!isIssued) {
-      const printId = await doSave(true);
+      const printId = await finalizeInvoice();
       if (!printId) return;
-      try {
-        await markIssued(printId);
-      } catch (e) {
-        setErrors([e instanceof Error ? e.message : 'Could not finalize the invoice.']);
-        return;
-      }
-      setInvoiceStatus('issued');
-      // Show confirmation toast
-      try {
-        const issued = await getDraft(printId);
-        setToast(`Invoice #${issued.invoice?.invoice_number ?? ''} issued`.trim());
-        setTimeout(() => setToast(null), 4000);
-      } catch { /* non-critical */ }
-      // Generate and privately store the issued PDF from the frozen snapshot.
-      // Best-effort: printing still works if this fails; the panels offer a retry.
-      if (workspace && activeBusiness) {
-        try {
-          await generateAndStoreIssuedPdf(
-            workspace.id,
-            printId,
-            (activeBusiness.invoice_style as InvoiceStyle) || 'classic',
-          );
-        } catch (e) {
-          console.error('Issued PDF could not be stored:', e);
-        }
-      }
       if (isIOS && workspace && activeBusiness) {
         // iOS: the in-browser PDF renderer doesn't work on Safari, so use the
         // native print dialog. The user can save as PDF via Share > Save to Files.
@@ -577,7 +587,13 @@ export default function InvoiceEditor() {
       return;
     }
     window.print();
-  }, [isIssued, doSave, workspace, activeBusiness, draftId]);
+  }, [isIssued, finalizeInvoice, workspace, activeBusiness, draftId]);
+
+  /** Email from a draft: finalize first, then open the email dialog — no printing needed. */
+  const doEmailDraft = useCallback(async () => {
+    const id = await finalizeInvoice();
+    if (id) setEmailSignal((s) => s + 1);
+  }, [finalizeInvoice]);
 
   // autosave
   useEffect(() => {
@@ -813,6 +829,11 @@ export default function InvoiceEditor() {
       <Button variant="secondary" onClick={doPrint} data-action="print">
         Print / Save PDF
       </Button>
+      {!isIssued && emailConfigured && (
+        <Button variant="secondary" onClick={doEmailDraft}>
+          Email invoice
+        </Button>
+      )}
       {!isIssued && (
         <span style={{ fontSize: 13, color: 'var(--muted)' }}>
           Drafts autosave{invoiceNumber ? ` as invoice #${invoiceNumber}` : ''}.
@@ -1275,7 +1296,7 @@ export default function InvoiceEditor() {
         </div>
       )}
       {isIssued && draftId && (
-        <IssuedPanels invoiceId={draftId} onChanged={refreshIssuedState} />
+        <IssuedPanels invoiceId={draftId} onChanged={refreshIssuedState} openEmailSignal={emailSignal} />
       )}
     </div>
   );

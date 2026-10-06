@@ -19,7 +19,7 @@ export async function uploadTimesheet(
   file: File,
 ): Promise<string> {
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-  if (!isPdf) throw new Error('The timesheet must be a PDF file.');
+  if (!isPdf) throw new Error(`The timesheet must be a PDF file (that file came through as ${file.type || 'an unknown type'}).`);
   if (file.size > MAX_BYTES) throw new Error('The timesheet PDF must be under 10 MB.');
   if (invoice.status === 'void') throw new Error('Cannot attach a timesheet to a voided invoice.');
 
