@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBusiness } from '../business/BusinessContext';
 import type { Invoice } from '../db/types';
 import { getInvoice } from '../data/invoices';
@@ -16,6 +16,8 @@ export interface TimesheetState {
   error: string | null;
   uploadFile: (file: File | undefined) => Promise<void>;
   removeFile: () => Promise<void>;
+  /** Called when the file input is tapped (picker is about to open). */
+  notePickerOpened: () => void;
   /** Called when we detect the page reloaded while the file picker was open. */
   notePickerReload: () => void;
 }
@@ -108,6 +110,16 @@ export function useTimesheet(
     }
   }, [invoice, workspace, attached, applyPath]);
 
+  const notePickerOpened = useCallback(() => {
+    setError(null);
+    setStatus('File picker opened — pick your PDF, then tap "Select".');
+    try {
+      sessionStorage.setItem(PICKER_FLAG, Date.now().toString());
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const notePickerReload = useCallback(() => {
     setStatus(null);
     setError(
@@ -116,19 +128,11 @@ export function useTimesheet(
     );
   }, []);
 
-  return { attachedPath: attached, busy, status, error, uploadFile, removeFile, notePickerReload };
+  return { attachedPath: attached, busy, status, error, uploadFile, removeFile, notePickerOpened, notePickerReload };
 }
 
 /** sessionStorage key tracking that the file picker was opened. */
 const PICKER_FLAG = 'tsPickerOpen';
-
-function markPickerOpened() {
-  try {
-    sessionStorage.setItem(PICKER_FLAG, Date.now().toString());
-  } catch {
-    /* ignore */
-  }
-}
 
 function clearPickerFlag() {
   try {
@@ -145,6 +149,8 @@ function clearPickerFlag() {
  * without scrolling.
  */
 export function TimesheetAttachButton({ ts }: { ts: TimesheetState }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
   // If the page reloaded while the file picker was open (phone dropped the
   // tab in the background), the selection was lost — say so plainly.
   useEffect(() => {
@@ -161,15 +167,27 @@ export function TimesheetAttachButton({ ts }: { ts: TimesheetState }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The `cancel` event fires when the picker is dismissed without a file.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const onCancel = () => {
+      clearPickerFlag();
+    };
+    el.addEventListener('cancel', onCancel);
+    return () => el.removeEventListener('cancel', onCancel);
+  }, []);
+
   return (
     <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 4, maxWidth: '100%' }}>
       <label className="btn btn-secondary btn-sm" style={{ opacity: ts.busy ? 0.7 : 1 }}>
         {ts.busy ? 'Uploading…' : ts.attachedPath ? '✓ PDF attached' : 'Attach PDF'}
         <input
+          ref={inputRef}
           type="file"
           className="ts-file-input"
           disabled={ts.busy}
-          onClick={markPickerOpened}
+          onClick={() => ts.notePickerOpened()}
           onChange={(e) => {
             clearPickerFlag();
             void ts.uploadFile(e.target.files?.[0]);
