@@ -859,7 +859,7 @@ export default function InvoiceEditor() {
   const previewEl = (
     <InvoicePreview business={activeBusiness} customer={customer} lines={lines} totals={totals}
       invoiceDate={invoiceDate} invoiceNumber={invoiceNumber}
-      notes={notes} terms={terms} paymentInstructions={displayPaymentInstructions}
+      notes={notes} paymentInstructions={displayPaymentInstructions}
       discountMode={discountMode} template={template}
       agentName={agentName} secondAgentName={secondAgentName}
       propertyAddress={propertyAddress}
@@ -1269,11 +1269,6 @@ export default function InvoiceEditor() {
             <Field label="Notes / comments" htmlFor="inv-notes">
               <TextArea id="inv-notes" value={notes} onChange={touch((e) => setNotes(e.target.value))} />
             </Field>
-            {template !== 'commission' && (
-              <Field label="Terms" htmlFor="inv-terms">
-                <TextField id="inv-terms" value={terms} onChange={touch((e) => setTerms(e.target.value))} />
-              </Field>
-            )}
             <Field
               label={template === 'commission' ? 'Wire instructions' : 'Payment instructions'}
               htmlFor="inv-pay"
@@ -1632,7 +1627,6 @@ function InvoicePreview({
   invoiceDate,
   invoiceNumber,
   notes,
-  terms,
   paymentInstructions,
   discountMode,
   template,
@@ -1654,7 +1648,6 @@ function InvoicePreview({
   invoiceDate: string;
   invoiceNumber: string | null;
   notes: string;
-  terms: string;
   paymentInstructions: string;
   discountMode: DiscountMode;
   template: InvoiceTemplate;
@@ -1783,11 +1776,6 @@ function InvoicePreview({
         <div className="inv-section" style={{ marginTop: 20 }}>
           <strong>Notes</strong>
           <div style={{ whiteSpace: 'pre-wrap' }}>{notes.trim()}</div>
-        </div>
-      )}
-      {!isCommission && terms !== '' && (
-        <div className="inv-section" style={{ marginTop: 12 }}>
-          <strong>Terms:</strong> {terms}
         </div>
       )}
       {!isCommission && paymentInstructions !== '' && (

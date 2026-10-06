@@ -118,11 +118,6 @@ function Notes({ snap }: { snap: InvoiceSnapshot }) {
           <Text>{snap.notes}</Text>
         </View>
       )}
-      {snap.terms && (
-        <View style={{ marginBottom: 8 }}>
-          <Text><Text style={styles.notesLabel}>Terms: </Text>{snap.terms}</Text>
-        </View>
-      )}
       {snap.template === 'standard' && snap.payment_instructions && (
         <View style={{ marginBottom: 8 }}>
           <Text style={styles.notesLabel}>Payment instructions</Text>
