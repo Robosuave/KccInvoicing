@@ -1192,7 +1192,7 @@ export default function InvoiceEditor() {
                       <TextField id={`qty-${l.key}`} inputMode="decimal" enterKeyHint="next" value={l.quantity} onChange={(e) => updateLine(l.key, { quantity: e.target.value })} />
                     </Field>
                   </div>
-                  <div style={{ flex: '0 0 76px', minWidth: 0 }}>
+                  <div style={{ flex: '0 0 52px', minWidth: 0 }}>
                     <Field label="Unit" htmlFor={`unit-${l.key}`}>
                       <TextField id={`unit-${l.key}`} value={l.unitLabel} onChange={(e) => updateLine(l.key, { unitLabel: e.target.value })} />
                     </Field>
