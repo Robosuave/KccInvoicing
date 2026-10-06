@@ -63,22 +63,6 @@ export default function Dashboard() {
   return (
     <div>
       <h1 className="page-title">Dashboard</h1>
-      <p className="page-sub">
-        {activeBusiness ? (
-          isOwner ? (
-            <>
-              Showing <strong>{activeBusiness.display_name}</strong>. Switch businesses anytime from the
-              top bar — each business keeps its own data.
-            </>
-          ) : (
-            <>
-              Showing <strong>{activeBusiness.display_name}</strong>.
-            </>
-          )
-        ) : (
-          'Loading…'
-        )}
-      </p>
 
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Quick actions</h2>
