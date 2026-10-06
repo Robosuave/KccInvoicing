@@ -136,6 +136,8 @@ export default function InvoiceEditor() {
   // Tracks arrow-key navigation in the Company picker so auto-advance only
   // fires when an option is actually picked (not while arrowing on desktop).
   const companyArrowRef = useRef(false);
+  const custArrowRef = useRef(false);
+  const catArrowRef = useRef(false);
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
   const [lines, setLines] = useState<LineState[]>([newLine()]);
   const [discountMode, setDiscountMode] = useState<DiscountMode>('none');
@@ -652,7 +654,10 @@ export default function InvoiceEditor() {
       return [...ls.slice(0, i + 1), nl, ...ls.slice(i + 1)];
     });
     markDirty();
-    setTimeout(() => document.getElementById(`desc-${nl.key}`)?.focus(), 50);
+    setTimeout(() => {
+      const targetId = catalog.length > 0 ? `cat-${nl.key}` : `qty-${nl.key}`;
+      document.getElementById(targetId)?.focus();
+    }, 50);
   };
 
   const removeLine = (key: string) => {
@@ -754,6 +759,37 @@ export default function InvoiceEditor() {
       actions.scrollIntoView({ behavior: 'smooth', block: 'start' });
       const printBtn = actions.querySelector<HTMLElement>('[data-action="print"]');
       printBtn?.focus({ preventScroll: true });
+    }
+  };
+
+  /* Standard invoice Enter flow: invoice date -> catalog item -> quantity,
+     skipping description / unit / unit price (auto-filled from the catalog). */
+  const standardEnterToNext = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key !== 'Enter') return;
+    const target = e.target as HTMLElement;
+    if (target.tagName !== 'INPUT') return;
+    const id = (target as HTMLInputElement).id;
+    const flow: string[] = ['inv-date'];
+    for (const l of lines) {
+      if (catalog.length > 0) flow.push(`cat-${l.key}`);
+      flow.push(`qty-${l.key}`);
+    }
+    flow.push('add-line-btn');
+    const idx = flow.indexOf(id);
+    if (idx === -1) return;
+    e.preventDefault();
+    for (let i = idx + 1; i < flow.length; i++) {
+      const el = document.getElementById(flow[i]) as HTMLElement | null;
+      if (el && !(el as HTMLInputElement | HTMLSelectElement).disabled && el.offsetParent !== null) {
+        el.focus({ preventScroll: true });
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        try {
+          if (el instanceof HTMLInputElement && el.type === 'text') el.select();
+        } catch {
+          /* select() unsupported for this input type — focus is enough */
+        }
+        return;
+      }
     }
   };
 
@@ -893,7 +929,7 @@ export default function InvoiceEditor() {
           <fieldset
             disabled={isIssued}
             style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
-            onKeyDown={template === 'commission' ? commissionEnterToNext : undefined}
+            onKeyDown={template === 'commission' ? commissionEnterToNext : standardEnterToNext}
           >
           <div className="card">
             <div className="form-row">
@@ -901,7 +937,26 @@ export default function InvoiceEditor() {
                 <Field label="Customer *" htmlFor="inv-cust" error={fieldError('customer')}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <SelectField id="inv-cust" value={customerId} onChange={touch((e: React.ChangeEvent<HTMLSelectElement>) => setCustomerId(e.target.value))}>
+                      <SelectField
+                        id="inv-cust"
+                        value={customerId}
+                        onKeyDown={(e) => {
+                          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') custArrowRef.current = true;
+                        }}
+                        onChange={(e) => {
+                          const viaArrows = custArrowRef.current;
+                          custArrowRef.current = false;
+                          touch((ev: React.ChangeEvent<HTMLSelectElement>) => setCustomerId(ev.target.value))(e);
+                          if (!viaArrows && e.target.value && lines.length > 0) {
+                            // Picked from the dropdown: jump straight to the first line's catalog item.
+                            requestAnimationFrame(() => {
+                              const first = lines[0];
+                              const targetId = catalog.length > 0 ? `cat-${first.key}` : `qty-${first.key}`;
+                              document.getElementById(targetId)?.focus({ preventScroll: true });
+                            });
+                          }
+                        }}
+                      >
                         <option value="">Choose a customer…</option>
                         {customers.map((c) => (
                           <option key={c.id} value={c.id}>
@@ -1074,8 +1129,21 @@ export default function InvoiceEditor() {
                     <SelectField
                       id={`cat-${l.key}`}
                       value=""
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') catArrowRef.current = true;
+                      }}
                       onChange={(e) => {
-                        if (e.target.value) applyCatalogItem(l.key, e.target.value);
+                        const viaArrows = catArrowRef.current;
+                        catArrowRef.current = false;
+                        if (e.target.value) {
+                          applyCatalogItem(l.key, e.target.value);
+                          if (!viaArrows) {
+                            // Item picked: jump straight to quantity, skipping the auto-filled fields.
+                            requestAnimationFrame(() => {
+                              document.getElementById(`qty-${l.key}`)?.focus({ preventScroll: true });
+                            });
+                          }
+                        }
                         e.target.value = '';
                       }}
                     >
@@ -1099,7 +1167,7 @@ export default function InvoiceEditor() {
                 </Field>
                 <div className="form-row">
                   <Field label="Quantity *" htmlFor={`qty-${l.key}`}>
-                    <TextField id={`qty-${l.key}`} inputMode="decimal" value={l.quantity} onChange={(e) => updateLine(l.key, { quantity: e.target.value })} />
+                    <TextField id={`qty-${l.key}`} inputMode="decimal" enterKeyHint="next" value={l.quantity} onChange={(e) => updateLine(l.key, { quantity: e.target.value })} />
                   </Field>
                   <Field label="Unit" htmlFor={`unit-${l.key}`}>
                     <TextField id={`unit-${l.key}`} value={l.unitLabel} onChange={(e) => updateLine(l.key, { unitLabel: e.target.value })} />
@@ -1120,7 +1188,7 @@ export default function InvoiceEditor() {
                 )}
               </div>
             ))}
-            <Button variant="secondary" onClick={() => addLine()}>
+            <Button variant="secondary" id="add-line-btn" onClick={() => addLine()}>
               Add line item
             </Button>
           </div>
