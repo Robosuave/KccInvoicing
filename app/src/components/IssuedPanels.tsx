@@ -7,7 +7,7 @@ import { listPayments, recordPayment, reversePayment, newIdempotencyKey } from '
 import { listAuditEvents } from '../data/audit';
 import { getCustomer } from '../data/customers';
 import { listEmailsForInvoice, sendInvoiceEmail, emailStatusLabel } from '../data/email';
-import TimesheetCard, { TimesheetAttachLabel } from './TimesheetCard';
+import TimesheetCard, { TimesheetAttachButton, useTimesheet } from './TimesheetCard';
 import type { InvoiceEmail } from '../db/types';
 import { balanceDue } from '../lib/money';
 import { paymentStatusOf, type AuditEvent, type Invoice, type Payment, type PaymentMethod } from '../db/types';
@@ -36,6 +36,9 @@ export default function IssuedPanels({ invoiceId, onChanged, openEmailSignal }: 
   const { workspace, activeBusiness, isOwner } = useBusiness();
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const ts = useTimesheet(invoiceId, (p) =>
+    setInvoice((inv) => (inv ? { ...inv, timesheet_path: p } : inv)),
+  );
   const [snapshot, setSnapshot] = useState<InvoiceSnapshot | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [audit, setAudit] = useState<AuditEvent[]>([]);
@@ -282,7 +285,7 @@ export default function IssuedPanels({ invoiceId, onChanged, openEmailSignal }: 
             <Button size="sm" onClick={openEmailModal}>Email invoice</Button>
           )}
           {!isVoid && (
-            <TimesheetAttachLabel invoiceId={invoiceId} timesheetPath={invoice?.timesheet_path ?? null} />
+            <TimesheetAttachButton ts={ts} />
           )}
         </div>
         {!isVoid && !emailConfigured && isOwner && (
@@ -333,10 +336,7 @@ export default function IssuedPanels({ invoiceId, onChanged, openEmailSignal }: 
         </div>
       )}
 
-      <TimesheetCard
-        invoiceId={invoiceId}
-        onTimesheetChange={(p) => setInvoice((inv) => (inv ? { ...inv, timesheet_path: p } : inv))}
-      />
+      <TimesheetCard ts={ts} />
 
       {emailOpen && (
         <Modal title={`Email invoice #${invoice.invoice_number}`} onClose={() => setEmailOpen(false)}>

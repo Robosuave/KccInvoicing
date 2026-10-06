@@ -265,6 +265,19 @@ textarea.input { min-height: 96px; resize: vertical; }
 /* Tighter field spacing inside line items (standard invoices). */
 .line-item .field { margin-bottom: 10px; }
 .line-item .form-row { gap: 10px; }
+/* Visually-hidden file input nested inside its <label> (implicit association). */
+.ts-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Compact quantity / unit / price row: narrow fixed widths, not full-width fields. */
 .line-amounts { display: flex; gap: 10px; align-items: flex-start; }
 .line-amounts .field { margin-bottom: 10px; min-width: 0; }

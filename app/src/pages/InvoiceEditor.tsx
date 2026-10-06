@@ -9,7 +9,7 @@ import { centsToDollars, dollarsToCents, multiplyQuantity, percentOf, pctToRate 
 import { formatPhone, isValidPhone, PHONE_HINT } from '../lib/phone';
 import { getLogoUrl } from '../data/businesses';
 import IssuedPanels from '../components/IssuedPanels';
-import TimesheetCard, { TimesheetAttachLabel } from '../components/TimesheetCard';
+import TimesheetCard, { TimesheetAttachButton, useTimesheet } from '../components/TimesheetCard';
 import { generateAndStoreIssuedPdf, type InvoiceStyle } from '../pdf/service';
 
 /** Extract a human-readable message from anything thrown — Supabase/PostgREST
@@ -481,7 +481,7 @@ export default function InvoiceEditor() {
 
   const emailConfigured = Boolean((activeBusiness?.email_from || '').trim());
   const [emailSignal, setEmailSignal] = useState(0);
-  const [timesheetPath, setTimesheetPath] = useState<string | null>(null);
+  const ts = useTimesheet(draftId);
 
   const doSave = useCallback(
     async (manual: boolean): Promise<string | null> => {
@@ -882,7 +882,7 @@ export default function InvoiceEditor() {
         </Button>
       )}
       {!isIssued && draftId && (
-        <TimesheetAttachLabel invoiceId={draftId} timesheetPath={timesheetPath} />
+        <TimesheetAttachButton ts={ts} />
       )}
       {!isIssued && (
         <span style={{ fontSize: 13, color: 'var(--muted)' }}>
@@ -1220,34 +1220,46 @@ export default function InvoiceEditor() {
             </Button>
           </div>
 
-          {!isIssued && draftId && <TimesheetCard invoiceId={draftId} onTimesheetChange={setTimesheetPath} />}
+          {!isIssued && draftId && <TimesheetCard ts={ts} />}
 
           <div className="card">
             <h2 style={{ marginTop: 0 }}>Discounts, tax &amp; totals</h2>
-            <Field label="Discount type" htmlFor="disc-mode">
-              <SelectField id="disc-mode" value={discountMode} onChange={touch((e) => setDiscountMode(e.target.value as DiscountMode))}>
-                <option value="none">No discount</option>
-                <option value="invoice">Invoice discount (%)</option>
-                <option value="lines">Per-line discounts ($)</option>
-              </SelectField>
-            </Field>
-            {discountMode === 'invoice' && (
-              <Field label="Invoice discount %" htmlFor="inv-disc" hint="Percent off the subtotal, e.g. 10">
-                <TextField id="inv-disc" inputMode="decimal" value={invoiceDiscountPct} onChange={touch((e) => setInvoiceDiscountPct(e.target.value))} />
-              </Field>
-            )}
-            <label className="checkbox-row">
-              <input type="checkbox" checked={useTax} onChange={touch((e) => setUseTax(e.target.checked))} />
-              Apply sales tax
-            </label>
-            {useTax && (
-              <Field label="Sales tax rate %" htmlFor="inv-tax" hint="e.g. 7 for 7%. Applied per line; grouped by rate on the invoice.">
-                <TextField id="inv-tax" inputMode="decimal" value={invoiceTaxPct} onChange={touch((e) => setInvoiceTaxPct(e.target.value))} />
-              </Field>
-            )}
-            <Field label="Shipping & handling $" htmlFor="inv-ship">
-              <TextField id="inv-ship" inputMode="decimal" value={shipping} onChange={touch((e) => setShipping(e.target.value))} placeholder="0.00" />
-            </Field>
+            <div className="line-amounts">
+              <div style={{ flex: '1 1 160px', maxWidth: 230, minWidth: 0 }}>
+                <Field label="Discount type" htmlFor="disc-mode">
+                  <SelectField id="disc-mode" value={discountMode} onChange={touch((e) => setDiscountMode(e.target.value as DiscountMode))}>
+                    <option value="none">No discount</option>
+                    <option value="invoice">Invoice discount (%)</option>
+                    <option value="lines">Per-line discounts ($)</option>
+                  </SelectField>
+                </Field>
+              </div>
+              {discountMode === 'invoice' && (
+                <div style={{ flex: '0 0 84px', minWidth: 0 }}>
+                  <Field label="Discount %" htmlFor="inv-disc">
+                    <TextField id="inv-disc" inputMode="decimal" value={invoiceDiscountPct} onChange={touch((e) => setInvoiceDiscountPct(e.target.value))} />
+                  </Field>
+                </div>
+              )}
+              <div style={{ flex: '0 0 130px', minWidth: 0 }}>
+                <Field label="Shipping & handling $" htmlFor="inv-ship">
+                  <TextField id="inv-ship" inputMode="decimal" value={shipping} onChange={touch((e) => setShipping(e.target.value))} placeholder="0.00" />
+                </Field>
+              </div>
+            </div>
+            <div className="line-amounts" style={{ alignItems: 'center' }}>
+              <label className="checkbox-row" style={{ marginBottom: 10 }}>
+                <input type="checkbox" checked={useTax} onChange={touch((e) => setUseTax(e.target.checked))} />
+                Apply sales tax
+              </label>
+              {useTax && (
+                <div style={{ flex: '0 0 84px', minWidth: 0 }}>
+                  <Field label="Tax %" htmlFor="inv-tax">
+                    <TextField id="inv-tax" inputMode="decimal" value={invoiceTaxPct} onChange={touch((e) => setInvoiceTaxPct(e.target.value))} />
+                  </Field>
+                </div>
+              )}
+            </div>
 
             {totals && (
               <div className="totals-box" aria-live="polite">
