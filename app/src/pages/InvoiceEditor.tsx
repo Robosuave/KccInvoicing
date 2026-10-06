@@ -668,16 +668,6 @@ export default function InvoiceEditor() {
     markDirty();
   };
 
-  const duplicateLine = (key: string) => {
-    setLines((ls) => {
-      const i = ls.findIndex((l) => l.key === key);
-      if (i < 0) return ls;
-      const copy = { ...ls[i], key: Math.random().toString(36).slice(2) };
-      return [...ls.slice(0, i + 1), copy, ...ls.slice(i + 1)];
-    });
-    markDirty();
-  };
-
   const moveLine = (key: string, dir: -1 | 1) => {
     setLines((ls) => {
       const i = ls.findIndex((l) => l.key === key);
@@ -1139,7 +1129,6 @@ export default function InvoiceEditor() {
                   <div className="btn-row">
                     <Button variant="ghost" size="sm" onClick={() => moveLine(l.key, -1)} aria-label={`Move line ${i + 1} up`} disabled={i === 0}>↑</Button>
                     <Button variant="ghost" size="sm" onClick={() => moveLine(l.key, 1)} aria-label={`Move line ${i + 1} down`} disabled={i === lines.length - 1}>↓</Button>
-                    <Button variant="ghost" size="sm" onClick={() => duplicateLine(l.key)}>Duplicate</Button>
                     <Button variant="ghost" size="sm" onClick={() => removeLine(l.key)} disabled={lines.length === 1}>Remove</Button>
                   </div>
                 </div>
