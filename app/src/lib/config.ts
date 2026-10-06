@@ -10,7 +10,7 @@ export const APP_NAME = 'My Business Invoice Desk';
  * reset request can originate from a preview build or local dev server while
  * the emailed link must always open the live app.
  */
-export const APP_URL = 'https://kcc-invoicing.vercel.app';
+export const APP_URL = 'https://invoice.kalekycomputer.com';
 
 export const DEFAULT_CURRENCY = 'USD';
 
