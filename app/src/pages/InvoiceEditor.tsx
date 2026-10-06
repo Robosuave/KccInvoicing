@@ -9,6 +9,7 @@ import { centsToDollars, dollarsToCents, multiplyQuantity, percentOf, pctToRate 
 import { formatPhone, isValidPhone, PHONE_HINT } from '../lib/phone';
 import { getLogoUrl } from '../data/businesses';
 import IssuedPanels from '../components/IssuedPanels';
+import TimesheetCard from '../components/TimesheetCard';
 import { generateAndStoreIssuedPdf, type InvoiceStyle } from '../pdf/service';
 
 /** Extract a human-readable message from anything thrown — Supabase/PostgREST
@@ -1128,6 +1129,8 @@ export default function InvoiceEditor() {
               Add line item
             </Button>
           </div>
+
+          {!isIssued && draftId && <TimesheetCard invoiceId={draftId} />}
 
           <div className="card">
             <h2 style={{ marginTop: 0 }}>Discounts, tax &amp; totals</h2>

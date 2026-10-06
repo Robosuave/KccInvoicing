@@ -7,7 +7,7 @@ import { listPayments, recordPayment, reversePayment, newIdempotencyKey } from '
 import { listAuditEvents } from '../data/audit';
 import { getCustomer } from '../data/customers';
 import { listEmailsForInvoice, sendInvoiceEmail, emailStatusLabel } from '../data/email';
-import { uploadTimesheet, removeTimesheet, timesheetDownloadUrl } from '../data/attachments';
+import TimesheetCard from './TimesheetCard';
 import type { InvoiceEmail } from '../db/types';
 import { balanceDue } from '../lib/money';
 import { paymentStatusOf, type AuditEvent, type Invoice, type Payment, type PaymentMethod } from '../db/types';
@@ -63,9 +63,6 @@ export default function IssuedPanels({ invoiceId, onChanged, openEmailSignal }: 
   const [emailMessage, setEmailMessage] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
   const [includeTimesheet, setIncludeTimesheet] = useState(true);
-  const [tsBusy, setTsBusy] = useState(false);
-  const [tsError, setTsError] = useState<string | null>(null);
-  const tsFileRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
     if (!workspace || !activeBusiness) return;
@@ -161,50 +158,6 @@ export default function IssuedPanels({ invoiceId, onChanged, openEmailSignal }: 
       setEmailError(e instanceof Error ? e.message : 'Could not send the email.');
     } finally {
       setBusy(null);
-    }
-  };
-
-  const doUploadTimesheet = async (file: File | undefined) => {
-    if (!file || !invoice || !workspace) return;
-    setTsError(null);
-    setTsBusy(true);
-    try {
-      const path = await uploadTimesheet(workspace.id, invoice, file);
-      setInvoice({ ...invoice, timesheet_path: path });
-      onChanged();
-    } catch (e) {
-      setTsError(e instanceof Error ? e.message : 'Upload failed.');
-    } finally {
-      setTsBusy(false);
-    }
-  };
-
-  const doRemoveTimesheet = async () => {
-    if (!invoice || !workspace) return;
-    if (!window.confirm('Remove the timesheet from this invoice?')) return;
-    setTsError(null);
-    setTsBusy(true);
-    try {
-      await removeTimesheet(workspace.id, invoice);
-      setInvoice({ ...invoice, timesheet_path: null });
-      onChanged();
-    } catch (e) {
-      setTsError(e instanceof Error ? e.message : 'Remove failed.');
-    } finally {
-      setTsBusy(false);
-    }
-  };
-
-  const doDownloadTimesheet = async () => {
-    if (!invoice?.timesheet_path) return;
-    setTsBusy(true);
-    try {
-      const url = await timesheetDownloadUrl(invoice.timesheet_path);
-      window.open(url, '_blank', 'noopener');
-    } catch (e) {
-      setTsError(e instanceof Error ? e.message : 'Download failed.');
-    } finally {
-      setTsBusy(false);
     }
   };
 
@@ -377,50 +330,10 @@ export default function IssuedPanels({ invoiceId, onChanged, openEmailSignal }: 
         </div>
       )}
 
-      {!isVoid && (
-        <div className="card">
-          <div className="btn-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0 }}>Attachments</h2>
-          </div>
-          {invoice.timesheet_path ? (
-            <div className="btn-row" style={{ alignItems: 'center' }}>
-              <span style={{ fontSize: 14 }}>
-                Timesheet PDF attached — it will be included when you email this invoice.
-              </span>
-              <Button size="sm" variant="secondary" onClick={doDownloadTimesheet} disabled={tsBusy}>View</Button>
-              <Button size="sm" variant="secondary" onClick={() => tsFileRef.current?.click()} disabled={tsBusy}>Replace</Button>
-              <Button size="sm" variant="ghost" onClick={doRemoveTimesheet} disabled={tsBusy}>Remove</Button>
-            </div>
-          ) : (
-            <div className="btn-row" style={{ alignItems: 'center' }}>
-              <span style={{ fontSize: 14, color: 'var(--muted)' }}>No timesheet attached.</span>
-              <Button size="sm" variant="secondary" onClick={() => tsFileRef.current?.click()} disabled={tsBusy}>
-                {tsBusy ? 'Uploading…' : 'Attach timesheet PDF'}
-              </Button>
-            </div>
-          )}
-          <input
-            ref={tsFileRef}
-            type="file"
-            accept="application/pdf,.pdf"
-            // Visually hidden but still rendered: some mobile browsers won't
-            // open the picker for a display:none input triggered by script.
-            style={{
-              position: 'absolute',
-              width: 1,
-              height: 1,
-              padding: 0,
-              margin: -1,
-              overflow: 'hidden',
-              clip: 'rect(0, 0, 0, 0)',
-              whiteSpace: 'nowrap',
-              border: 0,
-            }}
-            onChange={(e) => { doUploadTimesheet(e.target.files?.[0]); e.target.value = ''; }}
-          />
-          {tsError && <Alert kind="error">{tsError}</Alert>}
-        </div>
-      )}
+      <TimesheetCard
+        invoiceId={invoiceId}
+        onTimesheetChange={(p) => setInvoice((inv) => (inv ? { ...inv, timesheet_path: p } : inv))}
+      />
 
       {emailOpen && (
         <Modal title={`Email invoice #${invoice.invoice_number}`} onClose={() => setEmailOpen(false)}>
