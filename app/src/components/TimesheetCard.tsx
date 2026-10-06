@@ -16,6 +16,8 @@ export interface TimesheetState {
   error: string | null;
   uploadFile: (file: File | undefined) => Promise<void>;
   removeFile: () => Promise<void>;
+  /** Called when we detect the page reloaded while the file picker was open. */
+  notePickerReload: () => void;
 }
 
 /**
@@ -106,7 +108,34 @@ export function useTimesheet(
     }
   }, [invoice, workspace, attached, applyPath]);
 
-  return { attachedPath: attached, busy, status, error, uploadFile, removeFile };
+  const notePickerReload = useCallback(() => {
+    setStatus(null);
+    setError(
+      'The page reloaded while the file picker was open, so the selection was lost. ' +
+        'Please tap Attach PDF and try again — and if your phone asks, choose "Select" to confirm the file.',
+    );
+  }, []);
+
+  return { attachedPath: attached, busy, status, error, uploadFile, removeFile, notePickerReload };
+}
+
+/** sessionStorage key tracking that the file picker was opened. */
+const PICKER_FLAG = 'tsPickerOpen';
+
+function markPickerOpened() {
+  try {
+    sessionStorage.setItem(PICKER_FLAG, Date.now().toString());
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearPickerFlag() {
+  try {
+    sessionStorage.removeItem(PICKER_FLAG);
+  } catch {
+    /* ignore */
+  }
 }
 
 /**
@@ -116,16 +145,33 @@ export function useTimesheet(
  * without scrolling.
  */
 export function TimesheetAttachButton({ ts }: { ts: TimesheetState }) {
+  // If the page reloaded while the file picker was open (phone dropped the
+  // tab in the background), the selection was lost — say so plainly.
+  useEffect(() => {
+    let openedAt = 0;
+    try {
+      openedAt = Number(sessionStorage.getItem(PICKER_FLAG) ?? 0);
+      clearPickerFlag();
+    } catch {
+      /* ignore */
+    }
+    if (openedAt > 0 && Date.now() - openedAt < 5 * 60 * 1000) {
+      ts.notePickerReload();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 4, maxWidth: '100%' }}>
       <label className="btn btn-secondary btn-sm" style={{ opacity: ts.busy ? 0.7 : 1 }}>
         {ts.busy ? 'Uploading…' : ts.attachedPath ? '✓ PDF attached' : 'Attach PDF'}
         <input
           type="file"
-          accept="application/pdf,.pdf"
           className="ts-file-input"
           disabled={ts.busy}
+          onClick={markPickerOpened}
           onChange={(e) => {
+            clearPickerFlag();
             void ts.uploadFile(e.target.files?.[0]);
             e.target.value = '';
           }}
@@ -181,6 +227,9 @@ export default function TimesheetCard({ ts }: { ts: TimesheetState }) {
         </p>
       )}
       {ts.error && <Alert kind="error">{ts.error}</Alert>}
+      {ts.status && !ts.error && (
+        <p style={{ fontSize: 14, color: 'var(--muted)', margin: '8px 0 0' }}>{ts.status}</p>
+      )}
     </div>
   );
 }
