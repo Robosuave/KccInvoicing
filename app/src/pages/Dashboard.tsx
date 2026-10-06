@@ -88,15 +88,6 @@ export default function Dashboard() {
         <Stat label="Customers" value={String(stats.customers)} />
       </div>
 
-      <details className="card card-mini no-print">
-        <summary>What each number means</summary>
-        <ul style={{ margin: '8px 0 0', paddingLeft: 18, color: 'var(--muted)', fontSize: 12 }}>
-          <li>Draft invoices are works in progress — they are not finalized yet.</li>
-          <li>Draft total is the sum of draft amounts. It is not revenue.</li>
-          <li>Issued invoices are finalized (printing / saving a PDF issues the invoice). Billed total is the sum of issued amounts.</li>
-        </ul>
-      </details>
-
       {!statsLoading && (
         <div className="no-print" style={{ marginTop: 8 }}>
           <Link to="/invoices">
