@@ -9,7 +9,7 @@ import { centsToDollars, dollarsToCents, multiplyQuantity, percentOf, pctToRate 
 import { formatPhone, isValidPhone, PHONE_HINT } from '../lib/phone';
 import { getLogoUrl } from '../data/businesses';
 import IssuedPanels from '../components/IssuedPanels';
-import TimesheetCard from '../components/TimesheetCard';
+import TimesheetCard, { TimesheetAttachLabel } from '../components/TimesheetCard';
 import { generateAndStoreIssuedPdf, type InvoiceStyle } from '../pdf/service';
 
 /** Extract a human-readable message from anything thrown — Supabase/PostgREST
@@ -481,6 +481,7 @@ export default function InvoiceEditor() {
 
   const emailConfigured = Boolean((activeBusiness?.email_from || '').trim());
   const [emailSignal, setEmailSignal] = useState(0);
+  const [timesheetPath, setTimesheetPath] = useState<string | null>(null);
 
   const doSave = useCallback(
     async (manual: boolean): Promise<string | null> => {
@@ -880,6 +881,9 @@ export default function InvoiceEditor() {
           Email invoice
         </Button>
       )}
+      {!isIssued && draftId && (
+        <TimesheetAttachLabel invoiceId={draftId} timesheetPath={timesheetPath} />
+      )}
       {!isIssued && (
         <span style={{ fontSize: 13, color: 'var(--muted)' }}>
           Drafts autosave{invoiceNumber ? ` as invoice #${invoiceNumber}` : ''}.
@@ -1210,7 +1214,7 @@ export default function InvoiceEditor() {
             </Button>
           </div>
 
-          {!isIssued && draftId && <TimesheetCard invoiceId={draftId} />}
+          {!isIssued && draftId && <TimesheetCard invoiceId={draftId} onTimesheetChange={setTimesheetPath} />}
 
           <div className="card">
             <h2 style={{ marginTop: 0 }}>Discounts, tax &amp; totals</h2>

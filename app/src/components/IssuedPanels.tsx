@@ -7,7 +7,7 @@ import { listPayments, recordPayment, reversePayment, newIdempotencyKey } from '
 import { listAuditEvents } from '../data/audit';
 import { getCustomer } from '../data/customers';
 import { listEmailsForInvoice, sendInvoiceEmail, emailStatusLabel } from '../data/email';
-import TimesheetCard from './TimesheetCard';
+import TimesheetCard, { TimesheetAttachLabel } from './TimesheetCard';
 import type { InvoiceEmail } from '../db/types';
 import { balanceDue } from '../lib/money';
 import { paymentStatusOf, type AuditEvent, type Invoice, type Payment, type PaymentMethod } from '../db/types';
@@ -280,6 +280,9 @@ export default function IssuedPanels({ invoiceId, onChanged, openEmailSignal }: 
           <Button size="sm" variant="secondary" onClick={() => window.print()}>Print</Button>
           {!isVoid && emailConfigured && (
             <Button size="sm" onClick={openEmailModal}>Email invoice</Button>
+          )}
+          {!isVoid && (
+            <TimesheetAttachLabel invoiceId={invoiceId} timesheetPath={invoice?.timesheet_path ?? null} />
           )}
         </div>
         {!isVoid && !emailConfigured && isOwner && (

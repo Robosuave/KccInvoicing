@@ -23,9 +23,11 @@ export default function TimesheetCard({ invoiceId, onTimesheetChange }: {
     try {
       const { invoice: inv } = await getInvoice(invoiceId);
       setInvoice(inv);
+      onTimesheetChange?.(inv.timesheet_path ?? null);
     } catch {
       /* keep previous state */
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceId]);
 
   useEffect(() => { load(); }, [load]);
@@ -103,6 +105,7 @@ export default function TimesheetCard({ invoiceId, onTimesheetChange }: {
       )}
       <input
         ref={fileRef}
+        id={`ts-file-${invoiceId}`}
         type="file"
         accept="application/pdf,.pdf"
         // Visually hidden but still rendered: some mobile browsers won't
@@ -122,5 +125,26 @@ export default function TimesheetCard({ invoiceId, onTimesheetChange }: {
       />
       {error && <Alert kind="error">{error}</Alert>}
     </div>
+  );
+}
+
+/**
+ * Compact "Attach PDF" button that sits next to the Email invoice button.
+ * It's a <label> for the TimesheetCard's file input (native activation is the
+ * most reliable way to open the picker on mobile). The full card below still
+ * handles view/replace/remove.
+ */
+export function TimesheetAttachLabel({ invoiceId, timesheetPath }: {
+  invoiceId: string;
+  timesheetPath: string | null;
+}) {
+  return (
+    <label
+      htmlFor={`ts-file-${invoiceId}`}
+      className="btn btn-secondary btn-sm"
+      style={{ cursor: 'pointer', margin: 0 }}
+    >
+      {timesheetPath ? '✓ PDF attached' : 'Attach PDF'}
+    </label>
   );
 }
