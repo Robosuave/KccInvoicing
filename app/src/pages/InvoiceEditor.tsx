@@ -764,6 +764,10 @@ export default function InvoiceEditor() {
 
   /* Standard invoice Enter flow: invoice date -> catalog item -> quantity,
      skipping description / unit / unit price (auto-filled from the catalog). */
+  const blankDefaultQty = (key: string) => {
+    const line = lines.find((x) => x.key === key);
+    if (line && line.quantity === '1') updateLine(key, { quantity: '' });
+  };
   const standardEnterToNext = (e: React.KeyboardEvent<HTMLElement>) => {
     if (e.key !== 'Enter') return;
     const target = e.target as HTMLElement;
@@ -781,6 +785,7 @@ export default function InvoiceEditor() {
     for (let i = idx + 1; i < flow.length; i++) {
       const el = document.getElementById(flow[i]) as HTMLElement | null;
       if (el && !(el as HTMLInputElement | HTMLSelectElement).disabled && el.offsetParent !== null) {
+        if (flow[i].startsWith('qty-')) blankDefaultQty(flow[i].slice(4));
         el.focus({ preventScroll: true });
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         try {
@@ -952,6 +957,7 @@ export default function InvoiceEditor() {
                             requestAnimationFrame(() => {
                               const first = lines[0];
                               const targetId = catalog.length > 0 ? `cat-${first.key}` : `qty-${first.key}`;
+                              if (catalog.length === 0) blankDefaultQty(first.key);
                               document.getElementById(targetId)?.focus({ preventScroll: true });
                             });
                           }
@@ -1138,7 +1144,8 @@ export default function InvoiceEditor() {
                         if (e.target.value) {
                           applyCatalogItem(l.key, e.target.value);
                           if (!viaArrows) {
-                            // Item picked: jump straight to quantity, skipping the auto-filled fields.
+                            // Blank the untouched default quantity, then jump to it.
+                            blankDefaultQty(l.key);
                             requestAnimationFrame(() => {
                               document.getElementById(`qty-${l.key}`)?.focus({ preventScroll: true });
                             });
