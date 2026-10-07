@@ -358,7 +358,7 @@ textarea.input { min-height: 96px; resize: vertical; }
   .content { padding: 0; max-width: none; }
   .editor-layout { display: block !important; }
   .invoice-preview {
-    position: static; box-shadow: none; border: none; padding: 0;
+    position: static; box-shadow: none; border: none; padding: 10mm 12mm;
     font-size: 11px;
   }
   .invoice-preview h2 { font-size: 16px !important; margin-bottom: 2px !important; }
@@ -381,5 +381,5 @@ textarea.input { min-height: 96px; resize: vertical; }
   .inv-agentcols { gap: 10px; margin-bottom: 6px !important; font-size: 11px !important; }
   .inv-agentcols > div { font-size: 11px !important; }
   .inv-footer { margin-top: 8px !important; font-size: 10px !important; }
-  @page { size: Letter; margin: 10mm; }
+  @page { size: Letter; margin: 0; }
 }
