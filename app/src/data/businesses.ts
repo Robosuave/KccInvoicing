@@ -13,12 +13,12 @@ export async function ensureWorkspace(): Promise<Workspace> {
     .eq('user_id', user.id)
     .limit(1);
   if (mErr) throw mErr;
-  if (memberships && memberships.length > 0) {
-    return (memberships[0] as unknown as { workspaces: Workspace }).workspaces;
-  }
 
   // Agents invited via business_members don't need their own workspace —
   // return their assigned business's workspace instead of creating orphans.
+  // This is checked FIRST so an agent who previously ended up as owner of an
+  // empty orphan workspace (invite never redeemed) still lands in their
+  // assigned business once the invite is redeemed.
   const { data: bizMemberships } = await sb
     .from('business_members')
     .select('business_id, businesses!inner(workspace_id, workspaces(id, name, created_at))')
@@ -27,6 +27,10 @@ export async function ensureWorkspace(): Promise<Workspace> {
   if (bizMemberships && bizMemberships.length > 0) {
     const ws = (bizMemberships[0] as unknown as { businesses: { workspaces: Workspace } }).businesses.workspaces;
     return ws;
+  }
+
+  if (memberships && memberships.length > 0) {
+    return (memberships[0] as unknown as { workspaces: Workspace }).workspaces;
   }
 
   // NOTE: the id is generated client-side so the owner membership can be
