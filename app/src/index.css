@@ -147,6 +147,16 @@ textarea.input { min-height: 96px; resize: vertical; }
 
 .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
 
+/* Compact field widths (commission invoice money fields, date, etc.): dollar
+   fields get a fixed comfortable width instead of stretching; the % field is
+   narrower; .grow fields take the remaining space. Work inside .money-row
+   (flex) and plain .form-row; wrap on mobile. */
+.money-row { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-start; }
+.money-row .field { margin-bottom: 12px; }
+.field.money { flex: 0 0 160px; width: 160px; max-width: 100%; }
+.field.pct { flex: 0 0 100px; width: 100px; max-width: 100%; }
+.field.grow { flex: 1 1 220px; min-width: 0; }
+
 .checkbox-row { display: flex; align-items: center; gap: 10px; min-height: 46px; font-size: 15px; }
 .checkbox-row input { width: 20px; height: 20px; }
 

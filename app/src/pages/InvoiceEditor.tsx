@@ -960,9 +960,9 @@ export default function InvoiceEditor() {
             onKeyDown={template === 'commission' ? commissionEnterToNext : standardEnterToNext}
           >
           <div className="card">
-            <div className="form-row">
+            <div className="money-row">
               {template !== 'commission' && (
-                <Field label="Customer *" htmlFor="inv-cust" error={fieldError('customer')}>
+                <Field label="Customer *" htmlFor="inv-cust" error={fieldError('customer')} className="grow">
                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <SelectField
@@ -1012,7 +1012,7 @@ export default function InvoiceEditor() {
                 </Field>
               )}
               {template === 'commission' && (
-                <Field label="Company" htmlFor="inv-company" hint="Choose the title company or law firm — prints under the date on the invoice">
+                <Field label="Company" htmlFor="inv-company" hint="Choose the title company or law firm — prints under the date on the invoice" className="grow">
                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <SelectField
@@ -1058,7 +1058,7 @@ export default function InvoiceEditor() {
                   </div>
                 </Field>
               )}
-              <Field label="Invoice date *" htmlFor="inv-date" error={fieldError('invoiceDate')}>
+              <Field label="Invoice date *" htmlFor="inv-date" error={fieldError('invoiceDate')} className="money">
                 <TextField id="inv-date" type="date" value={invoiceDate} onChange={touch((e) => setInvoiceDate(e.target.value))} />
               </Field>
             </div>
@@ -1081,27 +1081,25 @@ export default function InvoiceEditor() {
                   <TextField id="com-agent2" enterKeyHint="next" value={secondAgentName} onChange={touch((e) => setSecondAgentName(e.target.value))} />
                 </Field>
               </div>
-              <div className="form-row">
-                <Field label="Sale price $ *" htmlFor="com-sale" error={fieldError('salePrice')}>
+              <div className="money-row">
+                <Field label="Sale price $ *" htmlFor="com-sale" error={fieldError('salePrice')} className="money">
                   <TextField id="com-sale" inputMode="decimal" enterKeyHint="next" value={salePrice} onChange={touch((e) => { commissionAmtManual.current = false; setSalePrice(e.target.value); })} placeholder="0.00" />
                 </Field>
-                <Field label="Real estate commission %" htmlFor="com-pct" error={fieldError('commissionPct')} hint="e.g. 3 for 3%">
+                <Field label="Real estate commission %" htmlFor="com-pct" error={fieldError('commissionPct')} hint="e.g. 3 for 3%" className="pct">
                   <TextField id="com-pct" inputMode="decimal" enterKeyHint="next" value={commissionPct} onChange={touch((e) => { commissionAmtManual.current = false; setCommissionPct(e.target.value); })} />
                 </Field>
-              </div>
-              <div className="form-row">
-                <Field label="Commission amount $ *" htmlFor="com-amt" error={fieldError('commissionAmt')} hint="Auto-filled from % — edit to override">
+                <Field label="Commission amount $ *" htmlFor="com-amt" error={fieldError('commissionAmt')} hint="Auto-filled from % — edit to override" className="money">
                   <TextField id="com-amt" inputMode="decimal" tabIndex={-1} value={commissionAmt} onChange={touch((e) => { commissionAmtManual.current = true; setCommissionAmt(e.target.value); })} placeholder="0.00" />
                 </Field>
-                <Field label="Processing fee $" htmlFor="com-fee">
+                <Field label="Processing fee $" htmlFor="com-fee" className="money">
                   <TextField id="com-fee" inputMode="decimal" tabIndex={-1} value={processingFee} onChange={touch((e) => setProcessingFee(e.target.value))} placeholder="295.00" />
                 </Field>
               </div>
-              <div className="form-row">
-                <Field label="Other charge $" htmlFor="com-other">
+              <div className="money-row">
+                <Field label="Other charge $" htmlFor="com-other" className="money">
                   <TextField id="com-other" inputMode="decimal" enterKeyHint="next" value={otherCharge} onChange={touch((e) => setOtherCharge(e.target.value))} placeholder="0.00" />
                 </Field>
-                <Field label="Other charge description" htmlFor="com-otherdesc" error={fieldError('otherChargeDesc')}>
+                <Field label="Other charge description" htmlFor="com-otherdesc" error={fieldError('otherChargeDesc')} className="grow">
                   <TextField id="com-otherdesc" enterKeyHint="done" value={otherChargeDesc} onChange={touch((e) => setOtherChargeDesc(e.target.value))} placeholder="What the other charge is for" />
                 </Field>
               </div>

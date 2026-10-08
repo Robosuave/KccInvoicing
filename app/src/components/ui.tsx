@@ -49,11 +49,12 @@ interface FieldProps {
   error?: string;
   children: ReactNode;
   htmlFor?: string;
+  className?: string;
 }
 
-export function Field({ label, hint, error, children, htmlFor }: FieldProps) {
+export function Field({ label, hint, error, children, htmlFor, className }: FieldProps) {
   return (
-    <div className={'field' + (error ? ' field-invalid' : '')}>
+    <div className={'field' + (error ? ' field-invalid' : '') + (className ? ' ' + className : '')}>
       <label htmlFor={htmlFor}>{label}</label>
       {children}
       {hint && !error && <div className="hint">{hint}</div>}
