@@ -19,14 +19,24 @@ export async function ensureWorkspace(): Promise<Workspace> {
   // This is checked FIRST so an agent who previously ended up as owner of an
   // empty orphan workspace (invite never redeemed) still lands in their
   // assigned business once the invite is redeemed.
-  const { data: bizMemberships } = await sb
+  const { data: bizMemberships, error: bErr } = await sb
     .from('business_members')
-    .select('business_id, businesses!inner(workspace_id, workspaces(id, name, created_at))')
+    .select('business_id, businesses!inner(workspace_id)')
     .eq('user_id', user.id)
     .limit(1);
+  if (bErr) throw bErr;
   if (bizMemberships && bizMemberships.length > 0) {
-    const ws = (bizMemberships[0] as unknown as { businesses: { workspaces: Workspace } }).businesses.workspaces;
-    return ws;
+    // Select the workspace directly: the nested workspaces(...) join can come
+    // back null under RLS (no workspaces SELECT policy for the agent), which
+    // used to crash refresh() on ws.id. The direct select fails loudly instead.
+    const workspaceId = (bizMemberships[0] as unknown as { businesses: { workspace_id: string } }).businesses.workspace_id;
+    const { data: ws, error: wsErr } = await sb
+      .from('workspaces')
+      .select('id, name, created_at')
+      .eq('id', workspaceId)
+      .single();
+    if (wsErr) throw wsErr;
+    return ws as Workspace;
   }
 
   if (memberships && memberships.length > 0) {
