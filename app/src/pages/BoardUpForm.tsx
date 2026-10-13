@@ -137,7 +137,7 @@ function Stepper({
 }
 
 /**
- * Board-up job sheet form. Mirrors the standalone Quick Board-Up intake app:
+ * Board-up job sheet form. Mirrors the standalone Aquick Board-up intake app:
  * same fields in the same order, live material estimates, photo capture,
  * and Email-this-job / Text-this-job actions.
  */

@@ -161,7 +161,7 @@ export default function InvoiceEditor() {
 
   /* commission template (Dania Realty) */
   const [template, setTemplate] = useState<InvoiceTemplate>('standard');
-  /* board-up template (Quick Board-Up): the form owns its state; the editor
+  /* board-up template (Aquick Board-up): the form owns its state; the editor
      keeps the latest details for save/validate/preview. */
   const boardUpRef = useRef<BoardUpFormHandle | null>(null);
   const [boardUp, setBoardUp] = useState<BoardUpDetails | null>(null);

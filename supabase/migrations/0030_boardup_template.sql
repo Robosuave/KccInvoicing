@@ -1,4 +1,4 @@
--- Board-Up job template (Quick Board-Up company).
+-- Board-Up job template (Aquick Board-up company).
 -- Extends the template check constraints to include 'boardup', adds a JSONB
 -- column for the board-up job-sheet fields, and includes it in the frozen
 -- issuance snapshot. Idempotent: safe to run more than once.

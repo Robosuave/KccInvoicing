@@ -1,5 +1,5 @@
 /**
- * Board-Up job template (Quick Board-Up company): field definitions,
+ * Board-Up job template (Aquick Board-up company): field definitions,
  * material-estimate math, and the plain-text job summary used by
  * Email-this-job / Text-this-job.
  *
