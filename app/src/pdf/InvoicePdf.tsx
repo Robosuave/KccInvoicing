@@ -2,7 +2,10 @@ import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/render
 import type { InvoiceSnapshot, SnapshotLine } from '../lib/snapshot';
 import {
   BOARDUP_FORMULA_NOTE,
+  PHOTOS_PER_PDF_PAGE,
   asBoardUpDetails,
+  boardUpPhotoCaption,
+  chunkArray,
   estimateBoardUp,
 } from '../lib/boardup';
 
@@ -75,8 +78,10 @@ const styles = StyleSheet.create({
   buEstTitle: { fontSize: 13, fontWeight: 'bold', marginBottom: 2 },
   buEstMeta: { fontSize: 10.5 },
   buFormula: { fontSize: 8, color: '#5b6470', marginBottom: 10 },
-  buPhotoGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
-  buPhoto: { width: 170, height: 128, objectFit: 'cover', marginRight: 8, marginBottom: 8, borderWidth: 0.5, borderColor: '#d7dde4' },
+  buPhotoPage: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6, marginBottom: 2 },
+  buPhotoCell: { width: '48%', marginRight: '2%', marginBottom: 10 },
+  buPhotoImg: { width: '100%', height: 190, objectFit: 'cover' },
+  buPhotoCaption: { fontSize: 8, color: '#5b6470', marginTop: 3 },
 });
 
 function addressLines(b: InvoiceSnapshot['business']): string[] {
@@ -247,6 +252,8 @@ function CommissionBody({ snap }: { snap: InvoiceSnapshot }) {
 function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: string[] }) {
   const d = asBoardUpDetails(snap.boardup_details);
   const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors);
+  /** Property address printed under every photo, matching the source app. */
+  const caption = boardUpPhotoCaption(d);
   const rows: [string, string][] = [
     ['City', d.cityName],
     ['Customer', d.otherCustomerName],
@@ -284,11 +291,16 @@ function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: st
       {photoUrls.length > 0 && (
         <View>
           <Text style={styles.sectionLabel}>Photos ({photoUrls.length})</Text>
-          <View style={styles.buPhotoGrid}>
-            {photoUrls.map((url, i) => (
-              <Image key={i} src={url} style={styles.buPhoto} />
-            ))}
-          </View>
+          {chunkArray(photoUrls, PHOTOS_PER_PDF_PAGE).map((page, pi) => (
+            <View key={pi} style={styles.buPhotoPage} wrap={false}>
+              {page.map((url, i) => (
+                <View key={i} style={styles.buPhotoCell}>
+                  <Image src={url} style={styles.buPhotoImg} />
+                  {caption !== '' && <Text style={styles.buPhotoCaption}>{caption}</Text>}
+                </View>
+              ))}
+            </View>
+          ))}
         </View>
       )}
     </View>

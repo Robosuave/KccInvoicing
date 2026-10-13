@@ -2,6 +2,8 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import { Alert, Button, Field, SelectField, TextArea, TextField } from '../components/ui';
 import { digitsOnly, formatPhone, isValidPhone, PHONE_HINT } from '../lib/phone';
 import {
+  BOARDUP_CUSTOM_CITIES_KEY,
+  BOARDUP_CUSTOM_CITY_NAMES_KEY,
   BOARDUP_FORMULA_NOTE,
   CREW_OPTIONS,
   CITY_NAME_OPTIONS,
@@ -12,6 +14,9 @@ import {
   asBoardUpDetails,
   buildBoardUpSummary,
   estimateBoardUp,
+  loadCustomCities,
+  rememberCustomCity,
+  withCustomCities,
   type BoardUpDetails,
 } from '../lib/boardup';
 import { boardUpPhotoUrl, removeBoardUpPhoto, uploadBoardUpPhoto } from '../data/attachments';
@@ -51,9 +56,11 @@ interface Props {
 /** Tab/enter order, top to bottom, matching the source app. */
 const FLOW = [
   'bu-cityname',
+  'bu-cityname-other',
   'bu-othercustomer',
   'bu-street',
   'bu-city',
+  'bu-city-other',
   'bu-phone',
   'bu-case',
   'bu-officer',
@@ -144,6 +151,18 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
+  /** Cities added via "Other", remembered per device. */
+  const [customCityNames, setCustomCityNames] = useState<string[]>(() =>
+    loadCustomCities(BOARDUP_CUSTOM_CITY_NAMES_KEY),
+  );
+  const [customCities, setCustomCities] = useState<string[]>(() =>
+    loadCustomCities(BOARDUP_CUSTOM_CITIES_KEY),
+  );
+  /** Text typed into an "Other" box (committed on blur / save). */
+  const [otherCityNameText, setOtherCityNameText] = useState('');
+  const [otherCityText, setOtherCityText] = useState('');
+  const otherCityNameTextRef = useRef('');
+  const otherCityTextRef = useRef('');
   const fileRef = useRef<HTMLInputElement | null>(null);
   const photosRef = useRef<PhotoItem[]>([]);
   photosRef.current = photos;
@@ -168,6 +187,39 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       next.delete(key as string);
       return next;
     });
+  };
+
+  /**
+   * Commit a city typed into an "Other" box: remember it for future jobs and
+   * select it as the field value. Runs on blur and again at validate/save
+   * time so the value is never lost when jumping straight to Save.
+   */
+  const commitOtherCityTexts = () => {
+    if (disabled) return;
+    const withPhotos = (d: BoardUpDetails): BoardUpDetails => ({
+      ...d,
+      photos: photosRef.current.map((p) => p.path),
+    });
+    const nameText = otherCityNameTextRef.current.trim();
+    if (detailsRef.current.cityName === 'Other' && nameText !== '') {
+      setCustomCityNames(rememberCustomCity(BOARDUP_CUSTOM_CITY_NAMES_KEY, nameText, CITY_NAME_OPTIONS));
+      const next = withPhotos({ ...detailsRef.current, cityName: nameText });
+      detailsRef.current = next;
+      setF(next);
+      onChange(next);
+      otherCityNameTextRef.current = '';
+      setOtherCityNameText('');
+    }
+    const cityText = otherCityTextRef.current.trim();
+    if (detailsRef.current.city === 'Other' && cityText !== '') {
+      setCustomCities(rememberCustomCity(BOARDUP_CUSTOM_CITIES_KEY, cityText, CITY_OPTIONS));
+      const next = withPhotos({ ...detailsRef.current, city: cityText });
+      detailsRef.current = next;
+      setF(next);
+      onChange(next);
+      otherCityTextRef.current = '';
+      setOtherCityText('');
+    }
   };
 
   // Resolve view URLs for photos already stored on the job.
@@ -197,28 +249,39 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     [f.windows, f.doors, f.sliders, f.garageDoors],
   );
 
+  const cityNameOptions = useMemo(
+    () => withCustomCities(CITY_NAME_OPTIONS, customCityNames),
+    [customCityNames],
+  );
+  const cityOptions = useMemo(() => withCustomCities(CITY_OPTIONS, customCities), [customCities]);
+
   const fieldError = (key: string) => (invalidFields.has(key) ? 'This field is required.' : undefined);
 
   const validate = (): { errors: string[]; invalid: string[] } => {
+    commitOtherCityTexts();
+    const cur = detailsRef.current;
     const errs: string[] = [];
     const invalid: string[] = [];
-    if (!f.cityName) {
+    if (!cur.cityName) {
       errs.push('Choose a city name.');
       invalid.push('cityName');
+    } else if (cur.cityName === 'Other') {
+      errs.push('Type the new city name.');
+      invalid.push('cityName');
     }
-    if (!f.streetAddress.trim()) {
+    if (!cur.streetAddress.trim()) {
       errs.push('Street address is required.');
       invalid.push('streetAddress');
     }
-    if (f.phone.trim() && !isValidPhone(f.phone)) {
+    if (cur.phone.trim() && !isValidPhone(cur.phone)) {
       errs.push(`Phone number format is not valid — ${PHONE_HINT}.`);
       invalid.push('phone');
     }
-    if (f.textTo.trim() && !isValidPhone(f.textTo)) {
+    if (cur.textTo.trim() && !isValidPhone(cur.textTo)) {
       errs.push(`Text-to phone number format is not valid — ${PHONE_HINT}.`);
       invalid.push('textTo');
     }
-    if (f.emailTo.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.emailTo.trim())) {
+    if (cur.emailTo.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cur.emailTo.trim())) {
       errs.push('Email-to address is not valid.');
       invalid.push('emailTo');
     }
@@ -370,16 +433,39 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
           id="bu-cityname"
           value={f.cityName}
           disabled={disabled}
-          onChange={(e) => set('cityName', e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v !== 'Other') {
+              otherCityNameTextRef.current = '';
+              setOtherCityNameText('');
+            }
+            set('cityName', v);
+          }}
         >
           <option value="">Select a city…</option>
-          {CITY_NAME_OPTIONS.map((o) => (
+          {cityNameOptions.map((o) => (
             <option key={o} value={o}>
               {o}
             </option>
           ))}
         </SelectField>
       </Field>
+      {!disabled && f.cityName === 'Other' && (
+        <Field label="New city name" htmlFor="bu-cityname-other" error={fieldError('cityName')}>
+          <TextField
+            id="bu-cityname-other"
+            enterKeyHint="next"
+            value={otherCityNameText}
+            disabled={disabled}
+            onChange={(e) => {
+              otherCityNameTextRef.current = e.target.value;
+              setOtherCityNameText(e.target.value);
+            }}
+            onBlur={() => commitOtherCityTexts()}
+            placeholder="Type the new city name"
+          />
+        </Field>
+      )}
 
       <Field label="Other – customer name" htmlFor="bu-othercustomer">
         <TextField
@@ -404,15 +490,43 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       </Field>
 
       <Field label="City" htmlFor="bu-city">
-        <SelectField id="bu-city" value={f.city} disabled={disabled} onChange={(e) => set('city', e.target.value)}>
+        <SelectField
+          id="bu-city"
+          value={f.city}
+          disabled={disabled}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v !== 'Other') {
+              otherCityTextRef.current = '';
+              setOtherCityText('');
+            }
+            set('city', v);
+          }}
+        >
           <option value="">Select a city…</option>
-          {CITY_OPTIONS.map((o) => (
+          {cityOptions.map((o) => (
             <option key={o} value={o}>
               {o}
             </option>
           ))}
         </SelectField>
       </Field>
+      {!disabled && f.city === 'Other' && (
+        <Field label="New city name" htmlFor="bu-city-other">
+          <TextField
+            id="bu-city-other"
+            enterKeyHint="next"
+            value={otherCityText}
+            disabled={disabled}
+            onChange={(e) => {
+              otherCityTextRef.current = e.target.value;
+              setOtherCityText(e.target.value);
+            }}
+            onBlur={() => commitOtherCityTexts()}
+            placeholder="Type the new city name"
+          />
+        </Field>
+      )}
 
       <Field label="Phone number" htmlFor="bu-phone" error={fieldError('phone')} hint={PHONE_HINT}>
         <TextField

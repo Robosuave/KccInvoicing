@@ -1,7 +1,10 @@
 import type { Business } from '../db/types';
 import {
   BOARDUP_FORMULA_NOTE,
+  PHOTOS_PER_PDF_PAGE,
   asBoardUpDetails,
+  boardUpPhotoCaption,
+  chunkArray,
   estimateBoardUp,
   type BoardUpDetails,
 } from '../lib/boardup';
@@ -41,6 +44,8 @@ export default function BoardUpPreviewBody({
 }) {
   const d = asBoardUpDetails(details);
   const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors);
+  /** Property address captioned under every photo, matching the source app. */
+  const caption = boardUpPhotoCaption(d);
   return (
     <div className="invoice-preview" aria-label="Board-up job preview">
       <div className="inv-head">
@@ -137,16 +142,25 @@ export default function BoardUpPreviewBody({
       {photos.length > 0 && (
         <div style={{ marginTop: 12 }}>
           <strong style={{ fontSize: 15 }}>Photos ({photos.length})</strong>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
-            {photos.map((p) => (
-              <img
-                key={p.path}
-                src={p.url}
-                alt="Job photo"
-                style={{ width: 220, height: 165, objectFit: 'cover', borderRadius: 6, border: '1px solid #ddd' }}
-              />
-            ))}
-          </div>
+          {chunkArray(photos, PHOTOS_PER_PDF_PAGE).map((page, pi) => (
+            <div
+              key={pi}
+              style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6, breakInside: 'avoid' }}
+            >
+              {page.map((p) => (
+                <div key={p.path} style={{ width: 'calc(50% - 4px)' }}>
+                  <img
+                    src={p.url}
+                    alt="Job photo"
+                    style={{ width: '100%', height: 165, objectFit: 'cover', borderRadius: 6, border: '1px solid #ddd' }}
+                  />
+                  {caption !== '' && (
+                    <div style={{ fontSize: 11, color: '#5b6470', marginTop: 2 }}>{caption}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       )}
 

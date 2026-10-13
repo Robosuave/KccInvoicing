@@ -3,8 +3,12 @@ import {
   BOARDUP_FORMULA_NOTE,
   EMPTY_BOARDUP,
   asBoardUpDetails,
+  boardUpPhotoCaption,
   buildBoardUpSummary,
+  chunkArray,
   estimateBoardUp,
+  rememberCustomCity,
+  withCustomCities,
 } from '../lib/boardup';
 
 describe('estimateBoardUp', () => {
@@ -75,5 +79,82 @@ describe('buildBoardUpSummary', () => {
     expect(body).toContain('Openings: 4 windows, 0 doors, 0 sliders/patios, 0 garage doors');
     expect(body).toContain('Photos: 2 attached');
     expect(body).toContain('4x8 sheets');
+  });
+});
+
+describe('chunkArray (photo PDF paging)', () => {
+  it('splits 9 photos into 4/4/1 — matching 4-per-page', () => {
+    const photos = Array.from({ length: 9 }, (_, i) => `p${i}.jpg`);
+    const pages = chunkArray(photos, 4);
+    expect(pages).toHaveLength(3);
+    expect(pages[0]).toHaveLength(4);
+    expect(pages[1]).toHaveLength(4);
+    expect(pages[2]).toEqual(['p8.jpg']);
+  });
+
+  it('returns one chunk when items fit', () => {
+    expect(chunkArray(['a', 'b'], 4)).toEqual([['a', 'b']]);
+  });
+
+  it('returns [] for empty input or non-positive size', () => {
+    expect(chunkArray([], 4)).toEqual([]);
+    expect(chunkArray(['a'], 0)).toEqual([]);
+    expect(chunkArray(['a'], -2)).toEqual([]);
+  });
+});
+
+describe('withCustomCities', () => {
+  const builtIn = ['City of Hollywood', 'Other'];
+
+  it('appends a new city after the built-ins', () => {
+    expect(withCustomCities(builtIn, ['Coconut Creek'])).toEqual([
+      'City of Hollywood',
+      'Other',
+      'Coconut Creek',
+    ]);
+  });
+
+  it('dedupes case-insensitively against built-ins and trims whitespace', () => {
+    expect(withCustomCities(builtIn, ['city of hollywood', '  Coconut Creek  ', 'COCONUT creek'])).toEqual([
+      'City of Hollywood',
+      'Other',
+      'Coconut Creek',
+    ]);
+  });
+
+  it('drops empty strings', () => {
+    expect(withCustomCities(builtIn, ['', '   '])).toEqual(builtIn);
+  });
+});
+
+describe('rememberCustomCity', () => {
+  const builtIn = ['City of Hollywood', 'Other'];
+
+  it('returns the updated list for a genuinely new city (in-memory when storage is unavailable)', () => {
+    expect(rememberCustomCity('test-key', 'Coconut Creek', builtIn)).toEqual(['Coconut Creek']);
+  });
+
+  it('does not add a duplicate of a built-in option (case-insensitive)', () => {
+    expect(rememberCustomCity('test-key', 'CITY OF HOLLYWOOD', builtIn)).toEqual([]);
+  });
+
+  it('ignores blank names', () => {
+    expect(rememberCustomCity('test-key', '   ', builtIn)).toEqual([]);
+  });
+});
+
+describe('boardUpPhotoCaption', () => {
+  it('combines street and city', () => {
+    expect(boardUpPhotoCaption({ streetAddress: '123 Main St', city: 'Hollywood Florida' })).toBe(
+      '123 Main St, Hollywood Florida',
+    );
+  });
+
+  it('falls back to street only when city is blank', () => {
+    expect(boardUpPhotoCaption({ streetAddress: '123 Main St', city: '' })).toBe('123 Main St');
+  });
+
+  it('returns empty string when there is no address', () => {
+    expect(boardUpPhotoCaption({ streetAddress: '', city: '' })).toBe('');
   });
 });
