@@ -68,7 +68,7 @@ export interface SnapshotCommission {
 export interface InvoiceSnapshot {
   version: 2;
   invoice_number: string | null;
-  template: 'standard' | 'commission';
+  template: 'standard' | 'commission' | 'boardup';
   currency: string;
   invoice_date: string;
   due_date: string | null;
@@ -79,6 +79,8 @@ export interface InvoiceSnapshot {
   customer: SnapshotCustomer | null;
   lines: SnapshotLine[];
   commission: SnapshotCommission;
+  /** Board-Up job sheet fields (template 'boardup'); null otherwise. */
+  boardup_details: Record<string, unknown> | null;
   totals: {
     subtotal_cents: number;
     discount_cents: number;
@@ -109,7 +111,7 @@ export function asSnapshot(raw: unknown): InvoiceSnapshot | null {
  */
 export function buildLiveSnapshot(args: {
   invoice: {
-    invoice_number: string | null; template: 'standard' | 'commission'; currency: string;
+    invoice_number: string | null; template: 'standard' | 'commission' | 'boardup'; currency: string;
     invoice_date: string; due_date: string | null; po_number: string | null;
     service_date: string | null; service_period: string | null;
     subtotal_cents: number; discount_cents: number; tax_cents: number;
@@ -121,6 +123,7 @@ export function buildLiveSnapshot(args: {
     processing_fee_cents: number; other_charge_desc: string | null; other_charge_cents: number;
     agent_name: string | null; second_agent_name: string | null; property_address: string | null;
     property_city: string | null; property_state: string | null; property_zip: string | null;
+    boardup_details: Record<string, unknown> | null;
     issued_at: string | null;
   };
   business: {
@@ -166,6 +169,7 @@ export function buildLiveSnapshot(args: {
       property_state: inv.property_state,
       property_zip: inv.property_zip,
     },
+    boardup_details: inv.boardup_details ?? null,
     totals: {
       subtotal_cents: inv.subtotal_cents,
       discount_cents: inv.discount_cents,

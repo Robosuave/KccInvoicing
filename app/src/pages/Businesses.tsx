@@ -151,7 +151,7 @@ export default function Businesses() {
         default_email_subject: form.default_email_subject.trim() || null,
         default_email_message: form.default_email_message.trim() || null,
         email_from: form.email_from.trim() || null,
-        default_template: (form.default_template === 'commission' ? 'commission' : 'standard') as InvoiceTemplate,
+        default_template: (['standard', 'commission', 'boardup'].includes(form.default_template) ? form.default_template : 'standard') as InvoiceTemplate,
         invoice_style: ['classic', 'modern', 'compact'].includes(form.invoice_style) ? form.invoice_style : 'classic',
       };
       let business: Business;
@@ -332,6 +332,7 @@ export default function Businesses() {
               <SelectField id="b-template" value={form.default_template} onChange={set('default_template')}>
                 <option value="standard">Standard invoice (line items)</option>
                 <option value="commission">Commission / wire instructions</option>
+                <option value="boardup">Board-up job sheet</option>
               </SelectField>
             </Field>
             <Field label="Invoice visual style" htmlFor="b-style" hint="Used for generated PDFs.">

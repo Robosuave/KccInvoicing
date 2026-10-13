@@ -77,6 +77,10 @@ export default function Invoices() {
         notes: invoice.notes,
         terms: invoice.terms,
         template: invoice.template,
+        boardup_details:
+          invoice.template === 'boardup' && invoice.boardup_details
+            ? { ...(invoice.boardup_details as Record<string, unknown>), photos: [] }
+            : null,
         sale_price_cents: invoice.sale_price_cents,
         commission_pct: invoice.commission_pct,
         commission_amount_cents: invoice.commission_amount_cents,
@@ -221,7 +225,7 @@ export default function Invoices() {
                     {d.template === 'commission' && d.property_address ? (
                       <strong>{d.property_address}</strong>
                     ) : d.invoice_number ? (
-                      <strong>Invoice #{d.invoice_number}</strong>
+                      <strong>{d.template === 'boardup' ? 'Job' : 'Invoice'} #{d.invoice_number}</strong>
                     ) : (
                       <strong>{d.draft_key}</strong>
                     )}
@@ -230,8 +234,16 @@ export default function Invoices() {
                         Commission
                       </span>
                     )}
+                    {d.template === 'boardup' && (
+                      <span className="badge" style={{ marginLeft: 8 }}>
+                        Board-Up
+                      </span>
+                    )}
                     {d.template === 'commission' && d.invoice_number && (
                       <div style={{ fontSize: 13, color: 'var(--muted)' }}>#{d.invoice_number}</div>
+                    )}
+                    {d.template === 'boardup' && d.invoice_number && (
+                      <div style={{ fontSize: 13, color: 'var(--muted)' }}>Job #{d.invoice_number}</div>
                     )}
                     {d.revision_no > 1 && (
                       <span className="badge" style={{ marginLeft: 8 }}>

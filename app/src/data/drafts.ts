@@ -7,6 +7,7 @@ import {
   type CalcResult,
 } from '../lib/money';
 import type { Invoice, InvoiceLine, InvoiceTemplate } from '../db/types';
+import type { BoardUpDetails } from '../lib/boardup';
 
 export interface DraftLineInput {
   id?: string;
@@ -45,10 +46,26 @@ export interface DraftInput {
   property_city?: string | null;
   property_state?: string | null;
   property_zip?: string | null;
+  /** Board-Up job sheet fields (template 'boardup'); null/omitted otherwise. */
+  boardup_details?: BoardUpDetails | Record<string, unknown> | null;
   lines: DraftLineInput[];
 }
 
 function totalsFor(input: DraftInput): CalcResult {
+  if (input.template === 'boardup') {
+    // Board-up jobs carry no dollar amounts — material estimates only.
+    return {
+      subtotalCents: 0,
+      lineDiscountCents: 0,
+      invoiceDiscountCents: 0,
+      discountCents: 0,
+      taxableCents: 0,
+      taxByRate: [],
+      taxCents: 0,
+      shippingCents: 0,
+      totalCents: 0,
+    };
+  }
   if (input.template === 'commission') {
     const c = calculateCommissionTotals(
       input.sale_price_cents ?? 0,
@@ -150,7 +167,8 @@ function withTimeout<T>(p: PromiseLike<T>, ms: number, label: string): Promise<T
 export async function createDraft(input: DraftInput): Promise<Invoice> {
   const sb = requireSupabase();
   const isCommission = input.template === 'commission';
-  if (!isCommission && input.lines.length === 0) throw new Error('Add at least one line item.');
+  const isBoardUp = input.template === 'boardup';
+  if (!isCommission && !isBoardUp && input.lines.length === 0) throw new Error('Add at least one line item.');
   const t = totalsFor(input);
 
   // Assign the business's next invoice number atomically (e.g. Dania Realty starts at 501).
@@ -207,6 +225,7 @@ export async function createDraft(input: DraftInput): Promise<Invoice> {
       tax_breakdown: t.taxByRate,
       notes: input.notes ?? null,
       terms: input.terms ?? null,
+      boardup_details: isBoardUp ? (input.boardup_details ?? null) : null,
       ...commissionColumns(input),
     })
     .select()
@@ -216,7 +235,7 @@ export async function createDraft(input: DraftInput): Promise<Invoice> {
   );
   if (iErr) throw iErr;
 
-  if (isCommission) return invoice as Invoice;
+  if (isCommission || isBoardUp) return invoice as Invoice;
 
   const rows = input.lines.map((l, i) => ({
     invoice_id: (invoice as Invoice).id,
@@ -259,7 +278,8 @@ export async function saveDraft(
     throw new Error('This draft was changed in another tab. Reload to merge before saving.');
   }
   const isCommission = input.template === 'commission';
-  if (!isCommission && input.lines.length === 0) throw new Error('Add at least one line item.');
+  const isBoardUp = input.template === 'boardup';
+  if (!isCommission && !isBoardUp && input.lines.length === 0) throw new Error('Add at least one line item.');
   const t = totalsFor(input);
 
   const { data: invoice, error: iErr } = await sb
@@ -276,6 +296,7 @@ export async function saveDraft(
       tax_breakdown: t.taxByRate,
       notes: input.notes ?? null,
       terms: input.terms ?? null,
+      ...(isBoardUp ? { boardup_details: input.boardup_details ?? null } : {}),
       ...commissionColumns(input),
     })
     .eq('id', id)
@@ -283,10 +304,10 @@ export async function saveDraft(
     .single();
   if (iErr) throw iErr;
 
-  // Commission invoices carry no line rows; clear any left from a template switch.
+  // Commission and board-up invoices carry no line rows; clear any left from a template switch.
   const { error: dErr } = await sb.from('invoice_lines').delete().eq('invoice_id', id);
   if (dErr) throw dErr;
-  if (isCommission) return invoice as Invoice;
+  if (isCommission || isBoardUp) return invoice as Invoice;
   const rows = input.lines.map((l, i) => ({
     invoice_id: id,
     position: i,

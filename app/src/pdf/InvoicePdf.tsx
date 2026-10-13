@@ -1,5 +1,10 @@
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import type { InvoiceSnapshot, SnapshotLine } from '../lib/snapshot';
+import {
+  BOARDUP_FORMULA_NOTE,
+  asBoardUpDetails,
+  estimateBoardUp,
+} from '../lib/boardup';
 
 export type PdfPageSize = 'LETTER' | 'A4';
 export type InvoiceStyle = 'classic' | 'modern' | 'compact';
@@ -63,6 +68,15 @@ const styles = StyleSheet.create({
   wireText: { fontSize: 12, fontWeight: 'bold', lineHeight: 1.5 },
   propLine: { fontSize: 11, marginBottom: 10 },
   agentLine: { fontSize: 10, marginBottom: 3 },
+  buRow: { flexDirection: 'row', marginBottom: 4, fontSize: 10.5, lineHeight: 1.4 },
+  buLabel: { width: 150, fontWeight: 'bold' },
+  buValue: { flex: 1 },
+  buEstBox: { backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 6, padding: 10, marginTop: 10, marginBottom: 6 },
+  buEstTitle: { fontSize: 13, fontWeight: 'bold', marginBottom: 2 },
+  buEstMeta: { fontSize: 10.5 },
+  buFormula: { fontSize: 8, color: '#5b6470', marginBottom: 10 },
+  buPhotoGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
+  buPhoto: { width: 170, height: 128, objectFit: 'cover', marginRight: 8, marginBottom: 8, borderWidth: 0.5, borderColor: '#d7dde4' },
 });
 
 function addressLines(b: InvoiceSnapshot['business']): string[] {
@@ -229,19 +243,75 @@ function CommissionBody({ snap }: { snap: InvoiceSnapshot }) {
   );
 }
 
+/** Board-up job sheet body: all intake fields, live material estimate, and job photos. */
+function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: string[] }) {
+  const d = asBoardUpDetails(snap.boardup_details);
+  const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors);
+  const rows: [string, string][] = [
+    ['City', d.cityName],
+    ['Customer', d.otherCustomerName],
+    ['Street address', d.streetAddress + (d.city ? `, ${d.city}` : '')],
+    ['Phone', d.phone],
+    ['Case number', d.caseNumber],
+    ['Requesting officer', d.requestingOfficer],
+    ['Type', d.propertyType],
+    ['Service needed', d.serviceNeeded],
+    ['Urgency', d.urgency + (d.neededBy ? ` (needed by ${d.neededBy.replace('T', ' ')})` : '')],
+    ['Other openings', d.otherOpenings],
+    ['Crew', d.crew + (d.additionalCrew ? ` + ${d.additionalCrew}` : '')],
+    ['Access / hazards', d.accessNotes],
+  ];
+  return (
+    <View>
+      {rows
+        .filter(([, v]) => v)
+        .map(([label, value]) => (
+          <View key={label} style={styles.buRow}>
+            <Text style={styles.buLabel}>{label}:</Text>
+            <Text style={styles.buValue}>{value}</Text>
+          </View>
+        ))}
+      <View style={styles.buEstBox}>
+        <Text style={styles.buEstTitle}>{est.sheets} PLYWOOD SHEETS EST.</Text>
+        <Text style={styles.buEstMeta}>
+          SQ FT COVER: {est.sqftCover} · 4×8 SHEETS: {est.sheets}
+        </Text>
+        <Text style={styles.buEstMeta}>
+          Windows: {d.windows} · Doors: {d.doors} · Sliders / patios: {d.sliders} · Garage doors: {d.garageDoors}
+        </Text>
+      </View>
+      <Text style={styles.buFormula}>{BOARDUP_FORMULA_NOTE}</Text>
+      {photoUrls.length > 0 && (
+        <View>
+          <Text style={styles.sectionLabel}>Photos ({photoUrls.length})</Text>
+          <View style={styles.buPhotoGrid}>
+            {photoUrls.map((url, i) => (
+              <Image key={i} src={url} style={styles.buPhoto} />
+            ))}
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
 export function InvoicePdf({
   snapshot,
   style = 'classic',
   pageSize = 'LETTER',
   logoUrl,
+  photoUrls = [],
 }: {
   snapshot: InvoiceSnapshot;
   style?: InvoiceStyle;
   pageSize?: PdfPageSize;
   logoUrl?: string;
+  /** Resolved view URLs for board-up job photos (template 'boardup' only). */
+  photoUrls?: string[];
 }) {
   const { label, linesPerPage } = PAGE[pageSize];
   const isCommission = snapshot.template === 'commission';
+  const isBoardUp = snapshot.template === 'boardup';
   const cust = snapshot.customer;
 
   // Paginate standard line items so table headers repeat on every page.
@@ -264,9 +334,21 @@ export function InvoicePdf({
     if (cust.email) custLines.push(cust.email);
   }
 
-  const title = isCommission ? 'COMMISSION' : 'INVOICE';
+  const title = isCommission ? 'COMMISSION' : isBoardUp ? 'BOARD-UP JOB' : 'INVOICE';
   const subtitle = isCommission ? 'Wire instructions' : undefined;
   const pageStyle = [styles.page, style === 'compact' ? styles.compactPage : undefined];
+
+  if (isBoardUp) {
+    return (
+      <Document title={`Board-Up Job ${snapshot.invoice_number}`} author={snapshot.business.display_name}>
+        <Page size={label} style={pageStyle}>
+          <Header snap={snapshot} style={style} logoUrl={logoUrl} title={title} subtitle={subtitle} />
+          <BoardUpBody snap={snapshot} photoUrls={photoUrls} />
+          <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} fixed />
+        </Page>
+      </Document>
+    );
+  }
 
   const billTo = !isCommission && (
     <View style={styles.billTo}>

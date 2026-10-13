@@ -100,8 +100,10 @@ function Shell() {
         </div>
         {NAV.filter((n) => {
           if (n.ownerOnly && !isOwner) return false;
-          // Commission businesses (Dania Realty) don't use line items.
-          if (n.to === '/items' && activeBusiness?.default_template === 'commission') return false;
+          // Commission (Dania Realty) and board-up businesses don't use line items.
+          if (n.to === '/items' && (activeBusiness?.default_template === 'commission' || activeBusiness?.default_template === 'boardup')) return false;
+          // Board-up jobs carry their own contact fields; no customer list needed.
+          if (n.to === '/customers' && activeBusiness?.default_template === 'boardup') return false;
           return true;
         }).map((n) => (
           <NavLink

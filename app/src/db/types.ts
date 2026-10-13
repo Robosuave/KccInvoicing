@@ -81,7 +81,7 @@ export interface Item {
 
 export type InvoiceStatus = 'draft' | 'issued' | 'void';
 
-export type InvoiceTemplate = 'standard' | 'commission';
+export type InvoiceTemplate = 'standard' | 'commission' | 'boardup';
 
 export interface Invoice {
   id: string;
@@ -113,6 +113,8 @@ export interface Invoice {
   agent_name: string | null;
   second_agent_name: string | null;
   property_address: string | null;
+  /** Board-Up job sheet fields (template 'boardup'); null for other templates. */
+  boardup_details: Record<string, unknown> | null;
   property_city: string | null;
   property_state: string | null;
   property_zip: string | null;
