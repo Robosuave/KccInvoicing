@@ -103,7 +103,7 @@ export default function Invoices() {
 
       <div className="btn-row" style={{ marginBottom: 20 }}>
         <Link className="btn btn-primary" to="/invoices/new">
-          New invoice
+          {activeBusiness.default_template === 'boardup' ? 'New Job' : 'New invoice'}
         </Link>
         <div style={{ flex: 1, minWidth: 200, maxWidth: 340 }}>
           <TextField
@@ -159,7 +159,7 @@ export default function Invoices() {
           }
           action={
             <Link className="btn btn-primary" to="/invoices/new">
-              New invoice
+              {activeBusiness.default_template === 'boardup' ? 'New Job' : 'New invoice'}
             </Link>
           }
         />
