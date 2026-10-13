@@ -161,6 +161,9 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
   /** Text typed into an "Other" box (committed on blur / save). */
   const [otherCityNameText, setOtherCityNameText] = useState('');
   const [otherCityText, setOtherCityText] = useState('');
+  /** "+ Add city" button opens the new-city box directly (no need to pick "Other"). */
+  const [addingCityName, setAddingCityName] = useState(false);
+  const [addingCity, setAddingCity] = useState(false);
   const otherCityNameTextRef = useRef('');
   const otherCityTextRef = useRef('');
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -201,7 +204,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       photos: photosRef.current.map((p) => p.path),
     });
     const nameText = otherCityNameTextRef.current.trim();
-    if (detailsRef.current.cityName === 'Other' && nameText !== '') {
+    if ((detailsRef.current.cityName === 'Other' || addingCityName) && nameText !== '') {
       setCustomCityNames(rememberCustomCity(BOARDUP_CUSTOM_CITY_NAMES_KEY, nameText, CITY_NAME_OPTIONS));
       const next = withPhotos({ ...detailsRef.current, cityName: nameText });
       detailsRef.current = next;
@@ -210,8 +213,9 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       otherCityNameTextRef.current = '';
       setOtherCityNameText('');
     }
+    setAddingCityName(false);
     const cityText = otherCityTextRef.current.trim();
-    if (detailsRef.current.city === 'Other' && cityText !== '') {
+    if ((detailsRef.current.city === 'Other' || addingCity) && cityText !== '') {
       setCustomCities(rememberCustomCity(BOARDUP_CUSTOM_CITIES_KEY, cityText, CITY_OPTIONS));
       const next = withPhotos({ ...detailsRef.current, city: cityText });
       detailsRef.current = next;
@@ -220,6 +224,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       otherCityTextRef.current = '';
       setOtherCityText('');
     }
+    setAddingCity(false);
   };
 
   // Resolve view URLs for photos already stored on the job.
@@ -429,28 +434,36 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       </div>
 
       <Field label="City name *" htmlFor="bu-cityname" error={fieldError('cityName')}>
-        <SelectField
-          id="bu-cityname"
-          value={f.cityName}
-          disabled={disabled}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v !== 'Other') {
-              otherCityNameTextRef.current = '';
-              setOtherCityNameText('');
-            }
-            set('cityName', v);
-          }}
-        >
-          <option value="">Select a city…</option>
-          {cityNameOptions.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </SelectField>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <SelectField
+            id="bu-cityname"
+            value={f.cityName}
+            disabled={disabled}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v !== 'Other') {
+                otherCityNameTextRef.current = '';
+                setOtherCityNameText('');
+                setAddingCityName(false);
+              }
+              set('cityName', v);
+            }}
+          >
+            <option value="">Select a city…</option>
+            {cityNameOptions.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </SelectField>
+          {!disabled && (
+            <Button variant="ghost" size="sm" onClick={() => setAddingCityName(true)}>
+              + Add city
+            </Button>
+          )}
+        </div>
       </Field>
-      {!disabled && f.cityName === 'Other' && (
+      {!disabled && (f.cityName === 'Other' || addingCityName) && (
         <Field label="New city name" htmlFor="bu-cityname-other" error={fieldError('cityName')}>
           <TextField
             id="bu-cityname-other"
@@ -490,28 +503,36 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       </Field>
 
       <Field label="City" htmlFor="bu-city">
-        <SelectField
-          id="bu-city"
-          value={f.city}
-          disabled={disabled}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v !== 'Other') {
-              otherCityTextRef.current = '';
-              setOtherCityText('');
-            }
-            set('city', v);
-          }}
-        >
-          <option value="">Select a city…</option>
-          {cityOptions.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </SelectField>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <SelectField
+            id="bu-city"
+            value={f.city}
+            disabled={disabled}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v !== 'Other') {
+                otherCityTextRef.current = '';
+                setOtherCityText('');
+                setAddingCity(false);
+              }
+              set('city', v);
+            }}
+          >
+            <option value="">Select a city…</option>
+            {cityOptions.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </SelectField>
+          {!disabled && (
+            <Button variant="ghost" size="sm" onClick={() => setAddingCity(true)}>
+              + Add city
+            </Button>
+          )}
+        </div>
       </Field>
-      {!disabled && f.city === 'Other' && (
+      {!disabled && (f.city === 'Other' || addingCity) && (
         <Field label="New city name" htmlFor="bu-city-other">
           <TextField
             id="bu-city-other"
