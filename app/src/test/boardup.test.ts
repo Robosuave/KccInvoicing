@@ -7,6 +7,8 @@ import {
   boardUpFilenameBase,
   buildBoardUpSmsText,
   buildBoardUpSummary,
+  measurementSummaryLines,
+  syncMeasurementCount,
   chunkArray,
   estimateBoardUp,
   rememberCustomCity,
@@ -99,6 +101,47 @@ describe('boardUpFilenameBase', () => {
 
   it('falls back when there is no address', () => {
     expect(boardUpFilenameBase({ streetAddress: '', city: '' })).toBe('boardup-job');
+  });
+});
+
+describe('syncMeasurementCount', () => {
+  it('grows the array with blanks when the count increases', () => {
+    expect(syncMeasurementCount(3, ['36x45'])).toEqual(['36x45', '', '']);
+  });
+
+  it('trims the array when the count decreases', () => {
+    expect(syncMeasurementCount(1, ['36x45', '40x60'])).toEqual(['36x45']);
+  });
+
+  it('keeps the array as-is when the count matches', () => {
+    expect(syncMeasurementCount(2, ['a', 'b'])).toEqual(['a', 'b']);
+  });
+});
+
+describe('measurementSummaryLines', () => {
+  it('lists one line per type with measurements, skipping blanks', () => {
+    const lines = measurementSummaryLines({
+      ...EMPTY_BOARDUP,
+      windowMeasurements: ['36x45', '', '40x60'],
+      doorMeasurements: [''],
+      sliderMeasurements: ['72x80'],
+    });
+    expect(lines).toEqual([
+      'Window measurements: 36x45, 40x60',
+      'Slider / patio measurements: 72x80',
+    ]);
+  });
+
+  it('returns nothing when no measurements are entered', () => {
+    expect(measurementSummaryLines({ ...EMPTY_BOARDUP })).toEqual([]);
+  });
+});
+
+describe('asBoardUpDetails measurements', () => {
+  it('parses measurement arrays, dropping non-strings', () => {
+    const d = asBoardUpDetails({ windowMeasurements: ['36x45', 42, ''], doorMeasurements: 'nope' });
+    expect(d.windowMeasurements).toEqual(['36x45', '']);
+    expect(d.doorMeasurements).toEqual([]);
   });
 });
 

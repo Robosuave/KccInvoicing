@@ -33,6 +33,11 @@ export interface BoardUpDetails {
   textTo: string;
   /** Storage paths (invoice-attachments bucket) of job photos. */
   photos: string[];
+  /** Per-opening measurements, e.g. ["36x45"] — one entry per counted opening. */
+  windowMeasurements: string[];
+  doorMeasurements: string[];
+  sliderMeasurements: string[];
+  garageMeasurements: string[];
 }
 
 export const EMPTY_BOARDUP: BoardUpDetails = {
@@ -58,6 +63,10 @@ export const EMPTY_BOARDUP: BoardUpDetails = {
   emailTo: '',
   textTo: '',
   photos: [],
+  windowMeasurements: [],
+  doorMeasurements: [],
+  sliderMeasurements: [],
+  garageMeasurements: [],
 };
 
 export const CITY_NAME_OPTIONS = [
@@ -183,6 +192,28 @@ export function boardUpFilenameBase(d: Pick<BoardUpDetails, 'streetAddress' | 'c
 export const BOARDUP_FORMULA_NOTE =
   'Estimate uses 12 sq ft/window, 21/door, 32/slider, 64/garage + 15% waste. Planning only — measure on site.';
 
+/** Keeps a measurement array the same length as its opening count. */
+export function syncMeasurementCount(count: number, arr: string[]): string[] {
+  const next = arr.slice(0, count);
+  while (next.length < count) next.push('');
+  return next;
+}
+
+/** One summary line per opening type that has any measurements, e.g. "Window measurements: 36x45, 40x60". */
+export function measurementSummaryLines(d: BoardUpDetails): string[] {
+  const groups: [string, string[]][] = [
+    ['Window', d.windowMeasurements],
+    ['Door', d.doorMeasurements],
+    ['Slider / patio', d.sliderMeasurements],
+    ['Garage door', d.garageMeasurements],
+  ];
+  return groups
+    .map(([label, arr]) => {
+      const vals = arr.map((s) => s.trim()).filter(Boolean);
+      return vals.length > 0 ? `${label} measurements: ${vals.join(', ')}` : null;
+    })
+    .filter((l): l is string => l !== null);
+}
 /** Sq ft per opening type, matching the source app. */
 const SQFT = { windows: 12, doors: 21, sliders: 32, garageDoors: 64 } as const;
 const WASTE_FACTOR = 1.15;
@@ -266,6 +297,7 @@ export function buildBoardUpSummary(d: BoardUpDetails, jobNumber: string | null)
     `Type: ${d.propertyType} — ${d.serviceNeeded}`,
     `Urgency: ${d.urgency}${d.neededBy ? ` (needed by ${fmtDateTime(d.neededBy)})` : ''}`,
     `Openings: ${d.windows} windows, ${d.doors} doors, ${d.sliders} sliders/patios, ${d.garageDoors} garage doors`,
+    ...measurementSummaryLines(d),
     d.otherOpenings ? `Other openings: ${d.otherOpenings}` : null,
     `Est: ${est.sqftCover} sq ft cover, ${est.sheets} 4x8 sheets`,
     `Crew: ${d.crew}${d.additionalCrew ? ` + ${d.additionalCrew}` : ''}`,
@@ -310,5 +342,9 @@ export function asBoardUpDetails(raw: unknown): BoardUpDetails {
     emailTo: str(r.emailTo),
     textTo: str(r.textTo),
     photos: strArr(r.photos),
+    windowMeasurements: strArr(r.windowMeasurements),
+    doorMeasurements: strArr(r.doorMeasurements),
+    sliderMeasurements: strArr(r.sliderMeasurements),
+    garageMeasurements: strArr(r.garageMeasurements),
   };
 }

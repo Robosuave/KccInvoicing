@@ -7,6 +7,7 @@ import {
   boardUpPhotoCaption,
   chunkArray,
   estimateBoardUp,
+  measurementSummaryLines,
 } from '../lib/boardup';
 
 export type PdfPageSize = 'LETTER' | 'A4';
@@ -290,6 +291,10 @@ function BoardUpBody({ snap, photoUrls, condensed = false }: { snap: InvoiceSnap
     ['Service needed', d.serviceNeeded],
     ['Urgency', d.urgency + (d.neededBy ? ` (needed by ${d.neededBy.replace('T', ' ')})` : '')],
     ['Other openings', d.otherOpenings],
+    ...measurementSummaryLines(d).map((line): [string, string] => {
+      const idx = line.indexOf(':');
+      return [line.slice(0, idx), line.slice(idx + 1).trim()];
+    }),
     ['Crew', d.crew + (d.additionalCrew ? ` + ${d.additionalCrew}` : '')],
     ['Access / hazards', d.accessNotes],
   ];

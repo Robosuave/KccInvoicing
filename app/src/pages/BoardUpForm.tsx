@@ -16,6 +16,7 @@ import {
   boardUpPhotoCaption,
   buildBoardUpSmsText,
   buildBoardUpSummary,
+  syncMeasurementCount,
   estimateBoardUp,
   loadCustomCities,
   rememberCustomCity,
@@ -152,6 +153,57 @@ function Stepper({
   );
 }
 
+type MeasurementKey = 'windowMeasurements' | 'doorMeasurements' | 'sliderMeasurements' | 'garageMeasurements';
+
+/** Stepper plus one measurement box per counted opening, matching the source app. */
+function OpeningCounter({
+  id,
+  label,
+  singular,
+  count,
+  measurements,
+  placeholder,
+  disabled,
+  onCount,
+  onMeasurement,
+}: {
+  id: string;
+  label: string;
+  singular: string;
+  count: number;
+  measurements: string[];
+  placeholder: string;
+  disabled?: boolean;
+  onCount: (v: number) => void;
+  onMeasurement: (i: number, v: string) => void;
+}) {
+  return (
+    <div>
+      <Stepper id={id} label={label} value={count} disabled={disabled} onChange={onCount} />
+      {count > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
+            Measurements — one per {label.toLowerCase()}
+          </div>
+          {measurements.map((m, i) => (
+            <Field key={i} label={`${singular} ${i + 1}`} htmlFor={`${id}-m${i}`}>
+              <TextField
+                id={`${id}-m${i}`}
+                value={m}
+                disabled={disabled}
+                onChange={(e) => onMeasurement(i, e.target.value)}
+                placeholder={placeholder}
+                style={{ maxWidth: 200 }}
+                enterKeyHint="next"
+              />
+            </Field>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * Board-up job sheet form. Mirrors the standalone Aquick Board-up intake app:
  * same fields in the same order, live material estimates, photo capture,
@@ -202,13 +254,40 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       detailsRef.current = next;
       onChange(next);
       return next;
-    });
-    setInvalidFields((prev) => {
+    });    setInvalidFields((prev) => {
       if (!prev.has(key as string)) return prev;
       const next = new Set(prev);
       next.delete(key as string);
       return next;
     });
+  };
+
+  /** Updates details + ref + parent in one step (same pattern as `set`). */
+  const applyDetails = (next: BoardUpDetails) => {
+    const withPhotos = { ...next, photos: photosRef.current.map((p) => p.path) };
+    detailsRef.current = withPhotos;
+    setF(withPhotos);
+    onChange(withPhotos);
+  };
+
+  /** Opening count change: also grows/shrinks the measurement boxes to match. */
+  const setOpeningCount = (
+    countKey: 'windows' | 'doors' | 'sliders' | 'garageDoors',
+    mKey: MeasurementKey,
+    v: number,
+  ) => {
+    applyDetails({
+      ...detailsRef.current,
+      [countKey]: v,
+      [mKey]: syncMeasurementCount(v, detailsRef.current[mKey]),
+    });
+  };
+
+  /** Edits one measurement box. */
+  const setMeasurement = (mKey: MeasurementKey, i: number, v: string) => {
+    const arr = [...detailsRef.current[mKey]];
+    arr[i] = v;
+    applyDetails({ ...detailsRef.current, [mKey]: arr });
   };
 
   /**
@@ -802,15 +881,29 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       <div className="card" style={{ marginBottom: 16 }}>
         <h3 style={{ marginTop: 0, marginBottom: 4 }}>Openings</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
-          <Stepper id="bu-win" label="Windows" value={f.windows} disabled={disabled} onChange={(v) => set('windows', v)} />
-          <Stepper id="bu-door" label="Doors" value={f.doors} disabled={disabled} onChange={(v) => set('doors', v)} />
-          <Stepper id="bu-slider" label="Sliders / patios" value={f.sliders} disabled={disabled} onChange={(v) => set('sliders', v)} />
-          <Stepper
-            id="bu-gar"
-            label="Garage doors"
-            value={f.garageDoors}
-            disabled={disabled}
-            onChange={(v) => set('garageDoors', v)}
+          <OpeningCounter
+            id="bu-win" label="Windows" singular="Window" count={f.windows}
+            measurements={f.windowMeasurements} placeholder="e.g. 36x45" disabled={disabled}
+            onCount={(v) => setOpeningCount('windows', 'windowMeasurements', v)}
+            onMeasurement={(i, v) => setMeasurement('windowMeasurements', i, v)}
+          />
+          <OpeningCounter
+            id="bu-door" label="Doors" singular="Door" count={f.doors}
+            measurements={f.doorMeasurements} placeholder="e.g. 38x81" disabled={disabled}
+            onCount={(v) => setOpeningCount('doors', 'doorMeasurements', v)}
+            onMeasurement={(i, v) => setMeasurement('doorMeasurements', i, v)}
+          />
+          <OpeningCounter
+            id="bu-slider" label="Sliders / patios" singular="Slider" count={f.sliders}
+            measurements={f.sliderMeasurements} placeholder="e.g. 72x80" disabled={disabled}
+            onCount={(v) => setOpeningCount('sliders', 'sliderMeasurements', v)}
+            onMeasurement={(i, v) => setMeasurement('sliderMeasurements', i, v)}
+          />
+          <OpeningCounter
+            id="bu-gar" label="Garage doors" singular="Garage door" count={f.garageDoors}
+            measurements={f.garageMeasurements} placeholder="e.g. 96x84" disabled={disabled}
+            onCount={(v) => setOpeningCount('garageDoors', 'garageMeasurements', v)}
+            onMeasurement={(i, v) => setMeasurement('garageMeasurements', i, v)}
           />
         </div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>{BOARDUP_FORMULA_NOTE}</div>
