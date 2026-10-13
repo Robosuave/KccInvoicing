@@ -12,6 +12,7 @@ import {
   SERVICE_NEEDED_OPTIONS,
   URGENCY_OPTIONS,
   asBoardUpDetails,
+  boardUpFilenameBase,
   boardUpPhotoCaption,
   buildBoardUpSmsText,
   buildBoardUpSummary,
@@ -437,37 +438,41 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
   };
 
   /** Renders the job sheet PDF from live form state (draft or issued). */
-  const renderSharePdf = async (condensed: boolean): Promise<Blob> => {
+  const renderSharePdf = async (condensed: boolean, photosOnly = false, includePhotos = true): Promise<Blob> => {
     const snap = buildBoardUpShareSnapshot({
       business,
       details: detailsRef.current as unknown as Record<string, unknown>,
       jobNumber,
       invoiceDate,
     });
-    return renderInvoicePdfBlob(snap, 'classic', 'LETTER', condensed);
+    return renderInvoicePdfBlob(snap, 'classic', 'LETTER', condensed, photosOnly, includePhotos);
   };
 
-  const pdfFilename = () => `boardup-job${jobNumber ? `-${jobNumber}` : ''}.pdf`;
-
-  /** Text + PDF: opens the native share sheet with the job PDF attached. */
+  /** Text + PDFs: shares the job-information PDF and the pictures PDF separately, like the original. */
   const textJobWithPdf = async () => {
     if (shareBusy) return;
     setShareError(null);
     setShareBusy('pdf');
     try {
-      const blob = await renderSharePdf(false);
-      const file = new File([blob], pdfFilename(), { type: 'application/pdf' });
-      if (!canShareFiles([file])) {
+      const d = details();
+      const base = boardUpFilenameBase(d);
+      const infoBlob = await renderSharePdf(false, false, false);
+      const files = [new File([infoBlob], `${base} - job information.pdf`, { type: 'application/pdf' })];
+      if (d.photos.length > 0) {
+        const photosBlob = await renderSharePdf(false, true, true);
+        files.push(new File([photosBlob], `${base} - photos.pdf`, { type: 'application/pdf' }));
+      }
+      if (!canShareFiles(files)) {
         setShareError('This browser can’t share files — use Print / Save PDF instead.');
         return;
       }
       await shareFiles({
-        files: [file],
+        files,
         title: `Board-up job${jobNumber ? ` ${jobNumber}` : ''}`,
-        text: buildBoardUpSmsText(details()),
+        text: buildBoardUpSmsText(d),
       });
     } catch (e) {
-      setShareError(e instanceof Error ? e.message : 'Could not prepare the PDF.');
+      setShareError(e instanceof Error ? e.message : 'Could not prepare the PDFs.');
     } finally {
       setShareBusy(null);
     }
@@ -510,7 +515,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = pdfFilename().replace('.pdf', '-condensed.pdf');
+      a.download = `${boardUpFilenameBase(details())} - condensed.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -961,7 +966,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
           Text this job
         </Button>
         <Button id="bu-textpdf" variant="secondary" onClick={textJobWithPdf} disabled={shareBusy !== null}>
-          {shareBusy === 'pdf' ? 'Preparing…' : 'Text + PDF'}
+          {shareBusy === 'pdf' ? 'Preparing…' : 'Text + PDFs'}
         </Button>
         <Button id="bu-sharephotos" variant="secondary" onClick={shareJobPhotos} disabled={shareBusy !== null}>
           {shareBusy === 'photos' ? 'Preparing…' : 'Share photos'}

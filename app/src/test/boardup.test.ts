@@ -4,6 +4,7 @@ import {
   EMPTY_BOARDUP,
   asBoardUpDetails,
   boardUpPhotoCaption,
+  boardUpFilenameBase,
   buildBoardUpSmsText,
   buildBoardUpSummary,
   chunkArray,
@@ -80,6 +81,24 @@ describe('buildBoardUpSummary', () => {
     expect(body).toContain('Openings: 4 windows, 0 doors, 0 sliders/patios, 0 garage doors');
     expect(body).toContain('Photos: 2 attached');
     expect(body).toContain('4x8 sheets');
+  });
+});
+
+describe('boardUpFilenameBase', () => {
+  it('builds a filename-safe address base', () => {
+    expect(boardUpFilenameBase({ streetAddress: '1333 S Ocean Blvd, Apt', city: 'Lauderhill Florida' })).toBe(
+      '1333 S Ocean Blvd, Apt, Lauderhill Florida',
+    );
+  });
+
+  it('strips characters illegal in filenames', () => {
+    expect(boardUpFilenameBase({ streetAddress: '123 "Main" St / Unit: 4', city: '' })).toBe(
+      '123 -Main- St - Unit- 4',
+    );
+  });
+
+  it('falls back when there is no address', () => {
+    expect(boardUpFilenameBase({ streetAddress: '', city: '' })).toBe('boardup-job');
   });
 });
 

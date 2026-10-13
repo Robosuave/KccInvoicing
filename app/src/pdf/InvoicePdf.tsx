@@ -251,6 +251,28 @@ function CommissionBody({ snap }: { snap: InvoiceSnapshot }) {
   );
 }
 
+/** Photos-only pages for the separate pictures PDF (matches the original's split PDFs). */
+function BoardUpPhotosBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: string[] }) {
+  const d = asBoardUpDetails(snap.boardup_details);
+  /** Property address printed under every photo, matching the source app. */
+  const caption = boardUpPhotoCaption(d);
+  return (
+    <View>
+      <Text style={styles.sectionLabel}>Job photos{caption !== '' ? ` — ${caption}` : ''} ({photoUrls.length})</Text>
+      {chunkArray(photoUrls, PHOTOS_PER_PDF_PAGE).map((page, pi) => (
+        <View key={pi} style={styles.buPhotoPage} wrap={false}>
+          {page.map((url, i) => (
+            <View key={i} style={styles.buPhotoCell}>
+              <Image src={url} style={styles.buPhotoImg} />
+              {caption !== '' && <Text style={styles.buPhotoCaption}>{caption}</Text>}
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 /** Board-up job sheet body: all intake fields, live material estimate, and job photos. */
 function BoardUpBody({ snap, photoUrls, condensed = false }: { snap: InvoiceSnapshot; photoUrls: string[]; condensed?: boolean }) {
   const d = asBoardUpDetails(snap.boardup_details);
@@ -317,6 +339,7 @@ export function InvoicePdf({
   logoUrl,
   photoUrls = [],
   condensed = false,
+  photosOnly = false,
 }: {
   snapshot: InvoiceSnapshot;
   style?: InvoiceStyle;
@@ -326,6 +349,8 @@ export function InvoicePdf({
   photoUrls?: string[];
   /** Condensed board-up layout: summary + small thumbnails for quick sharing. */
   condensed?: boolean;
+  /** Photos-only board-up document (the separate pictures PDF). */
+  photosOnly?: boolean;
 }) {
   const { label, linesPerPage } = PAGE[pageSize];
   const isCommission = snapshot.template === 'commission';
@@ -355,6 +380,18 @@ export function InvoicePdf({
   const title = isCommission ? 'COMMISSION' : isBoardUp ? 'BOARD-UP JOB' : 'INVOICE';
   const subtitle = isCommission ? 'Wire instructions' : undefined;
   const pageStyle = [styles.page, style === 'compact' ? styles.compactPage : undefined];
+
+  if (isBoardUp && photosOnly) {
+    return (
+      <Document title={`Board-Up Job Photos ${snapshot.invoice_number}`} author={snapshot.business.display_name}>
+        <Page size={label} style={pageStyle}>
+          <Header snap={snapshot} style={style} logoUrl={logoUrl} title="JOB PHOTOS" subtitle={subtitle} />
+          <BoardUpPhotosBody snap={snapshot} photoUrls={photoUrls} />
+          <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} fixed />
+        </Page>
+      </Document>
+    );
+  }
 
   if (isBoardUp) {
     return (

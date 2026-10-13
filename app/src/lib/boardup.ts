@@ -174,6 +174,12 @@ export function boardUpPhotoCaption(d: Pick<BoardUpDetails, 'streetAddress' | 'c
   return city ? `${street}, ${city}` : street;
 }
 
+/** Filename-safe property address for the split PDFs, e.g. "1333 S Ocean Blvd, Apt, Lauderhill Florida". */
+export function boardUpFilenameBase(d: Pick<BoardUpDetails, 'streetAddress' | 'city'>): string {
+  const raw = boardUpPhotoCaption(d).trim() || 'boardup-job';
+  return raw.replace(/[\\/:*?"<>|]/g, '-');
+}
+
 export const BOARDUP_FORMULA_NOTE =
   'Estimate uses 12 sq ft/window, 21/door, 32/slider, 64/garage + 15% waste. Planning only — measure on site.';
 
