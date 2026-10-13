@@ -13,9 +13,10 @@ import {
 import { Alert, BackButton, Button, EmptyState, Field, TextField } from '../components/ui';
 
 /** Link that drops a new agent straight onto account creation with their email prefilled. */
-export function inviteLinkFor(inviteEmail: string): string {
+export function inviteLinkFor(inviteEmail: string, businessTemplate?: string): string {
   const params = new URLSearchParams({ signup: '1', email: inviteEmail });
-  return `${APP_URL}/login?${params.toString()}`;
+  const base = businessTemplate === 'boardup' ? 'https://aquick.kalekycomputer.com' : APP_URL;
+  return `${base}/login?${params.toString()}`;
 }
 
 async function copyText(text: string): Promise<void> {
@@ -93,7 +94,8 @@ export default function Team() {
       const inviteEmail = email.trim();
       await inviteAgent(businessId, inviteEmail);
       setEmail('');
-      setLastInviteLink(inviteLinkFor(inviteEmail));
+      const invitedBusiness = businesses.find((b) => b.id === businessId);
+      setLastInviteLink(inviteLinkFor(inviteEmail, invitedBusiness?.default_template));
       setNotice(
         'Invite sent. Text the agent the invite link below — it takes them straight to creating their account.',
       );
@@ -271,7 +273,7 @@ export default function Team() {
                           {new Date(i.created_at).toLocaleDateString()}
                         </td>
                         <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                          <Button variant="ghost" size="sm" onClick={() => copyInviteLink(inviteLinkFor(i.email))}>
+                          <Button variant="ghost" size="sm" onClick={() => copyInviteLink(inviteLinkFor(i.email, business?.default_template))}>
                             Copy link
                           </Button>{' '}
                           <Button variant="ghost" size="sm" onClick={() => doCancelInvite(i.id)}>
