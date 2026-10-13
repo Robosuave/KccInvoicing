@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
 import type { Business, Customer, Invoice, Item, InvoiceTemplate, InvoiceStatus } from '../db/types';
 import { createDraft, getDraft, previewTotals, saveDraft, markIssued, type DraftInput } from '../data/drafts';
@@ -113,7 +113,8 @@ interface CommissionPreviewData {
 export default function InvoiceEditor() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const { activeBusiness, workspace, notConfigured, setEditorDirty, onSaveDraftRef, loading: businessesLoading } = useBusiness();
+  const { activeBusiness, workspace, notConfigured, setEditorDirty, onSaveDraftRef, loading: businessesLoading, isOwner } = useBusiness();
+  const navigate = useNavigate();
   const isNew = !id || id === 'new';
 
   const [draftId, setDraftId] = useState<string | null>(isNew ? null : (id as string));
@@ -1073,6 +1074,10 @@ export default function InvoiceEditor() {
                   markDirty();
                 }}
                 onPhotosChange={setBoardUpPhotos}
+                business={activeBusiness}
+                invoiceDate={invoiceDate}
+                isOwner={isOwner}
+                onDeleted={() => navigate('/invoices')}
               />
             </>
           ) : (

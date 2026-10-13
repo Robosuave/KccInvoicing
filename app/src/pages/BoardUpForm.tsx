@@ -12,6 +12,7 @@ import {
   SERVICE_NEEDED_OPTIONS,
   URGENCY_OPTIONS,
   asBoardUpDetails,
+  boardUpPhotoCaption,
   buildBoardUpSmsText,
   buildBoardUpSummary,
   estimateBoardUp,
@@ -21,6 +22,11 @@ import {
   type BoardUpDetails,
 } from '../lib/boardup';
 import { boardUpPhotoUrl, removeBoardUpPhoto, uploadBoardUpPhoto } from '../data/attachments';
+import { deleteInvoiceDeep } from '../data/invoices';
+import { buildBoardUpShareSnapshot } from '../lib/snapshot';
+import { canShareFiles, shareFiles, urlToFile } from '../lib/share';
+import { renderInvoicePdfBlob } from '../pdf/service';
+import type { Business } from '../db/types';
 
 export interface BoardUpFormHandle {
   validate: () => { errors: string[]; invalid: string[] };
@@ -52,6 +58,14 @@ interface Props {
   onPhotosCommitted?: (details: BoardUpDetails) => void;
   /** Called whenever the photo list changes (parent needs URLs for the print preview). */
   onPhotosChange?: (photos: BoardUpPhoto[]) => void;
+  /** Full business row — needed to render the share PDF from live form state. */
+  business: Business;
+  /** Invoice date for the share PDF snapshot. */
+  invoiceDate: string;
+  /** Owner-only actions (Delete job) are hidden from agents. */
+  isOwner: boolean;
+  /** Called after the job is deleted so the parent can navigate away. */
+  onDeleted: () => void;
 }
 
 /** Tab/enter order, top to bottom, matching the source app. */
@@ -143,7 +157,7 @@ function Stepper({
  * and Email-this-job / Text-this-job actions.
  */
 const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
-  { initial, workspaceId, businessId, jobNumber, disabled, getDraftId, ensureDraft, onChange, onPhotosCommitted, onPhotosChange },
+  { initial, workspaceId, businessId, jobNumber, disabled, getDraftId, ensureDraft, onChange, onPhotosCommitted, onPhotosChange, business, invoiceDate, isOwner, onDeleted },
   ref,
 ) {
   const [f, setF] = useState<BoardUpDetails>(() => asBoardUpDetails(initial));
@@ -153,6 +167,8 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [smsCopied, setSmsCopied] = useState(false);
+  /** Which file-share action is currently preparing its files. */
+  const [shareBusy, setShareBusy] = useState<'pdf' | 'photos' | 'condensed' | 'delete' | null>(null);
   /** Cities added via "Other", remembered per device. */
   const [customCityNames, setCustomCityNames] = useState<string[]>(() =>
     loadCustomCities(BOARDUP_CUSTOM_CITY_NAMES_KEY),
@@ -417,6 +433,113 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       setSmsCopied(true);
     } catch {
       setShareError('Could not copy — the browser blocked clipboard access.');
+    }
+  };
+
+  /** Renders the job sheet PDF from live form state (draft or issued). */
+  const renderSharePdf = async (condensed: boolean): Promise<Blob> => {
+    const snap = buildBoardUpShareSnapshot({
+      business,
+      details: detailsRef.current as unknown as Record<string, unknown>,
+      jobNumber,
+      invoiceDate,
+    });
+    return renderInvoicePdfBlob(snap, 'classic', 'LETTER', condensed);
+  };
+
+  const pdfFilename = () => `boardup-job${jobNumber ? `-${jobNumber}` : ''}.pdf`;
+
+  /** Text + PDF: opens the native share sheet with the job PDF attached. */
+  const textJobWithPdf = async () => {
+    if (shareBusy) return;
+    setShareError(null);
+    setShareBusy('pdf');
+    try {
+      const blob = await renderSharePdf(false);
+      const file = new File([blob], pdfFilename(), { type: 'application/pdf' });
+      if (!canShareFiles([file])) {
+        setShareError('This browser can’t share files — use Print / Save PDF instead.');
+        return;
+      }
+      await shareFiles({
+        files: [file],
+        title: `Board-up job${jobNumber ? ` ${jobNumber}` : ''}`,
+        text: buildBoardUpSmsText(details()),
+      });
+    } catch (e) {
+      setShareError(e instanceof Error ? e.message : 'Could not prepare the PDF.');
+    } finally {
+      setShareBusy(null);
+    }
+  };
+
+  /** Share photos: opens the native share sheet with the job photos attached. */
+  const shareJobPhotos = async () => {
+    if (shareBusy) return;
+    setShareError(null);
+    const items = photosRef.current;
+    if (items.length === 0) {
+      setShareError('No photos to share yet — add photos first.');
+      return;
+    }
+    setShareBusy('photos');
+    try {
+      const files: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        files.push(await urlToFile(items[i].url, `job-photo-${i + 1}.jpg`, 'image/jpeg'));
+      }
+      if (!canShareFiles(files)) {
+        setShareError('This browser can’t share files.');
+        return;
+      }
+      await shareFiles({ files, title: 'Job photos', text: boardUpPhotoCaption(details()) });
+    } catch (e) {
+      setShareError(e instanceof Error ? e.message : 'Could not share the photos.');
+    } finally {
+      setShareBusy(null);
+    }
+  };
+
+  /** Save condensed PDF: compact summary + small photo thumbnails, downloaded as a file. */
+  const saveCondensedPdf = async () => {
+    if (shareBusy) return;
+    setShareError(null);
+    setShareBusy('condensed');
+    try {
+      const blob = await renderSharePdf(true);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = pdfFilename().replace('.pdf', '-condensed.pdf');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e) {
+      setShareError(e instanceof Error ? e.message : 'Could not build the condensed PDF.');
+    } finally {
+      setShareBusy(null);
+    }
+  };
+
+  /** Delete job: owner-only, permanent, confirmed first. */
+  const deleteJob = async () => {
+    if (shareBusy) return;
+    const id = getDraftId();
+    if (!id) {
+      setShareError('Nothing to delete — the job hasn’t been saved yet.');
+      return;
+    }
+    if (!window.confirm('Delete this job permanently? Photos and the PDF go with it. This cannot be undone.')) return;
+    setShareError(null);
+    setShareBusy('delete');
+    try {
+      await deleteInvoiceDeep(id);
+      onDeleted();
+    } catch (e) {
+      setShareError(e instanceof Error ? e.message : 'Delete failed.');
+    } finally {
+      setShareBusy(null);
     }
   };
 
@@ -831,15 +954,29 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       )}
 
       <div className="btn-row" style={{ marginBottom: 8 }}>
-        <Button id="bu-emailjob" variant="secondary" onClick={emailJob}>
+        <Button id="bu-emailjob" variant="secondary" onClick={emailJob} disabled={shareBusy !== null}>
           Email this job
         </Button>
-        <Button id="bu-textjob" variant="secondary" onClick={textJob}>
+        <Button id="bu-textjob" variant="secondary" onClick={textJob} disabled={shareBusy !== null}>
           Text this job
         </Button>
-        <Button id="bu-copysms" variant="secondary" onClick={copySmsText}>
+        <Button id="bu-textpdf" variant="secondary" onClick={textJobWithPdf} disabled={shareBusy !== null}>
+          {shareBusy === 'pdf' ? 'Preparing…' : 'Text + PDF'}
+        </Button>
+        <Button id="bu-sharephotos" variant="secondary" onClick={shareJobPhotos} disabled={shareBusy !== null}>
+          {shareBusy === 'photos' ? 'Preparing…' : 'Share photos'}
+        </Button>
+        <Button id="bu-copysms" variant="secondary" onClick={copySmsText} disabled={shareBusy !== null}>
           Copy SMS text
         </Button>
+        <Button id="bu-condensed" variant="secondary" onClick={saveCondensedPdf} disabled={shareBusy !== null}>
+          {shareBusy === 'condensed' ? 'Building…' : 'Save condensed PDF'}
+        </Button>
+        {isOwner && (
+          <Button id="bu-deletejob" variant="danger" onClick={deleteJob} disabled={shareBusy !== null}>
+            {shareBusy === 'delete' ? 'Deleting…' : 'Delete job'}
+          </Button>
+        )}
       </div>
       {smsCopied && (
         <div style={{ marginBottom: 12, color: '#15803d', fontSize: 14, fontWeight: 600 }}>

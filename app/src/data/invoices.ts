@@ -80,6 +80,56 @@ export async function voidInvoice(id: string, reason: string): Promise<Invoice> 
 }
 
 /**
+ * Permanently deletes an invoice/job and its stored files (issued PDF,
+ * board-up photos). Owner-only in the UI; RLS has an invoices member-delete
+ * policy. This cannot be undone — callers must confirm first.
+ */
+export async function deleteInvoiceDeep(id: string): Promise<void> {
+  const sb = requireSupabase();
+  const { data: current, error: gErr } = await sb
+    .from('invoices')
+    .select('id, business_id, invoice_number, issued_pdf_path, template, boardup_details')
+    .eq('id', id)
+    .single();
+  if (gErr) throw gErr;
+  const inv = current as {
+    id: string; business_id: string; invoice_number: string | null;
+    issued_pdf_path: string | null; template: string; boardup_details: unknown;
+  };
+
+  // Best-effort file cleanup: a missing file must not block the delete.
+  const photoPaths: string[] = [];
+  if (inv.template === 'boardup' && inv.boardup_details && typeof inv.boardup_details === 'object') {
+    const photos = (inv.boardup_details as { photos?: unknown }).photos;
+    if (Array.isArray(photos)) {
+      for (const p of photos) if (typeof p === 'string' && p) photoPaths.push(p);
+    }
+  }
+  if (photoPaths.length > 0) {
+    try {
+      await sb.storage.from('invoice-attachments').remove(photoPaths);
+    } catch {
+      /* ignore — row delete still proceeds */
+    }
+  }
+  if (inv.issued_pdf_path) {
+    try {
+      await sb.storage.from('issued-pdfs').remove([inv.issued_pdf_path]);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const { error: dErr } = await sb.from('invoices').delete().eq('id', id);
+  if (dErr) throw dErr;
+
+  await logAuditEvent(inv.business_id, id, 'deleted', {
+    invoice_number: inv.invoice_number,
+    template: inv.template,
+  });
+}
+
+/**
  * Start a correction: copies an issued/void invoice into a new draft linked to
  * the original. The original is preserved untouched. Numbers are assigned fresh
  * at creation (never reused).
