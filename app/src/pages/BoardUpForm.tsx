@@ -517,14 +517,14 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
   };
 
   /** Renders the job sheet PDF from live form state (draft or issued). */
-  const renderSharePdf = async (condensed: boolean, photosOnly = false, includePhotos = true): Promise<Blob> => {
+  const renderSharePdf = async (photosOnly = false, includePhotos = true): Promise<Blob> => {
     const snap = buildBoardUpShareSnapshot({
       business,
       details: detailsRef.current as unknown as Record<string, unknown>,
       jobNumber,
       invoiceDate,
     });
-    return renderInvoicePdfBlob(snap, 'classic', 'LETTER', condensed, photosOnly, includePhotos);
+    return renderInvoicePdfBlob(snap, 'classic', 'LETTER', photosOnly, includePhotos);
   };
 
   /** Text + PDFs: shares the job-information PDF and the pictures PDF separately, like the original. */
@@ -535,10 +535,10 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     try {
       const d = details();
       const base = boardUpFilenameBase(d);
-      const infoBlob = await renderSharePdf(false, false, false);
+      const infoBlob = await renderSharePdf(false, false);
       const files = [new File([infoBlob], `${base} - job information.pdf`, { type: 'application/pdf' })];
       if (d.photos.length > 0) {
-        const photosBlob = await renderSharePdf(false, true, true);
+        const photosBlob = await renderSharePdf(true, true);
         files.push(new File([photosBlob], `${base} - photos.pdf`, { type: 'application/pdf' }));
       }
       if (!canShareFiles(files)) {
@@ -584,13 +584,13 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     }
   };
 
-  /** Save condensed PDF: compact summary + small photo thumbnails, downloaded as a file. */
+  /** Save condensed PDF: job summary + photos (4 per page, address captions), downloaded as a file. */
   const saveCondensedPdf = async () => {
     if (shareBusy) return;
     setShareError(null);
     setShareBusy('condensed');
     try {
-      const blob = await renderSharePdf(true);
+      const blob = await renderSharePdf(false, true);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -601,6 +601,43 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch (e) {
       setShareError(e instanceof Error ? e.message : 'Could not build the condensed PDF.');
+    } finally {
+      setShareBusy(null);
+    }
+  };
+
+  /** Email PDF: shares the combined job PDF (summary + photos, 4 per page with address
+   * captions) with the full job summary as the message. Opens the native share sheet
+   * so the PDF can be sent through Gmail; falls back to a download + email draft. */
+  const emailPdf = async () => {
+    if (shareBusy) return;
+    setShareError(null);
+    setShareBusy('condensed');
+    try {
+      const d = details();
+      const blob = await renderSharePdf(false, true);
+      const name = `${boardUpFilenameBase(d)} - condensed.pdf`;
+      const file = new File([blob], name, { type: 'application/pdf' });
+      const subject = `Board-up job${jobNumber ? ` #${jobNumber}` : ''} — ${d.streetAddress || 'new job'}`;
+      const body = buildBoardUpSummary(d, jobNumber);
+      if (canShareFiles([file])) {
+        await shareFiles({ files: [file], title: subject, text: body });
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      setShareError('This browser can’t share files — the PDF downloaded. Attach it to the email draft.');
+      window.location.href = `mailto:${encodeURIComponent(d.emailTo.trim())}?subject=${encodeURIComponent(
+        subject,
+      )}&body=${encodeURIComponent(body)}`;
+    } catch (e) {
+      setShareError(e instanceof Error ? e.message : 'Could not build the PDF.');
     } finally {
       setShareBusy(null);
     }
@@ -1069,6 +1106,9 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         </Button>
         <Button id="bu-condensed" variant="secondary" onClick={saveCondensedPdf} disabled={shareBusy !== null}>
           {shareBusy === 'condensed' ? 'Building…' : 'Save condensed PDF'}
+        </Button>
+        <Button id="bu-emailpdf" variant="secondary" onClick={emailPdf} disabled={shareBusy !== null}>
+          {shareBusy === 'condensed' ? 'Preparing…' : 'Email PDF'}
         </Button>
         {isOwner && (
           <Button id="bu-deletejob" variant="danger" onClick={deleteJob} disabled={shareBusy !== null}>
