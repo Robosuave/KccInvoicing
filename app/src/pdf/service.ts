@@ -28,14 +28,33 @@ async function resolveLogoUrl(snapshot: InvoiceSnapshot): Promise<string | undef
   }
 }
 
+async function resolveBoardUpPhotoUrls(snapshot: InvoiceSnapshot): Promise<string[]> {
+  if (snapshot.template !== 'boardup') return [];
+  const rec = snapshot.boardup_details;
+  const paths = rec && Array.isArray(rec.photos) ? rec.photos.filter((p): p is string => typeof p === 'string') : [];
+  if (paths.length === 0) return [];
+  const sb = requireSupabase();
+  const urls: string[] = [];
+  for (const path of paths) {
+    try {
+      const { data, error } = await sb.storage.from('invoice-attachments').createSignedUrl(path, 600);
+      if (!error && data?.signedUrl) urls.push(data.signedUrl);
+    } catch {
+      /* one bad photo must not block the PDF */
+    }
+  }
+  return urls;
+}
+
 export async function renderInvoicePdfBlob(
   snapshot: InvoiceSnapshot,
   style: InvoiceStyle = 'classic',
   pageSize: PdfPageSize = 'LETTER',
 ): Promise<Blob> {
   const logoUrl = await resolveLogoUrl(snapshot);
+  const photoUrls = await resolveBoardUpPhotoUrls(snapshot);
   const renderWith = async (url: string | undefined) => {
-    const element = InvoicePdf({ snapshot, style, pageSize, logoUrl: url });
+    const element = InvoicePdf({ snapshot, style, pageSize, logoUrl: url, photoUrls });
     const instance = pdf(element);
     // Ensure the reconciler has flushed: on some Safari/React versions the
     // initial updateContainer doesn't synchronously set container.document.

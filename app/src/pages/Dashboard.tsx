@@ -68,12 +68,18 @@ export default function Dashboard() {
         <h2 style={{ marginTop: 0 }}>Quick actions</h2>
         <div className="btn-row">
           <Link className="btn btn-primary" to="/invoices/new" style={{ fontSize: 16, padding: '12px 20px' }}>
-            {activeBusiness.default_template === 'commission' ? '+ New Commission Invoice' : '+ New Invoice'}
+            {activeBusiness.default_template === 'commission'
+              ? '+ New Commission Invoice'
+              : activeBusiness.default_template === 'boardup'
+                ? '+ New Board-Up Job'
+                : '+ New Invoice'}
           </Link>
-          <Link className="btn btn-secondary" to="/customers">
-            Manage customers
-          </Link>
-          {activeBusiness?.default_template !== 'commission' && (
+          {activeBusiness?.default_template !== 'boardup' && (
+            <Link className="btn btn-secondary" to="/customers">
+              Manage customers
+            </Link>
+          )}
+          {activeBusiness?.default_template !== 'commission' && activeBusiness?.default_template !== 'boardup' && (
             <Link className="btn btn-secondary" to="/items">
               Manage items
             </Link>

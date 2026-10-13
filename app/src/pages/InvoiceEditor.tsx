@@ -11,6 +11,9 @@ import { getLogoUrl } from '../data/businesses';
 import IssuedPanels from '../components/IssuedPanels';
 import TimesheetCard, { TimesheetAttachButton, useTimesheet } from '../components/TimesheetCard';
 import { generateAndStoreIssuedPdf, type InvoiceStyle } from '../pdf/service';
+import BoardUpForm, { type BoardUpFormHandle, type BoardUpPhoto } from './BoardUpForm';
+import BoardUpPreviewBody from './BoardUpPreview';
+import { asBoardUpDetails, type BoardUpDetails } from '../lib/boardup';
 
 /** Extract a human-readable message from anything thrown — Supabase/PostgREST
  *  errors are plain objects ({message, details, hint, code}), not Error instances. */
@@ -114,6 +117,12 @@ export default function InvoiceEditor() {
   const isNew = !id || id === 'new';
 
   const [draftId, setDraftId] = useState<string | null>(isNew ? null : (id as string));
+  /** Mirrors draftId for async callbacks that run before state flushes. */
+  const draftIdRef = useRef<string | null>(isNew ? null : (id as string));
+  const syncDraftId = (v: string | null) => {
+    draftIdRef.current = v;
+    setDraftId(v);
+  };
   const [invoiceStatus, setInvoiceStatus] = useState<InvoiceStatus>('draft');
   const isIssued = invoiceStatus !== 'draft';
   const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<string>(new Date(0).toISOString());
@@ -152,6 +161,11 @@ export default function InvoiceEditor() {
 
   /* commission template (Dania Realty) */
   const [template, setTemplate] = useState<InvoiceTemplate>('standard');
+  /* board-up template (Quick Board-Up): the form owns its state; the editor
+     keeps the latest details for save/validate/preview. */
+  const boardUpRef = useRef<BoardUpFormHandle | null>(null);
+  const [boardUp, setBoardUp] = useState<BoardUpDetails | null>(null);
+  const [boardUpPhotos, setBoardUpPhotos] = useState<BoardUpPhoto[]>([]);
   const [salePrice, setSalePrice] = useState('');
   const [commissionPct, setCommissionPct] = useState('');
   const [commissionAmt, setCommissionAmt] = useState('');
@@ -218,7 +232,7 @@ export default function InvoiceEditor() {
           setLoadError('This draft belongs to a different business.');
           return;
         }
-        setDraftId(invoice.id);
+        syncDraftId(invoice.id);
         setLoadedInvoice(invoice);
         setInvoiceStatus(invoice.status);
         setExpectedUpdatedAt(invoice.updated_at);
@@ -240,6 +254,12 @@ export default function InvoiceEditor() {
         setNotes(invoice.notes ?? '');
         setTerms(invoice.terms ?? '');
         setTemplate(invoice.template ?? 'standard');
+        if (invoice.template === 'boardup') {
+          setBoardUp(asBoardUpDetails(invoice.boardup_details));
+        } else {
+          setBoardUp(null);
+          setBoardUpPhotos([]);
+        }
         setSalePrice(invoice.sale_price_cents ? centsToDollars(invoice.sale_price_cents) : '');
         setCommissionPct(invoice.commission_pct && Number(invoice.commission_pct) !== 0 ? String(Number(invoice.commission_pct)) : '');
         setCommissionAmt(invoice.commission_amount_cents ? plainDollars(invoice.commission_amount_cents) : '');
@@ -261,7 +281,8 @@ export default function InvoiceEditor() {
   useEffect(() => {
     if (!isNew || !activeBusiness) return;
     // A business switch is a new context: re-apply that business's default template.
-    setTemplate(activeBusiness.default_template === 'commission' ? 'commission' : 'standard');
+    const dt = activeBusiness.default_template;
+    setTemplate(dt === 'commission' || dt === 'boardup' ? dt : 'standard');
     setNotes((v) => v || activeBusiness.invoice_notes || '');
     setTerms((v) => v || activeBusiness.payment_terms || '');
     setInvoiceTaxPct((v) => v || (Number(activeBusiness.default_tax_rate) > 0 ? rateToPct(activeBusiness.default_tax_rate) : ''));
@@ -305,12 +326,14 @@ export default function InvoiceEditor() {
   const toDraftInput = useCallback((): DraftInput => {
     if (!activeBusiness) throw new Error('No business selected.');
     const isCommission = template === 'commission';
+    const isBoardUp = template === 'boardup';
     return {
       business_id: activeBusiness.id,
       customer_id: customerId || null,
       invoice_date: invoiceDate,
       currency: 'USD',
       template,
+      boardup_details: isBoardUp ? (boardUp ?? asBoardUpDetails(null)) : null,
       sale_price_cents: isCommission && salePrice.trim() ? dollarsToCents(salePrice.trim()) : 0,
       commission_pct: isCommission && commissionPct.trim() ? commissionPct.trim() : '0',
       commission_amount_cents: isCommission && commissionAmt.trim() ? dollarsToCents(commissionAmt.trim()) : null,
@@ -335,13 +358,26 @@ export default function InvoiceEditor() {
         tax_rate: l.taxRate.trim() ? pctToRate(l.taxRate) : undefined,
       })),
     };
-  }, [activeBusiness, customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, template, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge, agentName, secondAgentName, propertyAddress]);
+  }, [activeBusiness, customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, template, boardUp, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge, agentName, secondAgentName, propertyAddress]);
 
   const validate = useCallback((): { errors: string[]; invalid: string[] } => {
     const errs: string[] = [];
     const invalid: string[] = [];
-    if (template !== 'commission' && !customerId) { errs.push('Choose a customer.'); invalid.push('customer'); }
+    if (template !== 'commission' && template !== 'boardup' && !customerId) { errs.push('Choose a customer.'); invalid.push('customer'); }
     if (!invoiceDate) { errs.push('Invoice date is required.'); invalid.push('invoiceDate'); }
+    if (template === 'boardup') {
+      const bu = boardUpRef.current?.validate();
+      if (bu) {
+        errs.push(...bu.errors);
+        invalid.push(...bu.invalid);
+      }
+      try {
+        toDraftInput();
+      } catch (e) {
+        errs.push(e instanceof Error ? e.message : 'The job could not be saved.');
+      }
+      return { errors: errs, invalid };
+    }
     if (template === 'commission') {
       const amt = (label: string, v: string, fieldKey: string, opts?: { required?: boolean; positive?: boolean }) => {
         const t = v.trim();
@@ -483,6 +519,44 @@ export default function InvoiceEditor() {
   const [emailSignal, setEmailSignal] = useState(0);
   const ts = useTimesheet(draftId, undefined, setExpectedUpdatedAt);
 
+  /* Saves the draft without running validation — used when adding job photos so
+     Robert can snap pictures on site before the required fields are filled. */
+  const ensureDraftForPhotos = useCallback(async (): Promise<string | null> => {
+    if (isIssued) return null;
+    if (draftId) return draftId;
+    try {
+      const input = toDraftInput();
+      input.lines = [];
+      const created = await createDraft(input);
+      syncDraftId(created.id);
+      setExpectedUpdatedAt(created.updated_at);
+      setInvoiceNumber(created.invoice_number ?? null);
+      window.history.replaceState(null, '', `/invoices/${created.id}`);
+      return created.id;
+    } catch {
+      return null;
+    }
+  }, [isIssued, draftId, toDraftInput]);
+
+  /* Persists board-up details (incl. photo paths) without running validation, so
+     photos are never orphaned if the required fields aren't filled yet. */
+  const saveBoardUpDetailsNow = useCallback(
+    async (details: BoardUpDetails) => {
+      if (isIssued) return;
+      const id = await ensureDraftForPhotos();
+      if (!id) return;
+      try {
+        const input = toDraftInput();
+        input.lines = [];
+        const updated = await saveDraft(id, { ...input, boardup_details: details }, expectedUpdatedAt);
+        setExpectedUpdatedAt(updated.updated_at);
+      } catch {
+        /* non-critical — autosave persists the paths once validation passes */
+      }
+    },
+    [isIssued, ensureDraftForPhotos, toDraftInput, expectedUpdatedAt],
+  );
+
   const doSave = useCallback(
     async (manual: boolean): Promise<string | null> => {
       if (isIssued) return null; // finalized invoices are read-only
@@ -514,7 +588,7 @@ export default function InvoiceEditor() {
           savedId = draftId;
         } else {
           const created = await createDraft(input);
-          setDraftId(created.id);
+          syncDraftId(created.id);
           setExpectedUpdatedAt(created.updated_at);
           setInvoiceNumber(created.invoice_number ?? null);
           // Swap the URL without a router navigation: navigating from /invoices/new
@@ -866,7 +940,17 @@ export default function InvoiceEditor() {
 
   const customer = customers.find((c) => c.id === customerId) ?? null;
 
-  const previewEl = (
+  const previewEl = template === 'boardup' ? (
+    <BoardUpPreviewBody
+      business={activeBusiness}
+      details={boardUp ?? asBoardUpDetails(null)}
+      photos={boardUpPhotos}
+      jobNumber={invoiceNumber}
+      invoiceDate={invoiceDate}
+      invoiceStatus={invoiceStatus}
+      logoUrl={logoUrl}
+    />
+  ) : (
     <InvoicePreview business={activeBusiness} customer={customer} lines={lines} totals={totals}
       invoiceDate={invoiceDate} invoiceNumber={invoiceNumber}
       notes={notes} paymentInstructions={displayPaymentInstructions}
@@ -886,12 +970,12 @@ export default function InvoiceEditor() {
       <Button variant="secondary" onClick={doPrint} data-action="print">
         Print / Save PDF
       </Button>
-      {!isIssued && emailConfigured && (
+      {template !== 'boardup' && !isIssued && emailConfigured && (
         <Button variant="secondary" onClick={doEmailDraft}>
           Email invoice
         </Button>
       )}
-      {!isIssued && draftId && (
+      {template !== 'boardup' && !isIssued && draftId && (
         <TimesheetAttachButton ts={ts} />
       )}
       {!isIssued && (
@@ -957,8 +1041,42 @@ export default function InvoiceEditor() {
           <fieldset
             disabled={isIssued}
             style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
-            onKeyDown={template === 'commission' ? commissionEnterToNext : standardEnterToNext}
+            onKeyDown={template === 'commission' ? commissionEnterToNext : template === 'boardup' ? undefined : standardEnterToNext}
           >
+          {template === 'boardup' ? (
+            <>
+              <div className="card">
+                <div className="money-row">
+                  <Field label="Job date *" htmlFor="inv-date" error={fieldError('invoiceDate')} className="money">
+                    <TextField id="inv-date" type="date" value={invoiceDate} onChange={touch((e) => setInvoiceDate(e.target.value))} />
+                  </Field>
+                  {invoiceNumber && (
+                    <Field label="Job #" htmlFor="inv-jobnum" className="money">
+                      <TextField id="inv-jobnum" value={`#${invoiceNumber}`} disabled readOnly />
+                    </Field>
+                  )}
+                </div>
+              </div>
+              <BoardUpForm
+                ref={boardUpRef}
+                key={`${draftId ?? 'new'}-${template}`}
+                initial={boardUp ?? asBoardUpDetails(null)}
+                workspaceId={workspace!.id}
+                businessId={activeBusiness.id}
+                jobNumber={invoiceNumber}
+                disabled={isIssued}
+                getDraftId={() => draftIdRef.current}
+                ensureDraft={ensureDraftForPhotos}
+                onPhotosCommitted={(d) => void saveBoardUpDetailsNow(d)}
+                onChange={(d) => {
+                  setBoardUp(d);
+                  markDirty();
+                }}
+                onPhotosChange={setBoardUpPhotos}
+              />
+            </>
+          ) : (
+            <>
           <div className="card">
             <div className="money-row">
               {template !== 'commission' && (
@@ -1307,6 +1425,8 @@ export default function InvoiceEditor() {
               </div>
             </Field>
           </div>
+            </>
+          )}
           </fieldset>
 
           {quickAddOpen && (

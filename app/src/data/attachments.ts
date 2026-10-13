@@ -78,3 +78,51 @@ export async function timesheetDownloadUrl(path: string): Promise<string> {
   if (error || !data?.signedUrl) throw error ?? new Error('Could not create download link.');
   return data.signedUrl;
 }
+
+const PHOTO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB per photo
+
+function boardUpPhotoPath(workspaceId: string, businessId: string, invoiceId: string, file: File): string {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 4) || 'jpg';
+  const stamp = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `${workspaceId}/${businessId}/${invoiceId}/boardup/photo-${stamp}-${rand}.${ext}`;
+}
+
+/**
+ * Uploads one board-up job photo to private storage. Returns the storage path
+ * (recorded in boardup_details.photos). Plain upload — no picker workarounds;
+ * the caller uses a simple file input.
+ */
+export async function uploadBoardUpPhoto(
+  workspaceId: string,
+  businessId: string,
+  invoiceId: string,
+  file: File,
+): Promise<string> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error(`That file (${file.type || 'unknown type'}) is not an image — photos only.`);
+  }
+  if (file.size > PHOTO_MAX_BYTES) throw new Error('Each photo must be under 10 MB.');
+  const sb = requireSupabase();
+  const path = boardUpPhotoPath(workspaceId, businessId, invoiceId, file);
+  const { error } = await sb.storage
+    .from(BUCKET)
+    .upload(path, file, { contentType: file.type || 'image/jpeg', upsert: false });
+  if (error) throw error;
+  return path;
+}
+
+/** Removes a board-up job photo from storage. */
+export async function removeBoardUpPhoto(path: string): Promise<void> {
+  const sb = requireSupabase();
+  const { error } = await sb.storage.from(BUCKET).remove([path]);
+  if (error) throw error;
+}
+
+/** Short-lived view URL for a stored board-up photo (5 minutes). */
+export async function boardUpPhotoUrl(path: string): Promise<string> {
+  const sb = requireSupabase();
+  const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(path, 300);
+  if (error || !data?.signedUrl) throw error ?? new Error('Could not create photo link.');
+  return data.signedUrl;
+}
