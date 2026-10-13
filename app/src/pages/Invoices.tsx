@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
 import type { Customer, Invoice } from '../db/types';
-import { createDraft, deleteDraft, getDraft, listInvoices } from '../data/drafts';
+import { deleteDraft, listInvoices } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listBusinessMembers } from '../data/team';
 import { isOverdue } from '../data/invoices';
@@ -14,7 +14,6 @@ import { Alert, BackButton, Button, EmptyState, SetupRequired, TextField } from 
 
 export default function Invoices() {
   const { activeBusiness, notConfigured, isOwner, loading: businessesLoading } = useBusiness();
-  const navigate = useNavigate();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [filter, setFilter] = useState<'all' | 'draft' | 'issued' | 'void'>('all');
   const [search, setSearch] = useState('');
@@ -65,46 +64,6 @@ export default function Invoices() {
   if (notConfigured) return <SetupRequired what="Invoices" />;
   if (businessesLoading) return <p>Loading…</p>;
   if (!activeBusiness) return <EmptyState title="No business selected" body="Create a business first." />;
-
-  const duplicate = async (id: string) => {
-    try {
-      const { invoice, lines } = await getDraft(id);
-      const copy = await createDraft({
-        business_id: invoice.business_id,
-        customer_id: invoice.customer_id,
-        invoice_date: new Date().toISOString().slice(0, 10),
-        currency: invoice.currency,
-        notes: invoice.notes,
-        terms: invoice.terms,
-        template: invoice.template,
-        boardup_details:
-          invoice.template === 'boardup' && invoice.boardup_details
-            ? { ...(invoice.boardup_details as Record<string, unknown>), photos: [] }
-            : null,
-        sale_price_cents: invoice.sale_price_cents,
-        commission_pct: invoice.commission_pct,
-        commission_amount_cents: invoice.commission_amount_cents,
-        processing_fee_cents: invoice.processing_fee_cents,
-        other_charge_desc: invoice.other_charge_desc,
-        other_charge_cents: invoice.other_charge_cents,
-        agent_name: invoice.agent_name,
-        second_agent_name: invoice.second_agent_name,
-        property_address: invoice.property_address,
-        lines: lines.map((l) => ({
-          item_id: l.item_id,
-          description: l.description,
-          quantity: l.quantity,
-          unit_label: l.unit_label,
-          unit_price_cents: l.unit_price_cents,
-          discount_cents: l.discount_cents,
-          tax_rate: l.tax_rate,
-        })),
-      });
-      navigate(`/invoices/${copy.id}`);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Duplicate failed.');
-    }
-  };
 
   const remove = async (id: string) => {
     if (!window.confirm('Delete this draft? This cannot be undone.')) return;
@@ -299,9 +258,6 @@ export default function Invoices() {
                     <Link className="btn btn-secondary btn-sm" to={`/invoices/${d.id}`}>
                       Open
                     </Link>{' '}
-                    <Button variant="ghost" size="sm" onClick={() => duplicate(d.id)}>
-                      Duplicate
-                    </Button>{' '}
                     {d.status === 'draft' && (
                       <Button variant="ghost" size="sm" onClick={() => remove(d.id)}>
                         Delete
