@@ -4,6 +4,7 @@ import {
   EMPTY_BOARDUP,
   asBoardUpDetails,
   boardUpPhotoCaption,
+  buildBoardUpSmsText,
   buildBoardUpSummary,
   chunkArray,
   estimateBoardUp,
@@ -79,6 +80,41 @@ describe('buildBoardUpSummary', () => {
     expect(body).toContain('Openings: 4 windows, 0 doors, 0 sliders/patios, 0 garage doors');
     expect(body).toContain('Photos: 2 attached');
     expect(body).toContain('4x8 sheets');
+  });
+});
+
+describe('buildBoardUpSmsText', () => {
+  it('matches the original app layout: date, city header, address, divider, facts', () => {
+    const body = buildBoardUpSmsText({
+      ...EMPTY_BOARDUP,
+      cityName: 'City of Lauderhill',
+      streetAddress: '1333 S Ocean Blvd, Apt',
+      city: 'Lauderhill Florida',
+      caseNumber: 'rrrr',
+      requestingOfficer: 'ser',
+      sliders: 2,
+      photos: ['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg', 'e.jpg'],
+    });
+    const lines = body.split('\n');
+    expect(lines[0]).toMatch(/at \d{1,2}:\d{2} (AM|PM)$/);
+    expect(lines[1]).toBe('City of Lauderhill');
+    expect(lines[2]).toBe('1333 S Ocean Blvd, Apt');
+    expect(lines[3]).toBe('Lauderhill, Florida');
+    expect(lines[4]).toBe('--------------------');
+    expect(body).toContain('Case rrrr');
+    expect(body).toContain('Officer ser');
+    expect(body).toContain('Single-family');
+    expect(body).toContain('Emergency board-up');
+    expect(body).toContain('2 total openings - 0 windows, 0 doors, 2 sliders/patios, 0 garage doors');
+    expect(body).toContain('3 plywood sheets (64 sq ft cover before waste)');
+    expect(body).toContain('5 attached photos');
+  });
+
+  it('omits blank case/officer lines and the photo line when empty', () => {
+    const body = buildBoardUpSmsText({ ...EMPTY_BOARDUP });
+    expect(body).not.toContain('Case');
+    expect(body).not.toContain('Officer');
+    expect(body).not.toContain('attached photos');
   });
 });
 

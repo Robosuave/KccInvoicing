@@ -215,9 +215,40 @@ function fmtDateTime(v: string): string {
   });
 }
 
-/** Plain-text job summary for mailto:/sms: bodies and the printed sheet. */
-export function buildBoardUpSummary(d: BoardUpDetails, jobNumber: string | null): string {
+/** Clean plain-text job card for SMS, matching the original intake app's layout:
+ * date/time, city header, address, divider, then one fact per line. */
+export function buildBoardUpSmsText(d: BoardUpDetails): string {
   const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors);
+  const now = new Date();
+  const datePart = now.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+  const timePart = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const cityLine = d.city
+    ? d.city.endsWith(' Florida')
+      ? d.city.replace(/ Florida$/, ', Florida')
+      : `${d.city}, Florida`
+    : '';
+  const total = d.windows + d.doors + d.sliders + d.garageDoors;
+  const lines = [
+    `${datePart} at ${timePart}`,
+    d.cityName || null,
+    d.streetAddress || null,
+    cityLine || null,
+    '--------------------',
+    d.caseNumber ? `Case ${d.caseNumber}` : null,
+    d.requestingOfficer ? `Officer ${d.requestingOfficer}` : null,
+    d.propertyType,
+    d.serviceNeeded,
+    d.urgency,
+    d.crew,
+    `${total} total openings - ${d.windows} windows, ${d.doors} doors, ${d.sliders} sliders/patios, ${d.garageDoors} garage doors`,
+    `${est.sheets} plywood sheets (${Math.round(est.rawSqft)} sq ft cover before waste)`,
+    d.photos.length > 0 ? `${d.photos.length} attached photos` : null,
+  ].filter((l): l is string => l !== null && l !== '');
+  return lines.join('\n');
+}
+
+/** Plain-text job summary for mailto:/sms: bodies and the printed sheet. */
+export function buildBoardUpSummary(d: BoardUpDetails, jobNumber: string | null): string {  const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors);
   const lines = [
     `BOARD-UP JOB${jobNumber ? ` #${jobNumber}` : ''}`,
     `City: ${d.cityName || '—'}`,

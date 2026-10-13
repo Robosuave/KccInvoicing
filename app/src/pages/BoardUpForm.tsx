@@ -12,6 +12,7 @@ import {
   SERVICE_NEEDED_OPTIONS,
   URGENCY_OPTIONS,
   asBoardUpDetails,
+  buildBoardUpSmsText,
   buildBoardUpSummary,
   estimateBoardUp,
   loadCustomCities,
@@ -151,6 +152,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
+  const [smsCopied, setSmsCopied] = useState(false);
   /** Cities added via "Other", remembered per device. */
   const [customCityNames, setCustomCityNames] = useState<string[]>(() =>
     loadCustomCities(BOARDUP_CUSTOM_CITY_NAMES_KEY),
@@ -401,9 +403,21 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       setShareError('Enter a "Text to" phone number first.');
       return;
     }
-    const body = buildBoardUpSummary(d, jobNumber);
+    const body = buildBoardUpSmsText(d);
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     window.location.href = `sms:${num}${isIOS ? '&body=' : '?body='}${encodeURIComponent(body)}`;
+  };
+
+  const copySmsText = async () => {
+    setShareError(null);
+    setSmsCopied(false);
+    const body = buildBoardUpSmsText(details());
+    try {
+      await navigator.clipboard.writeText(body);
+      setSmsCopied(true);
+    } catch {
+      setShareError('Could not copy — the browser blocked clipboard access.');
+    }
   };
 
   const blurPhone = (key: 'phone' | 'textTo') => {
@@ -823,7 +837,15 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         <Button id="bu-textjob" variant="secondary" onClick={textJob}>
           Text this job
         </Button>
+        <Button id="bu-copysms" variant="secondary" onClick={copySmsText}>
+          Copy SMS text
+        </Button>
       </div>
+      {smsCopied && (
+        <div style={{ marginBottom: 12, color: '#15803d', fontSize: 14, fontWeight: 600 }}>
+          Copied — paste it into your text message.
+        </div>
+      )}
     </div>
   );
 });
