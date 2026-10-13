@@ -104,6 +104,43 @@ export function asSnapshot(raw: unknown): InvoiceSnapshot | null {
 }
 
 /**
+ * Builds a share-ready snapshot for a board-up job from live form state.
+ * Used by "Text + PDF" / "Save condensed PDF" so a draft job can be rendered
+ * without finalizing it. Not immutable — for field sharing, not accounting.
+ */
+export function buildBoardUpShareSnapshot(args: {
+  business: {
+    display_name: string; legal_name: string | null; header_line: string | null; logo_path: string | null;
+    address_line1: string | null; address_line2: string | null; city: string | null; state: string | null;
+    zip: string | null; phone: string | null; email: string | null; website: string | null; tax_id: string | null;
+  };
+  details: Record<string, unknown>;
+  jobNumber: string | null;
+  invoiceDate: string;
+}): InvoiceSnapshot {
+  const { business, details, jobNumber, invoiceDate } = args;
+  return buildLiveSnapshot({
+    invoice: {
+      invoice_number: jobNumber, template: 'boardup', currency: 'USD',
+      invoice_date: invoiceDate, due_date: null, po_number: null,
+      service_date: null, service_period: null,
+      subtotal_cents: 0, discount_cents: 0, tax_cents: 0, tax_breakdown: [],
+      shipping_cents: 0, total_cents: 0, notes: null, terms: null,
+      payment_instructions_snapshot: null, payment_instructions: null,
+      sale_price_cents: 0, commission_pct: '', commission_amount_cents: null,
+      processing_fee_cents: 0, other_charge_desc: null, other_charge_cents: 0,
+      agent_name: null, second_agent_name: null, property_address: null,
+      property_city: null, property_state: null, property_zip: null,
+      boardup_details: details,
+      issued_at: null,
+    },
+    business,
+    customer: null,
+    lines: [],
+  });
+}
+
+/**
  * Fallback for invoices issued before migration 0018 (snapshot = null):
  * builds the v2 shape from live data. Not immutable — but no worse than the
  * pre-0018 print view, which also rendered live data. New issuances always

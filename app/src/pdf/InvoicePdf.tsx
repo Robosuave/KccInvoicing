@@ -82,6 +82,9 @@ const styles = StyleSheet.create({
   buPhotoCell: { width: '48%', marginRight: '2%', marginBottom: 10 },
   buPhotoImg: { width: '100%', height: 190, objectFit: 'cover' },
   buPhotoCaption: { fontSize: 8, color: '#5b6470', marginTop: 3 },
+  /** Condensed variant: small thumbnails, 8 per page, for quick sharing. */
+  buPhotoCellCondensed: { width: '23%', marginRight: '2%', marginBottom: 8 },
+  buPhotoImgCondensed: { width: '100%', height: 95, objectFit: 'cover' },
 });
 
 function addressLines(b: InvoiceSnapshot['business']): string[] {
@@ -249,7 +252,7 @@ function CommissionBody({ snap }: { snap: InvoiceSnapshot }) {
 }
 
 /** Board-up job sheet body: all intake fields, live material estimate, and job photos. */
-function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: string[] }) {
+function BoardUpBody({ snap, photoUrls, condensed = false }: { snap: InvoiceSnapshot; photoUrls: string[]; condensed?: boolean }) {
   const d = asBoardUpDetails(snap.boardup_details);
   const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors);
   /** Property address printed under every photo, matching the source app. */
@@ -291,11 +294,11 @@ function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: st
       {photoUrls.length > 0 && (
         <View>
           <Text style={styles.sectionLabel}>Photos ({photoUrls.length})</Text>
-          {chunkArray(photoUrls, PHOTOS_PER_PDF_PAGE).map((page, pi) => (
+          {chunkArray(photoUrls, condensed ? 8 : PHOTOS_PER_PDF_PAGE).map((page, pi) => (
             <View key={pi} style={styles.buPhotoPage} wrap={false}>
               {page.map((url, i) => (
-                <View key={i} style={styles.buPhotoCell}>
-                  <Image src={url} style={styles.buPhotoImg} />
+                <View key={i} style={condensed ? styles.buPhotoCellCondensed : styles.buPhotoCell}>
+                  <Image src={url} style={condensed ? styles.buPhotoImgCondensed : styles.buPhotoImg} />
                   {caption !== '' && <Text style={styles.buPhotoCaption}>{caption}</Text>}
                 </View>
               ))}
@@ -313,6 +316,7 @@ export function InvoicePdf({
   pageSize = 'LETTER',
   logoUrl,
   photoUrls = [],
+  condensed = false,
 }: {
   snapshot: InvoiceSnapshot;
   style?: InvoiceStyle;
@@ -320,6 +324,8 @@ export function InvoicePdf({
   logoUrl?: string;
   /** Resolved view URLs for board-up job photos (template 'boardup' only). */
   photoUrls?: string[];
+  /** Condensed board-up layout: summary + small thumbnails for quick sharing. */
+  condensed?: boolean;
 }) {
   const { label, linesPerPage } = PAGE[pageSize];
   const isCommission = snapshot.template === 'commission';
@@ -355,7 +361,7 @@ export function InvoicePdf({
       <Document title={`Board-Up Job ${snapshot.invoice_number}`} author={snapshot.business.display_name}>
         <Page size={label} style={pageStyle}>
           <Header snap={snapshot} style={style} logoUrl={logoUrl} title={title} subtitle={subtitle} />
-          <BoardUpBody snap={snapshot} photoUrls={photoUrls} />
+          <BoardUpBody snap={snapshot} photoUrls={photoUrls} condensed={condensed} />
           <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} fixed />
         </Page>
       </Document>

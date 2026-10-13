@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isOverdue } from '../data/invoices';
-import { asSnapshot, buildLiveSnapshot } from '../lib/snapshot';
+import { asSnapshot, buildBoardUpShareSnapshot, buildLiveSnapshot } from '../lib/snapshot';
 import { invoicePdfFilename } from '../pdf/InvoicePdf';
 import { receiptPdfFilename } from '../pdf/ReceiptPdf';
 import { paymentStatusOf, type Invoice, type Payment } from '../db/types';
@@ -147,6 +147,26 @@ describe('buildLiveSnapshot', () => {
       lines: [],
     });
     expect(snap.payment_instructions).toBe('FROZEN instructions');
+  });
+});
+
+describe('buildBoardUpShareSnapshot', () => {
+  it('builds a boardup snapshot from live form state for sharing', () => {
+    const snap = buildBoardUpShareSnapshot({
+      business: {
+        display_name: 'Aquick Board-up', legal_name: null, header_line: null, logo_path: null,
+        address_line1: null, address_line2: null, city: null, state: null, zip: null,
+        phone: null, email: null, website: null, tax_id: null,
+      },
+      details: { streetAddress: '123 Main St', windows: 2 } as unknown as Record<string, unknown>,
+      jobNumber: 'QB-3',
+      invoiceDate: '2026-10-13',
+    });
+    expect(snap.template).toBe('boardup');
+    expect(snap.invoice_number).toBe('QB-3');
+    expect(snap.business.display_name).toBe('Aquick Board-up');
+    expect((snap.boardup_details as { streetAddress: string }).streetAddress).toBe('123 Main St');
+    expect(asSnapshot(snap)).not.toBeNull();
   });
 });
 

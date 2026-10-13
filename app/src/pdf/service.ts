@@ -50,11 +50,12 @@ export async function renderInvoicePdfBlob(
   snapshot: InvoiceSnapshot,
   style: InvoiceStyle = 'classic',
   pageSize: PdfPageSize = 'LETTER',
+  condensed = false,
 ): Promise<Blob> {
   const logoUrl = await resolveLogoUrl(snapshot);
   const photoUrls = await resolveBoardUpPhotoUrls(snapshot);
   const renderWith = async (url: string | undefined) => {
-    const element = InvoicePdf({ snapshot, style, pageSize, logoUrl: url, photoUrls });
+    const element = InvoicePdf({ snapshot, style, pageSize, logoUrl: url, photoUrls, condensed });
     const instance = pdf(element);
     // Ensure the reconciler has flushed: on some Safari/React versions the
     // initial updateContainer doesn't synchronously set container.document.
