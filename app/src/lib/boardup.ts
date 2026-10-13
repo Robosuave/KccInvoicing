@@ -252,34 +252,27 @@ function fmtDateTime(v: string): string {
   });
 }
 
-/** Clean plain-text job card for SMS, matching the original intake app's layout:
- * date/time, city header, address, divider, then one fact per line. */
+/** Clean plain-text job card for SMS, matching the source app's compact labeled layout. */
 export function buildBoardUpSmsText(d: BoardUpDetails): string {
   const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors);
-  const now = new Date();
-  const datePart = now.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
-  const timePart = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const total = d.windows + d.doors + d.sliders + d.garageDoors;
   const cityLine = d.city
     ? d.city.endsWith(' Florida')
       ? d.city.replace(/ Florida$/, ', Florida')
       : `${d.city}, Florida`
     : '';
-  const total = d.windows + d.doors + d.sliders + d.garageDoors;
+  const address = [d.streetAddress.trim(), cityLine].filter(Boolean).join(', ');
   const lines = [
-    `${datePart} at ${timePart}`,
-    d.cityName || null,
-    d.streetAddress || null,
-    cityLine || null,
-    '--------------------',
-    d.caseNumber ? `Case ${d.caseNumber}` : null,
-    d.requestingOfficer ? `Officer ${d.requestingOfficer}` : null,
-    d.propertyType,
-    d.serviceNeeded,
-    d.urgency,
-    d.crew,
-    `${total} total openings - ${d.windows} windows, ${d.doors} doors, ${d.sliders} sliders/patios, ${d.garageDoors} garage doors`,
-    `${est.sheets} plywood sheets (${Math.round(est.rawSqft)} sq ft cover before waste)`,
-    d.photos.length > 0 ? `${d.photos.length} attached photos` : null,
+    `AQUICK BOARD-UP \u2014 ${d.serviceNeeded}`,
+    d.caseNumber ? `Case #: ${d.caseNumber}` : null,
+    d.requestingOfficer ? `Requesting officer: ${d.requestingOfficer}` : null,
+    d.cityName ? `City name: ${d.cityName}` : null,
+    address ? `Address: ${address}` : null,
+    d.phone ? `Phone number: ${d.phone}` : null,
+    `Type: ${d.propertyType}`,
+    `Urgency: ${d.urgency}${d.neededBy ? ` (needed by ${fmtDateTime(d.neededBy)})` : ''} | Crew: ${d.crew}${d.additionalCrew ? ` + ${d.additionalCrew}` : ''}`,
+    `Openings: ${total} (${d.windows}W ${d.doors}D ${d.sliders}S ${d.garageDoors}G) \u2014 ${est.sheets} sheets est.`,
+    'Ref: https://aquick.kalekycomputer.com',
   ].filter((l): l is string => l !== null && l !== '');
   return lines.join('\n');
 }

@@ -146,37 +146,40 @@ describe('asBoardUpDetails measurements', () => {
 });
 
 describe('buildBoardUpSmsText', () => {
-  it('matches the original app layout: date, city header, address, divider, facts', () => {
+  it('matches the source app compact layout', () => {
     const body = buildBoardUpSmsText({
       ...EMPTY_BOARDUP,
-      cityName: 'City of Lauderhill',
-      streetAddress: '1333 S Ocean Blvd, Apt',
-      city: 'Lauderhill Florida',
-      caseNumber: 'rrrr',
-      requestingOfficer: 'ser',
-      sliders: 2,
-      photos: ['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg', 'e.jpg'],
+      serviceNeeded: 'Emergency board-up',
+      caseNumber: '13344',
+      requestingOfficer: 'Dija',
+      cityName: 'City of Miramar',
+      streetAddress: '344tt',
+      city: 'Miramar Florida',
+      phone: '(954) 441-4540',
+      propertyType: 'Commercial',
+      urgency: 'Today',
+      crew: 'Dan',
+      windows: 1,
+      doors: 1,
     });
     const lines = body.split('\n');
-    expect(lines[0]).toMatch(/at \d{1,2}:\d{2} (AM|PM)$/);
-    expect(lines[1]).toBe('City of Lauderhill');
-    expect(lines[2]).toBe('1333 S Ocean Blvd, Apt');
-    expect(lines[3]).toBe('Lauderhill, Florida');
-    expect(lines[4]).toBe('--------------------');
-    expect(body).toContain('Case rrrr');
-    expect(body).toContain('Officer ser');
-    expect(body).toContain('Single-family');
-    expect(body).toContain('Emergency board-up');
-    expect(body).toContain('2 total openings - 0 windows, 0 doors, 2 sliders/patios, 0 garage doors');
-    expect(body).toContain('3 plywood sheets (64 sq ft cover before waste)');
-    expect(body).toContain('5 attached photos');
+    expect(lines[0]).toBe('AQUICK BOARD-UP \u2014 Emergency board-up');
+    expect(body).toContain('Case #: 13344');
+    expect(body).toContain('Requesting officer: Dija');
+    expect(body).toContain('City name: City of Miramar');
+    expect(body).toContain('Address: 344tt, Miramar, Florida');
+    expect(body).toContain('Phone number: (954) 441-4540');
+    expect(body).toContain('Type: Commercial');
+    expect(body).toContain('Urgency: Today | Crew: Dan');
+    expect(body).toContain('Openings: 2 (1W 1D 0S 0G) \u2014 2 sheets est.');
+    expect(body).toContain('Ref: https://aquick.kalekycomputer.com');
   });
 
-  it('omits blank case/officer lines and the photo line when empty', () => {
+  it('omits blank case/officer/phone lines', () => {
     const body = buildBoardUpSmsText({ ...EMPTY_BOARDUP });
-    expect(body).not.toContain('Case');
-    expect(body).not.toContain('Officer');
-    expect(body).not.toContain('attached photos');
+    expect(body).not.toContain('Case #');
+    expect(body).not.toContain('Requesting officer');
+    expect(body).not.toContain('Phone number');
   });
 });
 
