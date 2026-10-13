@@ -437,6 +437,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <SelectField
             id="bu-cityname"
+          style={{ maxWidth: 260 }}
             value={f.cityName}
             disabled={disabled}
             onChange={(e) => {
@@ -467,6 +468,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         <Field label="New city name" htmlFor="bu-cityname-other" error={fieldError('cityName')}>
           <TextField
             id="bu-cityname-other"
+            style={{ maxWidth: 280 }}
             enterKeyHint="next"
             value={otherCityNameText}
             disabled={disabled}
@@ -483,6 +485,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       <Field label="Other – customer name" htmlFor="bu-othercustomer">
         <TextField
           id="bu-othercustomer"
+          style={{ maxWidth: 300 }}
           enterKeyHint="next"
           value={f.otherCustomerName}
           disabled={disabled}
@@ -494,6 +497,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       <Field label="Street address *" htmlFor="bu-street" error={fieldError('streetAddress')}>
         <TextField
           id="bu-street"
+          style={{ maxWidth: 440 }}
           enterKeyHint="next"
           value={f.streetAddress}
           disabled={disabled}
@@ -506,6 +510,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <SelectField
             id="bu-city"
+          style={{ maxWidth: 260 }}
             value={f.city}
             disabled={disabled}
             onChange={(e) => {
@@ -536,6 +541,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         <Field label="New city name" htmlFor="bu-city-other">
           <TextField
             id="bu-city-other"
+            style={{ maxWidth: 280 }}
             enterKeyHint="next"
             value={otherCityText}
             disabled={disabled}
@@ -552,6 +558,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       <Field label="Phone number" htmlFor="bu-phone" error={fieldError('phone')} hint={PHONE_HINT}>
         <TextField
           id="bu-phone"
+          style={{ maxWidth: 200 }}
           enterKeyHint="next"
           inputMode="tel"
           value={f.phone}
@@ -565,6 +572,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       <Field label="Case number" htmlFor="bu-case">
         <TextField
           id="bu-case"
+          style={{ maxWidth: 190 }}
           enterKeyHint="next"
           value={f.caseNumber}
           disabled={disabled}
@@ -576,6 +584,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       <Field label="Requesting officer and badge number" htmlFor="bu-officer">
         <TextField
           id="bu-officer"
+          style={{ maxWidth: 320 }}
           enterKeyHint="next"
           value={f.requestingOfficer}
           disabled={disabled}
@@ -587,6 +596,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       <Field label="Type" htmlFor="bu-type">
         <SelectField
           id="bu-type"
+          style={{ maxWidth: 240 }}
           value={f.propertyType}
           disabled={disabled}
           onChange={(e) => set('propertyType', e.target.value)}
@@ -602,6 +612,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       <Field label="Service needed" htmlFor="bu-service">
         <SelectField
           id="bu-service"
+          style={{ maxWidth: 300 }}
           value={f.serviceNeeded}
           disabled={disabled}
           onChange={(e) => set('serviceNeeded', e.target.value)}
@@ -638,6 +649,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       <Field label="Needed by" htmlFor="bu-neededby">
         <TextField
           id="bu-neededby"
+          style={{ maxWidth: 230 }}
           type="datetime-local"
           value={f.neededBy}
           disabled={disabled}
@@ -647,22 +659,25 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
 
       <div className="card" style={{ marginBottom: 16 }}>
         <h3 style={{ marginTop: 0, marginBottom: 4 }}>Openings</h3>
-        <Stepper id="bu-win" label="Windows" value={f.windows} disabled={disabled} onChange={(v) => set('windows', v)} />
-        <Stepper id="bu-door" label="Doors" value={f.doors} disabled={disabled} onChange={(v) => set('doors', v)} />
-        <Stepper id="bu-slider" label="Sliders / patios" value={f.sliders} disabled={disabled} onChange={(v) => set('sliders', v)} />
-        <Stepper
-          id="bu-gar"
-          label="Garage doors"
-          value={f.garageDoors}
-          disabled={disabled}
-          onChange={(v) => set('garageDoors', v)}
-        />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+          <Stepper id="bu-win" label="Windows" value={f.windows} disabled={disabled} onChange={(v) => set('windows', v)} />
+          <Stepper id="bu-door" label="Doors" value={f.doors} disabled={disabled} onChange={(v) => set('doors', v)} />
+          <Stepper id="bu-slider" label="Sliders / patios" value={f.sliders} disabled={disabled} onChange={(v) => set('sliders', v)} />
+          <Stepper
+            id="bu-gar"
+            label="Garage doors"
+            value={f.garageDoors}
+            disabled={disabled}
+            onChange={(v) => set('garageDoors', v)}
+          />
+        </div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>{BOARDUP_FORMULA_NOTE}</div>
       </div>
 
       <Field label="Other opening information" htmlFor="bu-otheropen">
         <TextField
           id="bu-otheropen"
+          style={{ maxWidth: 320 }}
           enterKeyHint="next"
           value={f.otherOpenings}
           disabled={disabled}
@@ -672,7 +687,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       </Field>
 
       <Field label="Crew" htmlFor="bu-crew">
-        <SelectField id="bu-crew" value={f.crew} disabled={disabled} onChange={(e) => set('crew', e.target.value)}>
+        <SelectField id="bu-crew" style={{ maxWidth: 190 }} value={f.crew} disabled={disabled} onChange={(e) => set('crew', e.target.value)}>
           {CREW_OPTIONS.map((o) => (
             <option key={o} value={o}>
               {o}
@@ -684,6 +699,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       <Field label="Additional crew name (optional)" htmlFor="bu-addcrew">
         <TextField
           id="bu-addcrew"
+          style={{ maxWidth: 300 }}
           enterKeyHint="next"
           value={f.additionalCrew}
           disabled={disabled}
@@ -695,6 +711,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       <Field label="Access, hazards, gate codes, dogs, etc." htmlFor="bu-access">
         <TextArea
           id="bu-access"
+          style={{ maxWidth: 520 }}
           value={f.accessNotes}
           disabled={disabled}
           onChange={(e) => set('accessNotes', e.target.value)}
@@ -769,6 +786,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       <Field label="Email to (optional)" htmlFor="bu-emailto" error={fieldError('emailTo')}>
         <TextField
           id="bu-emailto"
+          style={{ maxWidth: 320 }}
           enterKeyHint="next"
           inputMode="email"
           value={f.emailTo}
@@ -781,6 +799,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       <Field label="Text to — phone (optional)" htmlFor="bu-textto" error={fieldError('textTo')} hint={PHONE_HINT}>
         <TextField
           id="bu-textto"
+          style={{ maxWidth: 200 }}
           enterKeyHint="done"
           inputMode="tel"
           value={f.textTo}
