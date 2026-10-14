@@ -382,7 +382,7 @@ export function InvoicePdf({
 
   if (isBoardUp && photosOnly) {
     return (
-      <Document title={`Board-Up Job Photos ${snapshot.invoice_number}`} author={snapshot.business.display_name}>
+      <Document title={`Aquick Job Photos ${snapshot.invoice_number}`} author={snapshot.business.display_name}>
         <Page size={label} style={pageStyle}>
           <Header snap={snapshot} style={style} logoUrl={logoUrl} title="JOB PHOTOS" subtitle={subtitle} />
           <BoardUpPhotosBody snap={snapshot} photoUrls={photoUrls} />
@@ -394,7 +394,7 @@ export function InvoicePdf({
 
   if (isBoardUp) {
     return (
-      <Document title={`Board-Up Job ${snapshot.invoice_number}`} author={snapshot.business.display_name}>
+      <Document title={`Aquick Job ${snapshot.invoice_number}`} author={snapshot.business.display_name}>
         <Page size={label} style={pageStyle}>
           <Header snap={snapshot} style={style} logoUrl={logoUrl} title={title} subtitle={subtitle} />
           <BoardUpBody snap={snapshot} photoUrls={photoUrls} />

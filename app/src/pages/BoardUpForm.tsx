@@ -12,7 +12,7 @@ import {
   SERVICE_NEEDED_OPTIONS,
   URGENCY_OPTIONS,
   asBoardUpDetails,
-  boardUpFilenameBase,
+  boardUpPdfFilename,
   boardUpPhotoCaption,
   buildBoardUpSmsText,
   buildBoardUpSummary,
@@ -325,9 +325,17 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     setAddingCity(false);
   };
 
-  // Resolve view URLs for photos already stored on the job.
+  // Browser tab / print-to-PDF name: "Aquick Job", not the generic app title.
   useEffect(() => {
-    let cancelled = false;
+    const prev = document.title;
+    document.title = 'Aquick Job';
+    return () => {
+      document.title = prev;
+    };
+  }, []);
+
+  // Resolve view URLs for photos already stored on the job.
+  useEffect(() => {    let cancelled = false;
     (async () => {
       const items: PhotoItem[] = [];
       for (const path of asBoardUpDetails(initial).photos) {
@@ -534,12 +542,11 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     setShareBusy('pdf');
     try {
       const d = details();
-      const base = boardUpFilenameBase(d);
       const infoBlob = await renderSharePdf(false, false);
-      const files = [new File([infoBlob], `${base} - job information.pdf`, { type: 'application/pdf' })];
+      const files = [new File([infoBlob], boardUpPdfFilename(d, invoiceDate, 'job information'), { type: 'application/pdf' })];
       if (d.photos.length > 0) {
         const photosBlob = await renderSharePdf(true, true);
-        files.push(new File([photosBlob], `${base} - photos.pdf`, { type: 'application/pdf' }));
+        files.push(new File([photosBlob], boardUpPdfFilename(d, invoiceDate, 'photos'), { type: 'application/pdf' }));
       }
       if (!canShareFiles(files)) {
         setShareError('This browser can’t share files — use Print / Save PDF instead.');
@@ -594,7 +601,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${boardUpFilenameBase(details())} - condensed.pdf`;
+      a.download = boardUpPdfFilename(details(), invoiceDate, 'condensed');
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -616,7 +623,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     try {
       const d = details();
       const blob = await renderSharePdf(false, true);
-      const name = `${boardUpFilenameBase(d)} - condensed.pdf`;
+      const name = boardUpPdfFilename(d, invoiceDate, 'condensed');
       const file = new File([blob], name, { type: 'application/pdf' });
       const subject = `Board-up job${jobNumber ? ` #${jobNumber}` : ''} — ${d.streetAddress || 'new job'}`;
       const body = buildBoardUpSummary(d, jobNumber);

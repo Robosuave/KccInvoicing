@@ -5,6 +5,8 @@ import {
   asBoardUpDetails,
   boardUpPhotoCaption,
   boardUpFilenameBase,
+  boardUpFileDate,
+  boardUpPdfFilename,
   buildBoardUpSmsText,
   buildBoardUpSummary,
   measurementSummaryLines,
@@ -107,6 +109,26 @@ describe('boardUpFilenameBase', () => {
 
   it('falls back when there is no address', () => {
     expect(boardUpFilenameBase({ streetAddress: '', city: '' })).toBe('boardup-job');
+  });
+});
+
+describe('boardUpPdfFilename', () => {
+  const d = { streetAddress: '344tt', city: 'Miramar Florida' };
+
+  it('names files "Aquick Job M-D-YYYY - address - kind.pdf"', () => {
+    expect(boardUpPdfFilename(d, '2026-10-13', 'job information')).toBe(
+      'Aquick Job 10-13-2026 - 344tt, Miramar Florida - job information.pdf',
+    );
+    expect(boardUpPdfFilename(d, '2026-10-13', 'photos')).toBe(
+      'Aquick Job 10-13-2026 - 344tt, Miramar Florida - photos.pdf',
+    );
+    expect(boardUpPdfFilename(d, '2026-10-13', 'condensed')).toBe(
+      'Aquick Job 10-13-2026 - 344tt, Miramar Florida - condensed.pdf',
+    );
+  });
+
+  it('parses the day and month from the job date', () => {
+    expect(boardUpFileDate('2026-01-05')).toBe('1-5-2026');
   });
 });
 

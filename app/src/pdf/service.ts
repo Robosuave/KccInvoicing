@@ -46,6 +46,54 @@ async function resolveBoardUpPhotoUrls(snapshot: InvoiceSnapshot): Promise<strin
   return urls;
 }
 
+/**
+ * Target dimensions for a photo embedded in a PDF, keeping the aspect ratio.
+ * Pure function so the math is unit-testable.
+ */
+export function pdfPhotoTargetSize(width: number, height: number, maxSide = 900): { w: number; h: number } {
+  const w0 = Math.max(1, Math.floor(width) || 1);
+  const h0 = Math.max(1, Math.floor(height) || 1);
+  const scale = Math.min(1, maxSide / Math.max(w0, h0));
+  return { w: Math.max(1, Math.round(w0 * scale)), h: Math.max(1, Math.round(h0 * scale)) };
+}
+
+/**
+ * Downscale a full-resolution phone photo to a compact JPEG data URL for PDF
+ * embedding (4 photos/page stay crisp well under email size limits). Any
+ * failure falls back to the original URL so the PDF still builds.
+ */
+async function downscalePhotoForPdf(url: string): Promise<string> {
+  try {
+    if (typeof document === 'undefined' || typeof Image === 'undefined') return url;
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.crossOrigin = 'anonymous';
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('photo load failed'));
+      el.src = url;
+    });
+    const { w, h } = pdfPhotoTargetSize(img.naturalWidth || img.width, img.naturalHeight || img.height);
+    // Already small enough and a JPEG: embedding as-is is fine.
+    if (w >= (img.naturalWidth || img.width) && /\.jpe?g($|\?)/i.test(url)) return url;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return url;
+    ctx.drawImage(img, 0, 0, w, h);
+    const out = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.72));
+    if (!out) return url;
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error ?? new Error('read failed'));
+      reader.readAsDataURL(out);
+    });
+  } catch {
+    return url;
+  }
+}
+
 export async function renderInvoicePdfBlob(
   snapshot: InvoiceSnapshot,
   style: InvoiceStyle = 'classic',
@@ -55,8 +103,11 @@ export async function renderInvoicePdfBlob(
 ): Promise<Blob> {
   const logoUrl = await resolveLogoUrl(snapshot);
   const photoUrls = includePhotos ? await resolveBoardUpPhotoUrls(snapshot) : [];
+  // Compress photos before embedding: full-resolution phone photos would
+  // otherwise make multi-photo PDFs tens of megabytes (unemailable).
+  const pdfPhotoUrls = await Promise.all(photoUrls.map((u) => downscalePhotoForPdf(u)));
   const renderWith = async (url: string | undefined) => {
-    const element = InvoicePdf({ snapshot, style, pageSize, logoUrl: url, photoUrls, photosOnly });
+    const element = InvoicePdf({ snapshot, style, pageSize, logoUrl: url, photoUrls: pdfPhotoUrls, photosOnly });
     const instance = pdf(element);
     // Ensure the reconciler has flushed: on some Safari/React versions the
     // initial updateContainer doesn't synchronously set container.document.

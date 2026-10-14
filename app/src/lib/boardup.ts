@@ -192,6 +192,26 @@ export function boardUpFilenameBase(d: Pick<BoardUpDetails, 'streetAddress' | 'c
   return raw.replace(/[\\/:*?"<>|]/g, '-');
 }
 
+/** M-D-YYYY stamp for file names, from a YYYY-MM-DD job date (falls back to today). */
+export function boardUpFileDate(invoiceDate: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec((invoiceDate || '').trim());
+  if (m) return `${parseInt(m[2], 10)}-${parseInt(m[3], 10)}-${m[1]}`;
+  const t = new Date();
+  return `${t.getMonth() + 1}-${t.getDate()}-${t.getFullYear()}`;
+}
+
+/**
+ * Full PDF file name, e.g.
+ * "Aquick Job 10-13-2026 - 123 Main St, Miramar Florida - job information.pdf".
+ */
+export function boardUpPdfFilename(
+  d: Pick<BoardUpDetails, 'streetAddress' | 'city'>,
+  invoiceDate: string,
+  kind: 'job information' | 'photos' | 'condensed',
+): string {
+  return `Aquick Job ${boardUpFileDate(invoiceDate)} - ${boardUpFilenameBase(d)} - ${kind}.pdf`;
+}
+
 export const BOARDUP_FORMULA_NOTE =
   'Estimate uses 12 sq ft/window, 21/door, 32/slider, 64/garage + 15% waste. Planning only — measure on site.';
 
