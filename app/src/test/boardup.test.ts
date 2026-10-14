@@ -20,14 +20,19 @@ describe('estimateBoardUp', () => {
     expect(estimateBoardUp(0, 0, 0, 0)).toEqual({ rawSqft: 0, sqftCover: 0, sheets: 0 });
   });
 
-  it('computes sqft = 12/window + 21/door + 32/slider + 64/garage, +15% waste, sheets = ceil(waste/32)', () => {
+  it('computes sqft = 12/window + 21/door + 32/slider + 64/garage; cover shows raw, sheets = ceil(raw*1.15/32)', () => {
     // 2 windows (24) + 1 door (21) + 1 slider (32) + 1 garage (64) = 141 sqft
-    // waste: 141 * 1.15 = 162.15 -> rounded to 162
-    // sheets: ceil(162.15 / 32) = ceil(5.067) = 6
+    // cover: raw sum, NO waste (matches the source app)
+    // sheets: ceil(141 * 1.15 / 32) = ceil(5.067) = 6
     const est = estimateBoardUp(2, 1, 1, 1);
     expect(est.rawSqft).toBe(141);
-    expect(est.sqftCover).toBe(162);
+    expect(est.sqftCover).toBe(141);
     expect(est.sheets).toBe(6);
+  });
+
+  it('matches the source app exactly: 1 slider -> 32 cover, 2 sheets; 1 window + 2 sliders -> 76 cover, 3 sheets', () => {
+    expect(estimateBoardUp(0, 0, 1, 0)).toEqual({ rawSqft: 32, sqftCover: 32, sheets: 2 });
+    expect(estimateBoardUp(1, 0, 2, 0)).toEqual({ rawSqft: 76, sqftCover: 76, sheets: 3 });
   });
 
   it('rounds sheets up, never down', () => {
@@ -83,6 +88,7 @@ describe('buildBoardUpSummary', () => {
     expect(body).toContain('Openings: 4 windows, 0 doors, 0 sliders/patios, 0 garage doors');
     expect(body).toContain('Photos: 2 attached');
     expect(body).toContain('4x8 sheets');
+    expect(body).toContain('Ref: https://aquick.kalekycomputer.com');
   });
 });
 
@@ -173,6 +179,15 @@ describe('buildBoardUpSmsText', () => {
     expect(body).toContain('Urgency: Today | Crew: Dan');
     expect(body).toContain('Openings: 2 (1W 1D 0S 0G) \u2014 2 sheets est.');
     expect(body).toContain('Ref: https://aquick.kalekycomputer.com');
+  });
+
+  it('uses a custom reference link in the SMS when set', () => {
+    const body = buildBoardUpSmsText({
+      ...EMPTY_BOARDUP,
+      referenceLink: 'https://example.com/job-42',
+    });
+    expect(body).toContain('Ref: https://example.com/job-42');
+    expect(body).not.toContain('Ref: https://aquick.kalekycomputer.com');
   });
 
   it('omits blank case/officer/phone lines', () => {

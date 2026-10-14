@@ -21,6 +21,8 @@ export interface BoardUpDetails {
   serviceNeeded: string;
   urgency: string;
   neededBy: string;
+  /** Reference link, prefilled with the Aquick login URL (editable per job). */
+  referenceLink: string;
   windows: number;
   doors: number;
   sliders: number;
@@ -52,6 +54,7 @@ export const EMPTY_BOARDUP: BoardUpDetails = {
   serviceNeeded: 'Emergency board-up',
   urgency: 'Today',
   neededBy: '',
+  referenceLink: 'https://aquick.kalekycomputer.com',
   windows: 0,
   doors: 0,
   sliders: 0,
@@ -222,9 +225,12 @@ const SHEET_SQFT = 32; // a 4x8 plywood sheet
 export interface BoardUpEstimate {
   /** Raw covered sq ft before waste. */
   rawSqft: number;
-  /** Sq ft including 15% waste, rounded to a whole number. */
+  /**
+   * Displayed SQ FT COVER: the raw sum with NO waste applied, matching the
+   * source app (waste only goes into the sheet count).
+   */
   sqftCover: number;
-  /** 4x8 sheets needed, rounded up. */
+  /** 4x8 sheets needed: raw sq ft + 15% waste, rounded up. */
   sheets: number;
 }
 
@@ -234,9 +240,8 @@ export function estimateBoardUp(windows: number, doors: number, sliders: number,
   const s = Math.max(0, Math.floor(sliders) || 0);
   const g = Math.max(0, Math.floor(garageDoors) || 0);
   const rawSqft = w * SQFT.windows + d * SQFT.doors + s * SQFT.sliders + g * SQFT.garageDoors;
-  const sqftCover = Math.round(rawSqft * WASTE_FACTOR);
   const sheets = Math.ceil((rawSqft * WASTE_FACTOR) / SHEET_SQFT);
-  return { rawSqft, sqftCover, sheets };
+  return { rawSqft, sqftCover: rawSqft, sheets };
 }
 
 function fmtDateTime(v: string): string {
@@ -272,7 +277,7 @@ export function buildBoardUpSmsText(d: BoardUpDetails): string {
     `Type: ${d.propertyType}`,
     `Urgency: ${d.urgency}${d.neededBy ? ` (needed by ${fmtDateTime(d.neededBy)})` : ''} | Crew: ${d.crew}${d.additionalCrew ? ` + ${d.additionalCrew}` : ''}`,
     `Openings: ${total} (${d.windows}W ${d.doors}D ${d.sliders}S ${d.garageDoors}G) \u2014 ${est.sheets} sheets est.`,
-    'Ref: https://aquick.kalekycomputer.com',
+    `Ref: ${d.referenceLink || 'https://aquick.kalekycomputer.com'}`,
   ].filter((l): l is string => l !== null && l !== '');
   return lines.join('\n');
 }
@@ -295,6 +300,7 @@ export function buildBoardUpSummary(d: BoardUpDetails, jobNumber: string | null)
     `Est: ${est.sqftCover} sq ft cover, ${est.sheets} 4x8 sheets`,
     `Crew: ${d.crew}${d.additionalCrew ? ` + ${d.additionalCrew}` : ''}`,
     d.accessNotes ? `Access/notes: ${d.accessNotes}` : null,
+    d.referenceLink ? `Ref: ${d.referenceLink}` : null,
     d.photos.length > 0 ? `Photos: ${d.photos.length} attached` : null,
   ].filter((l): l is string => l !== null);
   return lines.join('\n');
@@ -324,6 +330,7 @@ export function asBoardUpDetails(raw: unknown): BoardUpDetails {
     serviceNeeded: opt(r.serviceNeeded, SERVICE_NEEDED_OPTIONS, 'Emergency board-up'),
     urgency: opt(r.urgency, URGENCY_OPTIONS, 'Today'),
     neededBy: str(r.neededBy),
+    referenceLink: str(r.referenceLink, 'https://aquick.kalekycomputer.com'),
     windows: num(r.windows),
     doors: num(r.doors),
     sliders: num(r.sliders),

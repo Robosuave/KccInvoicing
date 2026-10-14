@@ -915,6 +915,19 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         />
       </Field>
 
+      <Field label="Reference link" htmlFor="bu-reflink">
+        <TextField
+          id="bu-reflink"
+          style={{ maxWidth: 420 }}
+          type="url"
+          inputMode="url"
+          placeholder="https://aquick.kalekycomputer.com"
+          value={f.referenceLink}
+          disabled={disabled}
+          onChange={(e) => set('referenceLink', e.target.value)}
+        />
+      </Field>
+
       <div className="card" style={{ marginBottom: 16 }}>
         <h3 style={{ marginTop: 0, marginBottom: 4 }}>Openings</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
