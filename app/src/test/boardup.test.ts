@@ -261,7 +261,7 @@ describe('asBoardUpDetails measurements', () => {
 });
 
 describe('buildBoardUpSmsText', () => {
-  it('follows Robert\'s 12-line layout', () => {
+  it('sends values only, in Robert\'s 12-field order, no labels', () => {
     const body = buildBoardUpSmsText(
       {
         ...EMPTY_BOARDUP,
@@ -282,41 +282,31 @@ describe('buildBoardUpSmsText', () => {
     );
     const lines = body.split('\n');
     expect(lines[0]).toBe('AQUICK BOARD-UP');
-    expect(lines[1]).toMatch(/^Date and time: /);
-    expect(body).toContain('City name: City of Miramar');
-    expect(body).toContain('Address: 344tt');
-    expect(body).toContain('City and state: Miramar, Florida');
-    expect(body).toContain('Phone number: (954) 441-4540');
-    expect(body).toContain('Case: 13344');
-    expect(body).toContain('Requesting officer and badge: Dija');
-    expect(body).toContain('Structure type: Commercial');
-    expect(body).toContain('Type of board up: Emergency board-up');
-    expect(body).toContain('When needed: Today');
-    expect(body).toContain('Crew: Dan');
-    expect(body).toContain('Job details:');
-    expect(body).toContain('2 openings (1W 1D 0S 0G) \u2014 2 sheets est.');
-    expect(body).toContain('Ref: https://aquick.kalekycomputer.com');
-    // label order
-    const labels = [
-      'Date and time:',
-      'City name:',
-      'Address:',
-      'City and state:',
-      'Phone number:',
-      'Case:',
-      'Requesting officer and badge:',
-      'Structure type:',
-      'Type of board up:',
-      'When needed:',
-      'Crew:',
-      'Job details:',
+    expect(lines[1]).toMatch(/10\/14\/2026/);
+    // values in order, no labels
+    const values = [
+      'City of Miramar',
+      '344tt',
+      'Miramar, Florida',
+      '(954) 441-4540',
+      '13344',
+      'Dija',
+      'Commercial',
+      'Emergency board-up',
+      'Today',
+      'Dan',
+      '2 openings (1W 1D 0S 0G) \u2014 2 sheets est.',
     ];
-    let last = -1;
-    for (const label of labels) {
-      const i = body.indexOf(label);
+    let last = 1;
+    for (const v of values) {
+      const i = lines.indexOf(v, last + 1);
       expect(i).toBeGreaterThan(last);
       last = i;
     }
+    expect(body).toContain('Ref: https://aquick.kalekycomputer.com');
+    expect(body).not.toContain('City name:');
+    expect(body).not.toContain('Phone number:');
+    expect(body).not.toContain('Job details:');
   });
 
   it('uses a custom reference link in the SMS when set', () => {
@@ -328,11 +318,11 @@ describe('buildBoardUpSmsText', () => {
     expect(body).not.toContain('Ref: https://aquick.kalekycomputer.com');
   });
 
-  it('omits blank case/officer/phone lines', () => {
+  it('omits blank values', () => {
     const body = buildBoardUpSmsText({ ...EMPTY_BOARDUP });
-    expect(body).not.toContain('Case:');
-    expect(body).not.toContain('Requesting officer and badge:');
-    expect(body).not.toContain('Phone number:');
+    expect(body).not.toContain('Dija');
+    expect(body).not.toContain('13344');
+    expect(body).toContain('AQUICK BOARD-UP');
   });
 });
 

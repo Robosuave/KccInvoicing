@@ -335,11 +335,18 @@ function renderBoardUpText(header: string, d: BoardUpDetails, opts: BoardUpOutpu
   return lines.join('\n');
 }
 
-/** Clean plain-text job card for SMS in Robert's 12-line layout. */
+/**
+ * Values-only job card for SMS: Robert's 12 fields in order, no labels —
+ * just the field contents, one per line. Header and Ref link are kept.
+ */
 export function buildBoardUpSmsText(d: BoardUpDetails, opts: BoardUpOutputOptions = {}): string {
-  return renderBoardUpText('AQUICK BOARD-UP', d, opts, [
-    `Ref: ${d.referenceLink || 'https://aquick.kalekycomputer.com'}`,
-  ]);
+  const lines = ['AQUICK BOARD-UP'];
+  for (const [, value] of boardUpOutputRows(d, opts)) {
+    if (value === '') continue;
+    lines.push(...value.split('\n'));
+  }
+  lines.push(`Ref: ${d.referenceLink || 'https://aquick.kalekycomputer.com'}`);
+  return lines.join('\n');
 }
 
 /** Plain-text job summary for mailto:/sms: bodies and the printed sheet. */
