@@ -1076,6 +1076,7 @@ export default function InvoiceEditor() {
                 onPhotosChange={setBoardUpPhotos}
                 business={activeBusiness}
                 invoiceDate={invoiceDate}
+                jobCreatedAt={loadedInvoice?.created_at ?? null}
                 isOwner={isOwner}
                 onDeleted={() => navigate('/invoices')}
               />
