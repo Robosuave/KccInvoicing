@@ -7,6 +7,7 @@ import {
   boardUpFilenameBase,
   boardUpFileDate,
   boardUpPdfFilename,
+  boardUpOutputRows,
   buildBoardUpSmsText,
   buildBoardUpSummary,
   measurementSummaryLines,
@@ -79,6 +80,58 @@ describe('asBoardUpDetails', () => {
   });
 });
 
+describe('boardUpOutputRows', () => {
+  it('returns the 12 labeled rows in Robert\'s order', () => {
+    const rows = boardUpOutputRows({ ...EMPTY_BOARDUP });
+    expect(rows.map(([label]) => label)).toEqual([
+      'Date and time',
+      'City name',
+      'Address',
+      'City and state',
+      'Phone number',
+      'Case',
+      'Requesting officer and badge',
+      'Structure type',
+      'Type of board up',
+      'When needed',
+      'Crew',
+      'Job details',
+    ]);
+  });
+
+  it('uses the job-came-in time for "Date and time"', () => {
+    const rows = boardUpOutputRows({ ...EMPTY_BOARDUP }, { jobDateTime: '2026-10-14T14:30:00' });
+    expect(rows[0][1]).toContain('2026');
+    expect(rows[0][1]).toContain('10/14');
+  });
+
+  it('splits street address from city/state', () => {
+    const rows = boardUpOutputRows({
+      ...EMPTY_BOARDUP,
+      streetAddress: '344tt',
+      city: 'Miramar Florida',
+    });
+    const byLabel = Object.fromEntries(rows);
+    expect(byLabel['Address']).toBe('344tt');
+    expect(byLabel['City and state']).toBe('Miramar, Florida');
+  });
+
+  it('packs openings, measurements, and notes into Job details', () => {
+    const rows = boardUpOutputRows({
+      ...EMPTY_BOARDUP,
+      windows: 1,
+      doors: 1,
+      windowMeasurements: ['36x45'],
+      accessNotes: 'Gate code 1234',
+    });
+    const byLabel = Object.fromEntries(rows);
+    expect(byLabel['Job details']).toContain('2 openings (1W 1D 0S 0G)');
+    expect(byLabel['Job details']).toContain('2 sheets est.');
+    expect(byLabel['Job details']).toContain('Window measurements: 36x45');
+    expect(byLabel['Job details']).toContain('Notes: Gate code 1234');
+  });
+});
+
 describe('buildBoardUpSummary', () => {
   it('includes the job number, estimate, and photo count', () => {
     const body = buildBoardUpSummary(
@@ -86,11 +139,45 @@ describe('buildBoardUpSummary', () => {
       'QB-7',
     );
     expect(body).toContain('BOARD-UP JOB #QB-7');
-    expect(body).toContain('123 Main St');
-    expect(body).toContain('Openings: 4 windows, 0 doors, 0 sliders/patios, 0 garage doors');
+    expect(body).toContain('Address: 123 Main St');
+    expect(body).toContain('sheets est.');
     expect(body).toContain('Photos: 2 attached');
-    expect(body).toContain('4x8 sheets');
     expect(body).toContain('Ref: https://aquick.kalekycomputer.com');
+  });
+
+  it('lists the 12 labels in order', () => {
+    const body = buildBoardUpSummary(
+      {
+        ...EMPTY_BOARDUP,
+        cityName: 'City of Miramar',
+        streetAddress: '344tt',
+        city: 'Miramar Florida',
+        phone: '9544414540',
+        caseNumber: '13344',
+        requestingOfficer: 'Dija',
+      },
+      null,
+    );
+    const labels = [
+      'Date and time:',
+      'City name:',
+      'Address:',
+      'City and state:',
+      'Phone number:',
+      'Case:',
+      'Requesting officer and badge:',
+      'Structure type:',
+      'Type of board up:',
+      'When needed:',
+      'Crew:',
+      'Job details:',
+    ];
+    let last = -1;
+    for (const label of labels) {
+      const i = body.indexOf(label);
+      expect(i).toBeGreaterThan(last);
+      last = i;
+    }
   });
 });
 
@@ -174,33 +261,62 @@ describe('asBoardUpDetails measurements', () => {
 });
 
 describe('buildBoardUpSmsText', () => {
-  it('matches the source app compact layout', () => {
-    const body = buildBoardUpSmsText({
-      ...EMPTY_BOARDUP,
-      serviceNeeded: 'Emergency board-up',
-      caseNumber: '13344',
-      requestingOfficer: 'Dija',
-      cityName: 'City of Miramar',
-      streetAddress: '344tt',
-      city: 'Miramar Florida',
-      phone: '(954) 441-4540',
-      propertyType: 'Commercial',
-      urgency: 'Today',
-      crew: 'Dan',
-      windows: 1,
-      doors: 1,
-    });
+  it('follows Robert\'s 12-line layout', () => {
+    const body = buildBoardUpSmsText(
+      {
+        ...EMPTY_BOARDUP,
+        serviceNeeded: 'Emergency board-up',
+        caseNumber: '13344',
+        requestingOfficer: 'Dija',
+        cityName: 'City of Miramar',
+        streetAddress: '344tt',
+        city: 'Miramar Florida',
+        phone: '(954) 441-4540',
+        propertyType: 'Commercial',
+        urgency: 'Today',
+        crew: 'Dan',
+        windows: 1,
+        doors: 1,
+      },
+      { jobDateTime: '2026-10-14T18:30:00' },
+    );
     const lines = body.split('\n');
-    expect(lines[0]).toBe('AQUICK BOARD-UP \u2014 Emergency board-up');
-    expect(body).toContain('Case #: 13344');
-    expect(body).toContain('Requesting officer: Dija');
+    expect(lines[0]).toBe('AQUICK BOARD-UP');
+    expect(lines[1]).toMatch(/^Date and time: /);
     expect(body).toContain('City name: City of Miramar');
-    expect(body).toContain('Address: 344tt, Miramar, Florida');
+    expect(body).toContain('Address: 344tt');
+    expect(body).toContain('City and state: Miramar, Florida');
     expect(body).toContain('Phone number: (954) 441-4540');
-    expect(body).toContain('Type: Commercial');
-    expect(body).toContain('Urgency: Today | Crew: Dan');
-    expect(body).toContain('Openings: 2 (1W 1D 0S 0G) \u2014 2 sheets est.');
+    expect(body).toContain('Case: 13344');
+    expect(body).toContain('Requesting officer and badge: Dija');
+    expect(body).toContain('Structure type: Commercial');
+    expect(body).toContain('Type of board up: Emergency board-up');
+    expect(body).toContain('When needed: Today');
+    expect(body).toContain('Crew: Dan');
+    expect(body).toContain('Job details:');
+    expect(body).toContain('2 openings (1W 1D 0S 0G) \u2014 2 sheets est.');
     expect(body).toContain('Ref: https://aquick.kalekycomputer.com');
+    // label order
+    const labels = [
+      'Date and time:',
+      'City name:',
+      'Address:',
+      'City and state:',
+      'Phone number:',
+      'Case:',
+      'Requesting officer and badge:',
+      'Structure type:',
+      'Type of board up:',
+      'When needed:',
+      'Crew:',
+      'Job details:',
+    ];
+    let last = -1;
+    for (const label of labels) {
+      const i = body.indexOf(label);
+      expect(i).toBeGreaterThan(last);
+      last = i;
+    }
   });
 
   it('uses a custom reference link in the SMS when set', () => {
@@ -214,9 +330,9 @@ describe('buildBoardUpSmsText', () => {
 
   it('omits blank case/officer/phone lines', () => {
     const body = buildBoardUpSmsText({ ...EMPTY_BOARDUP });
-    expect(body).not.toContain('Case #');
-    expect(body).not.toContain('Requesting officer');
-    expect(body).not.toContain('Phone number');
+    expect(body).not.toContain('Case:');
+    expect(body).not.toContain('Requesting officer and badge:');
+    expect(body).not.toContain('Phone number:');
   });
 });
 

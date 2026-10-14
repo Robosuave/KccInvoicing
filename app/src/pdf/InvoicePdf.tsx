@@ -4,10 +4,10 @@ import {
   BOARDUP_FORMULA_NOTE,
   PHOTOS_PER_PDF_PAGE,
   asBoardUpDetails,
+  boardUpOutputRows,
   boardUpPhotoCaption,
   chunkArray,
   estimateBoardUp,
-  measurementSummaryLines,
 } from '../lib/boardup';
 
 export type PdfPageSize = 'LETTER' | 'A4';
@@ -277,24 +277,10 @@ function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: st
   const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors);
   /** Property address printed under every photo, matching the source app. */
   const caption = boardUpPhotoCaption(d);
-  const rows: [string, string][] = [
-    ['City', d.cityName],
-    ['Customer', d.otherCustomerName],
-    ['Street address', d.streetAddress + (d.city ? `, ${d.city}` : '')],
-    ['Phone', d.phone],
-    ['Case number', d.caseNumber],
-    ['Requesting officer', d.requestingOfficer],
-    ['Type', d.propertyType],
-    ['Service needed', d.serviceNeeded],
-    ['Urgency', d.urgency + (d.neededBy ? ` (needed by ${d.neededBy.replace('T', ' ')})` : '')],
-    ['Other openings', d.otherOpenings],
-    ...measurementSummaryLines(d).map((line): [string, string] => {
-      const idx = line.indexOf(':');
-      return [line.slice(0, idx), line.slice(idx + 1).trim()];
-    }),
-    ['Crew', d.crew + (d.additionalCrew ? ` + ${d.additionalCrew}` : '')],
-    ['Access / hazards', d.accessNotes],
-  ];
+  /** Robert's 12-line output layout; "Date and time" is when the job came in. */
+  const rows: [string, string][] = boardUpOutputRows(d, {
+    jobDateTime: snap.job_created_at ?? snap.issued_at ?? null,
+  }).filter(([, v]) => v !== '');
   return (
     <View>
       {rows
