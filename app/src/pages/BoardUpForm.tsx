@@ -65,6 +65,8 @@ interface Props {
   business: Business;
   /** Invoice date for the share PDF snapshot. */
   invoiceDate: string;
+  /** When the job came in (invoice created_at) — the "Date and time" output line. */
+  jobCreatedAt?: string | null;
   /** Owner-only actions (Delete job) are hidden from agents. */
   isOwner: boolean;
   /** Called after the job is deleted so the parent can navigate away. */
@@ -211,7 +213,7 @@ function OpeningCounter({
  * and Email-this-job / Text-this-job actions.
  */
 const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
-  { initial, workspaceId, businessId, jobNumber, disabled, getDraftId, ensureDraft, onChange, onPhotosCommitted, onPhotosChange, business, invoiceDate, isOwner, onDeleted },
+  { initial, workspaceId, businessId, jobNumber, disabled, getDraftId, ensureDraft, onChange, onPhotosCommitted, onPhotosChange, business, invoiceDate, jobCreatedAt, isOwner, onDeleted },
   ref,
 ) {
   const [f, setF] = useState<BoardUpDetails>(() => asBoardUpDetails(initial));
@@ -497,7 +499,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     setShareError(null);
     const d = details();
     const subject = `Board-up job${jobNumber ? ` #${jobNumber}` : ''} — ${d.streetAddress || 'new job'}`;
-    const body = buildBoardUpSummary(d, jobNumber);
+    const body = buildBoardUpSummary(d, jobNumber, { jobDateTime: jobCreatedAt ?? null });
     window.location.href = `mailto:${encodeURIComponent(d.emailTo.trim())}?subject=${encodeURIComponent(
       subject,
     )}&body=${encodeURIComponent(body)}`;
@@ -511,7 +513,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       setShareError('Enter a "Text to" phone number first.');
       return;
     }
-    const body = buildBoardUpSmsText(d);
+    const body = buildBoardUpSmsText(d, { jobDateTime: jobCreatedAt ?? null });
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     window.location.href = `sms:${num}${isIOS ? '&body=' : '?body='}${encodeURIComponent(body)}`;
   };
@@ -523,6 +525,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       details: detailsRef.current as unknown as Record<string, unknown>,
       jobNumber,
       invoiceDate,
+      jobCreatedAt: jobCreatedAt ?? null,
     });
     return renderInvoicePdfBlob(snap, 'classic', 'LETTER', photosOnly, includePhotos);
   };
@@ -563,7 +566,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     if (shareBusy) return;
     const d = details();
     const subject = `Board-up job${jobNumber ? ` #${jobNumber}` : ''} — ${d.streetAddress || 'new job'}`;
-    const body = buildBoardUpSummary(d, jobNumber);
+    const body = buildBoardUpSummary(d, jobNumber, { jobDateTime: jobCreatedAt ?? null });
     // Second tap: the prepared file shares inside this tap's gesture.
     if (pdfReady) {
       setShareError(null);

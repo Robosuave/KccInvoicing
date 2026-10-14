@@ -81,6 +81,8 @@ export interface InvoiceSnapshot {
   commission: SnapshotCommission;
   /** Board-Up job sheet fields (template 'boardup'); null otherwise. */
   boardup_details: Record<string, unknown> | null;
+  /** When the board-up job came in (invoice created_at); null for other templates. */
+  job_created_at: string | null;
   totals: {
     subtotal_cents: number;
     discount_cents: number;
@@ -117,12 +119,14 @@ export function buildBoardUpShareSnapshot(args: {
   details: Record<string, unknown>;
   jobNumber: string | null;
   invoiceDate: string;
+  /** When the job came in — feeds the PDF "Date and time" line. */
+  jobCreatedAt?: string | null;
 }): InvoiceSnapshot {
-  const { business, details, jobNumber, invoiceDate } = args;
+  const { business, details, jobNumber, invoiceDate, jobCreatedAt } = args;
   return buildLiveSnapshot({
     invoice: {
       invoice_number: jobNumber, template: 'boardup', currency: 'USD',
-      invoice_date: invoiceDate, due_date: null, po_number: null,
+      invoice_date: invoiceDate, created_at: jobCreatedAt ?? null, due_date: null, po_number: null,
       service_date: null, service_period: null,
       subtotal_cents: 0, discount_cents: 0, tax_cents: 0, tax_breakdown: [],
       shipping_cents: 0, total_cents: 0, notes: null, terms: null,
@@ -162,6 +166,8 @@ export function buildLiveSnapshot(args: {
     property_city: string | null; property_state: string | null; property_zip: string | null;
     boardup_details: Record<string, unknown> | null;
     issued_at: string | null;
+    /** DB created_at — when the job came in (optional; boardup "Date and time" line). */
+    created_at?: string | null;
   };
   business: {
     display_name: string; legal_name: string | null; header_line: string | null; logo_path: string | null;
@@ -207,6 +213,7 @@ export function buildLiveSnapshot(args: {
       property_zip: inv.property_zip,
     },
     boardup_details: inv.boardup_details ?? null,
+    job_created_at: inv.created_at ?? null,
     totals: {
       subtotal_cents: inv.subtotal_cents,
       discount_cents: inv.discount_cents,

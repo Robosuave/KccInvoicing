@@ -277,53 +277,82 @@ function fmtDateTime(v: string): string {
   });
 }
 
-/** Clean plain-text job card for SMS, matching the source app's compact labeled layout. */
-export function buildBoardUpSmsText(d: BoardUpDetails): string {
+export interface BoardUpOutputOptions {
+  /** ISO timestamp of when the job came in (invoice created_at); defaults to now. */
+  jobDateTime?: string | null;
+}
+
+/**
+ * Robert's 12-line board-up output layout, in order: Date and time, City name,
+ * Address, City and state, Phone number, Case, Requesting officer and badge,
+ * Structure type, Type of board up, When needed, Crew, Job details.
+ * Shared by the SMS text, the email summary, and the PDF job sheet so all
+ * three read identically.
+ */
+export function boardUpOutputRows(d: BoardUpDetails, opts: BoardUpOutputOptions = {}): [string, string][] {
   const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors);
   const total = d.windows + d.doors + d.sliders + d.garageDoors;
-  const cityLine = d.city
+  const cityState = d.city
     ? d.city.endsWith(' Florida')
       ? d.city.replace(/ Florida$/, ', Florida')
       : `${d.city}, Florida`
     : '';
-  const address = [d.streetAddress.trim(), cityLine].filter(Boolean).join(', ');
-  const lines = [
-    `AQUICK BOARD-UP \u2014 ${d.serviceNeeded}`,
-    d.caseNumber ? `Case #: ${d.caseNumber}` : null,
-    d.requestingOfficer ? `Requesting officer: ${d.requestingOfficer}` : null,
-    d.cityName ? `City name: ${d.cityName}` : null,
-    address ? `Address: ${address}` : null,
-    d.phone ? `Phone number: ${d.phone}` : null,
-    `Type: ${d.propertyType}`,
-    `Urgency: ${d.urgency}${d.neededBy ? ` (needed by ${fmtDateTime(d.neededBy)})` : ''} | Crew: ${d.crew}${d.additionalCrew ? ` + ${d.additionalCrew}` : ''}`,
-    `Openings: ${total} (${d.windows}W ${d.doors}D ${d.sliders}S ${d.garageDoors}G) \u2014 ${est.sheets} sheets est.`,
-    `Ref: ${d.referenceLink || 'https://aquick.kalekycomputer.com'}`,
-  ].filter((l): l is string => l !== null && l !== '');
+  const detailParts = [
+    `${total} openings (${d.windows}W ${d.doors}D ${d.sliders}S ${d.garageDoors}G) — ${est.sheets} sheets est.`,
+    ...measurementSummaryLines(d),
+    d.otherOpenings.trim() ? `Other openings: ${d.otherOpenings.trim()}` : null,
+    d.accessNotes.trim() ? `Notes: ${d.accessNotes.trim()}` : null,
+  ].filter((p): p is string => p !== null);
+  return [
+    ['Date and time', fmtDateTime(opts.jobDateTime ?? new Date().toISOString())],
+    ['City name', d.cityName.trim()],
+    ['Address', d.streetAddress.trim()],
+    ['City and state', cityState],
+    ['Phone number', d.phone.trim()],
+    ['Case', d.caseNumber.trim()],
+    ['Requesting officer and badge', d.requestingOfficer.trim()],
+    ['Structure type', d.propertyType],
+    ['Type of board up', d.serviceNeeded],
+    ['When needed', `${d.urgency}${d.neededBy ? ` (needed by ${fmtDateTime(d.neededBy)})` : ''}`],
+    ['Crew', `${d.crew}${d.additionalCrew.trim() ? ` + ${d.additionalCrew.trim()}` : ''}`],
+    ['Job details', detailParts.join('\n')],
+  ];
+}
+
+/** Renders the 12 labeled rows as plain text; Job details spans multiple lines. */
+function renderBoardUpText(header: string, d: BoardUpDetails, opts: BoardUpOutputOptions, tail: string[]): string {
+  const lines = [header];
+  for (const [label, value] of boardUpOutputRows(d, opts)) {
+    if (value === '') continue;
+    if (label === 'Job details') {
+      lines.push(`${label}:`);
+      lines.push(...value.split('\n'));
+    } else {
+      lines.push(`${label}: ${value}`);
+    }
+  }
+  lines.push(...tail);
   return lines.join('\n');
 }
 
+/** Clean plain-text job card for SMS in Robert's 12-line layout. */
+export function buildBoardUpSmsText(d: BoardUpDetails, opts: BoardUpOutputOptions = {}): string {
+  return renderBoardUpText('AQUICK BOARD-UP', d, opts, [
+    `Ref: ${d.referenceLink || 'https://aquick.kalekycomputer.com'}`,
+  ]);
+}
+
 /** Plain-text job summary for mailto:/sms: bodies and the printed sheet. */
-export function buildBoardUpSummary(d: BoardUpDetails, jobNumber: string | null): string {  const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors);
-  const lines = [
-    `BOARD-UP JOB${jobNumber ? ` #${jobNumber}` : ''}`,
-    `City: ${d.cityName || '—'}`,
-    d.otherCustomerName ? `Customer: ${d.otherCustomerName}` : null,
-    `Address: ${d.streetAddress || '—'}${d.city ? `, ${d.city}` : ''}`,
-    d.phone ? `Phone: ${d.phone}` : null,
-    d.caseNumber ? `Case #: ${d.caseNumber}` : null,
-    d.requestingOfficer ? `Requesting: ${d.requestingOfficer}` : null,
-    `Type: ${d.propertyType} — ${d.serviceNeeded}`,
-    `Urgency: ${d.urgency}${d.neededBy ? ` (needed by ${fmtDateTime(d.neededBy)})` : ''}`,
-    `Openings: ${d.windows} windows, ${d.doors} doors, ${d.sliders} sliders/patios, ${d.garageDoors} garage doors`,
-    ...measurementSummaryLines(d),
-    d.otherOpenings ? `Other openings: ${d.otherOpenings}` : null,
-    `Est: ${est.sqftCover} sq ft cover, ${est.sheets} 4x8 sheets`,
-    `Crew: ${d.crew}${d.additionalCrew ? ` + ${d.additionalCrew}` : ''}`,
-    d.accessNotes ? `Access/notes: ${d.accessNotes}` : null,
-    d.referenceLink ? `Ref: ${d.referenceLink}` : null,
-    d.photos.length > 0 ? `Photos: ${d.photos.length} attached` : null,
-  ].filter((l): l is string => l !== null);
-  return lines.join('\n');
+export function buildBoardUpSummary(
+  d: BoardUpDetails,
+  jobNumber: string | null,
+  opts: BoardUpOutputOptions = {},
+): string {
+  const tail = [
+    ...(d.photos.length > 0 ? [`Photos: ${d.photos.length} attached`] : []),
+    `Ref: ${d.referenceLink || 'https://aquick.kalekycomputer.com'}`,
+  ];
+  return renderBoardUpText(`BOARD-UP JOB${jobNumber ? ` #${jobNumber}` : ''}`, d, opts, tail);
 }
 
 /** Type guard for boardup_details read back from the database. */
