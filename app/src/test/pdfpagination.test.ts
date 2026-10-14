@@ -34,8 +34,8 @@ function boardUpSnapshot() {
   });
 }
 
-function countPages(buf: Buffer): number {
-  const matches = buf.toString('latin1').match(/\/Type\s*\/Page[^s]/g);
+function countPages(bytes: Uint8Array): number {
+  const matches = new TextDecoder('latin1').decode(bytes).match(/\/Type\s*\/Page[^s]/g);
   return matches ? matches.length : 0;
 }
 
@@ -50,7 +50,7 @@ describe('board-up photos PDF pagination', () => {
       photosOnly: true,
     });
     const blob = await pdf(element).toBlob();
-    const buf = Buffer.from(await blob.arrayBuffer());
+    const buf = new Uint8Array(await blob.arrayBuffer());
     expect(countPages(buf)).toBe(2);
   }, 30000);
 
@@ -64,7 +64,7 @@ describe('board-up photos PDF pagination', () => {
       photosOnly: true,
     });
     const blob = await pdf(element).toBlob();
-    const buf = Buffer.from(await blob.arrayBuffer());
+    const buf = new Uint8Array(await blob.arrayBuffer());
     expect(countPages(buf)).toBe(1);
   }, 30000);
 });
