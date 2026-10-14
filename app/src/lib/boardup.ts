@@ -349,6 +349,65 @@ export function buildBoardUpSmsText(d: BoardUpDetails, opts: BoardUpOutputOption
   return lines.join('\n');
 }
 
+/** One row of the board-up CSV export (Dan's "Download CSV"). */
+export interface BoardUpCsvRow {
+  /** Stored invoice_number, e.g. "QB-12" (prefix included). */
+  jobNumber: string | null;
+  completed: boolean;
+  createdAt: string;
+  details: BoardUpDetails;
+}
+
+function csvCell(v: string): string {
+  return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+}
+
+/**
+ * CSV export of board-up jobs: one row per job with the 12 output fields plus
+ * job number, sheet estimate, and done flag. Opens in Excel/Sheets.
+ */
+export function buildBoardUpCsv(rows: BoardUpCsvRow[]): string {
+  const header = [
+    'Job', 'Done', 'Date and time', 'City name', 'Address', 'City and state',
+    'Phone number', 'Case', 'Requesting officer and badge', 'Structure type',
+    'Type of board up', 'When needed', 'Crew', 'Openings', 'Measurements',
+    'Sheets est.', 'Notes',
+  ];
+  const lines = [header.join(',')];
+  for (const r of rows) {
+    const d = r.details;
+    const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors);
+    const total = d.windows + d.doors + d.sliders + d.garageDoors;
+    const cityState = d.city
+      ? d.city.endsWith(' Florida')
+        ? d.city.replace(/ Florida$/, ', Florida')
+        : `${d.city}, Florida`
+      : '';
+    lines.push(
+      [
+        r.jobNumber ?? '',
+        r.completed ? 'Yes' : '',
+        fmtDateTime(r.createdAt),
+        d.cityName.trim(),
+        d.streetAddress.trim(),
+        cityState,
+        d.phone.trim(),
+        d.caseNumber.trim(),
+        d.requestingOfficer.trim(),
+        d.propertyType,
+        d.serviceNeeded,
+        `${d.urgency}${d.neededBy ? ` (needed by ${fmtDateTime(d.neededBy)})` : ''}`,
+        `${d.crew}${d.additionalCrew.trim() ? ` + ${d.additionalCrew.trim()}` : ''}`,
+        `${total} (${d.windows}W ${d.doors}D ${d.sliders}S ${d.garageDoors}G)`,
+        measurementSummaryLines(d).join('; '),
+        String(est.sheets),
+        d.accessNotes.trim(),
+      ].map(csvCell).join(','),
+    );
+  }
+  return lines.join('\n');
+}
+
 /** Plain-text job summary for mailto:/sms: bodies and the printed sheet. */
 export function buildBoardUpSummary(
   d: BoardUpDetails,

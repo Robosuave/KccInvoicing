@@ -8,6 +8,7 @@ import {
   boardUpFileDate,
   boardUpPdfFilename,
   boardUpOutputRows,
+  buildBoardUpCsv,
   buildBoardUpSmsText,
   buildBoardUpSummary,
   measurementSummaryLines,
@@ -400,5 +401,62 @@ describe('boardUpPhotoCaption', () => {
 
   it('returns empty string when there is no address', () => {
     expect(boardUpPhotoCaption({ streetAddress: '', city: '' })).toBe('');
+  });
+});
+
+describe('buildBoardUpCsv', () => {
+  it('exports one row per job with the 12 fields, sheets, and done flag', () => {
+    const csv = buildBoardUpCsv([
+      {
+        jobNumber: 'QB-12',
+        completed: true,
+        createdAt: '2026-10-14T18:30:00',
+        details: {
+          ...EMPTY_BOARDUP,
+          cityName: 'City of Miramar',
+          streetAddress: '344tt',
+          city: 'Miramar Florida',
+          phone: '(954) 441-4540',
+          caseNumber: '13344',
+          requestingOfficer: 'Dija',
+          propertyType: 'Commercial',
+          serviceNeeded: 'Emergency board-up',
+          urgency: 'Today',
+          crew: 'Dan',
+          windows: 1,
+          doors: 1,
+          windowMeasurements: ['36x45'],
+          accessNotes: 'Gate code 1234',
+        },
+      },
+    ]);
+    const lines = csv.split('\n');
+    expect(lines[0]).toBe(
+      'Job,Done,Date and time,City name,Address,City and state,Phone number,Case,Requesting officer and badge,Structure type,Type of board up,When needed,Crew,Openings,Measurements,Sheets est.,Notes',
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain('QB-12,Yes,');
+    expect(lines[1]).toContain('City of Miramar');
+    expect(lines[1]).toContain('Miramar, Florida');
+    expect(lines[1]).toContain('2 (1W 1D 0S 0G)');
+    expect(lines[1]).toContain('Window measurements: 36x45');
+    expect(lines[1]).toContain(',2,');
+    expect(lines[1]).toContain('Gate code 1234');
+  });
+
+  it('quotes cells containing commas or quotes', () => {
+    const csv = buildBoardUpCsv([
+      {
+        jobNumber: 'QB-13',
+        completed: false,
+        createdAt: '2026-10-14T18:30:00',
+        details: { ...EMPTY_BOARDUP, streetAddress: '123 "Main", Apt 4' },
+      },
+    ]);
+    expect(csv.split('\n')[1]).toContain('"123 ""Main"", Apt 4"');
+  });
+
+  it('returns just the header when there are no jobs', () => {
+    expect(buildBoardUpCsv([]).split('\n')).toHaveLength(1);
   });
 });

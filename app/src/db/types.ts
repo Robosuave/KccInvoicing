@@ -133,6 +133,8 @@ export interface Invoice {
   tax_breakdown: { rate: string; cents: number }[];
   created_at: string;
   updated_at: string;
+  /** Board-up "mark done" flag (migration 0031); ignored by other templates. */
+  completed: boolean;
 }
 
 export interface InvoiceLine {
