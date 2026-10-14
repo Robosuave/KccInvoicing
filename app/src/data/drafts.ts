@@ -137,6 +137,13 @@ export async function listInvoices(businessId: string, status?: 'draft' | 'issue
   return data as Invoice[];
 }
 
+/** Mark a board-up job done (or reopen it). Needs migration 0031 on the database. */
+export async function setInvoiceCompleted(id: string, completed: boolean): Promise<void> {
+  const sb = requireSupabase();
+  const { error } = await sb.from('invoices').update({ completed }).eq('id', id);
+  if (error) throw error;
+}
+
 export async function getDraft(id: string): Promise<{ invoice: Invoice; lines: InvoiceLine[] }> {
   const sb = requireSupabase();
   const { data: invoice, error: iErr } = await sb.from('invoices').select('*').eq('id', id).single();

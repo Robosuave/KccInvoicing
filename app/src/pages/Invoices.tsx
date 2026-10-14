@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
 import type { Customer, Invoice } from '../db/types';
-import { deleteDraft, listInvoices } from '../data/drafts';
+import { deleteDraft, listInvoices, setInvoiceCompleted } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listBusinessMembers } from '../data/team';
 import { isOverdue } from '../data/invoices';
@@ -11,6 +11,11 @@ import { centsToDollars } from '../lib/money';
 import { emailStatusByInvoice, emailStatusLabel } from '../data/email';
 import type { InvoiceEmail } from '../db/types';
 import { Alert, BackButton, Button, EmptyState, SetupRequired, TextField } from '../components/ui';
+import {
+  asBoardUpDetails,
+  buildBoardUpCsv,
+  estimateBoardUp,
+} from '../lib/boardup';
 
 export default function Invoices() {
   const { activeBusiness, notConfigured, isOwner, loading: businessesLoading } = useBusiness();
@@ -75,6 +80,53 @@ export default function Invoices() {
     }
   };
 
+  const isBoardUp = activeBusiness?.default_template === 'boardup';
+
+  /** Live counters for the board-up job board (Dan's header stats). */
+  const boardUpStats = useMemo(() => {
+    if (!isBoardUp) return null;
+    let jobs = 0;
+    let emergency = 0;
+    let sheets = 0;
+    for (const inv of invoices) {
+      if (inv.template !== 'boardup') continue;
+      jobs++;
+      const d = asBoardUpDetails(inv.boardup_details);
+      if (d.urgency.startsWith('Emergency')) emergency++;
+      sheets += estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors).sheets;
+    }
+    return { jobs, emergency, sheets };
+  }, [invoices, isBoardUp]);
+
+  const toggleDone = async (d: Invoice) => {
+    try {
+      await setInvoiceCompleted(d.id, !d.completed);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Update failed.');
+    }
+  };
+
+  const downloadCsv = () => {
+    const rows = invoices
+      .filter((d) => d.template === 'boardup')
+      .map((d) => ({
+        jobNumber: d.invoice_number,
+        completed: !!d.completed,
+        createdAt: d.created_at,
+        details: asBoardUpDetails(d.boardup_details),
+      }));
+    const blob = new Blob([buildBoardUpCsv(rows)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `aquick-jobs-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const q = search.trim().toLowerCase();
   const visible = invoices.filter((d) => {
     if (overdueOnly && !isOverdue(d)) return false;
@@ -137,6 +189,16 @@ export default function Invoices() {
       </div>
 
       {error && <Alert kind="error">{error}</Alert>}
+      {isBoardUp && boardUpStats && (
+        <div className="btn-row" style={{ marginBottom: 16, alignItems: 'center' }}>
+          <span className="badge">{boardUpStats.jobs} JOBS LOGGED</span>
+          <span className="badge">{boardUpStats.emergency} EMERGENCY</span>
+          <span className="badge">{boardUpStats.sheets} PLYWOOD SHEETS EST.</span>
+          <Button variant="secondary" size="sm" onClick={downloadCsv}>
+            Download CSV
+          </Button>
+        </div>
+      )}
       {loading ? (
         <p>Loading…</p>
       ) : visible.length === 0 ? (
@@ -253,11 +315,21 @@ export default function Invoices() {
                         <span className="badge badge-draft">OVERDUE</span>
                       </div>
                     )}
+                    {d.template === 'boardup' && !!d.completed && (
+                      <div style={{ marginTop: 4 }}>
+                        <span className="badge badge-issued">DONE</span>
+                      </div>
+                    )}
                   </td>
                   <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                     <Link className="btn btn-secondary btn-sm" to={`/invoices/${d.id}`}>
                       Open
                     </Link>{' '}
+                    {d.template === 'boardup' && (
+                      <Button variant="ghost" size="sm" onClick={() => toggleDone(d)}>
+                        {d.completed ? 'Reopen' : 'Mark done'}
+                      </Button>
+                    )}{' '}
                     {d.status === 'draft' && (
                       <Button variant="ghost" size="sm" onClick={() => remove(d.id)}>
                         Delete
