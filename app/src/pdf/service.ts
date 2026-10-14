@@ -61,8 +61,11 @@ export function pdfPhotoTargetSize(width: number, height: number, maxSide = 900)
  * Downscale a full-resolution phone photo to a compact JPEG data URL for PDF
  * embedding (4 photos/page stay crisp well under email size limits). Any
  * failure falls back to the original URL so the PDF still builds.
+ *
+ * Exported for the job form too: thumbnails use the same compressed image so
+ * browser Print / Save-as-PDF doesn't embed full-resolution originals.
  */
-async function downscalePhotoForPdf(url: string): Promise<string> {
+export async function downscalePhotoForPdf(url: string): Promise<string> {
   try {
     if (typeof document === 'undefined' || typeof Image === 'undefined') return url;
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {

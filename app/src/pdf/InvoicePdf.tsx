@@ -258,7 +258,7 @@ function BoardUpPhotosBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUr
     <View>
       <Text style={styles.sectionLabel}>Job photos{caption !== '' ? ` — ${caption}` : ''} ({photoUrls.length})</Text>
       {chunkArray(photoUrls, PHOTOS_PER_PDF_PAGE).map((page, pi) => (
-        <View key={pi} style={styles.buPhotoPage} wrap={false}>
+        <View key={pi} style={styles.buPhotoPage} wrap={false} break={pi > 0}>
           {page.map((url, i) => (
             <View key={i} style={styles.buPhotoCell}>
               <Image src={url} style={styles.buPhotoImg} />
@@ -319,7 +319,7 @@ function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: st
         <View>
           <Text style={styles.sectionLabel}>Photos ({photoUrls.length})</Text>
           {chunkArray(photoUrls, PHOTOS_PER_PDF_PAGE).map((page, pi) => (
-            <View key={pi} style={styles.buPhotoPage} wrap={false}>
+            <View key={pi} style={styles.buPhotoPage} wrap={false} break={pi > 0}>
               {page.map((url, i) => (
                 <View key={i} style={styles.buPhotoCell}>
                   <Image src={url} style={styles.buPhotoImg} />

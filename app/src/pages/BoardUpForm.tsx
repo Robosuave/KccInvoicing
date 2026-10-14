@@ -13,7 +13,6 @@ import {
   URGENCY_OPTIONS,
   asBoardUpDetails,
   boardUpPdfFilename,
-  boardUpPhotoCaption,
   buildBoardUpSmsText,
   buildBoardUpSummary,
   syncMeasurementCount,
@@ -26,8 +25,8 @@ import {
 import { boardUpPhotoUrl, removeBoardUpPhoto, uploadBoardUpPhoto } from '../data/attachments';
 import { deleteInvoiceDeep } from '../data/invoices';
 import { buildBoardUpShareSnapshot } from '../lib/snapshot';
-import { canShareFiles, shareFiles, urlToFile } from '../lib/share';
-import { renderInvoicePdfBlob } from '../pdf/service';
+import { canShareFiles, shareFiles } from '../lib/share';
+import { downscalePhotoForPdf, renderInvoicePdfBlob } from '../pdf/service';
 import type { Business } from '../db/types';
 
 export interface BoardUpFormHandle {
@@ -37,6 +36,8 @@ export interface BoardUpFormHandle {
 interface PhotoItem {
   path: string;
   url: string;
+  /** Downscaled version used for thumbnails (and browser printing). */
+  thumbUrl?: string;
 }
 
 export interface BoardUpPhoto {
@@ -219,9 +220,10 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
-  const [smsCopied, setSmsCopied] = useState(false);
   /** Which file-share action is currently preparing its files. */
-  const [shareBusy, setShareBusy] = useState<'pdf' | 'photos' | 'condensed' | 'delete' | null>(null);
+  const [shareBusy, setShareBusy] = useState<'condensed' | 'delete' | null>(null);
+  /** Combined PDF prepared by the first "Email PDF" tap, shared on the second tap. */
+  const [pdfReady, setPdfReady] = useState<File | null>(null);
   /** Cities added via "Other", remembered per device. */
   const [customCityNames, setCustomCityNames] = useState<string[]>(() =>
     loadCustomCities(BOARDUP_CUSTOM_CITY_NAMES_KEY),
@@ -245,6 +247,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
 
   const setPhotosAndNotify = (next: PhotoItem[]) => {
     setPhotos(next);
+    setPdfReady(null);
     onPhotosChange?.(next.map((p) => ({ path: p.path, url: p.url })));
   };
 
@@ -340,7 +343,8 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       const items: PhotoItem[] = [];
       for (const path of asBoardUpDetails(initial).photos) {
         try {
-          items.push({ path, url: await boardUpPhotoUrl(path) });
+          const url = await boardUpPhotoUrl(path);
+          items.push({ path, url, thumbUrl: await downscalePhotoForPdf(url) });
         } catch {
           /* unreadable photo — leave it out of the thumbnails */
         }
@@ -455,7 +459,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       for (const file of valid) {
         const path = await uploadBoardUpPhoto(workspaceId, businessId, id, file);
         const url = await boardUpPhotoUrl(path);
-        next.push({ path, url });
+        next.push({ path, url, thumbUrl: await downscalePhotoForPdf(url) });
       }
       setPhotosAndNotify(next);
       const paths = next.map((p) => p.path);
@@ -512,18 +516,6 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     window.location.href = `sms:${num}${isIOS ? '&body=' : '?body='}${encodeURIComponent(body)}`;
   };
 
-  const copySmsText = async () => {
-    setShareError(null);
-    setSmsCopied(false);
-    const body = buildBoardUpSmsText(details());
-    try {
-      await navigator.clipboard.writeText(body);
-      setSmsCopied(true);
-    } catch {
-      setShareError('Could not copy — the browser blocked clipboard access.');
-    }
-  };
-
   /** Renders the job sheet PDF from live form state (draft or issued). */
   const renderSharePdf = async (photosOnly = false, includePhotos = true): Promise<Blob> => {
     const snap = buildBoardUpShareSnapshot({
@@ -533,62 +525,6 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       invoiceDate,
     });
     return renderInvoicePdfBlob(snap, 'classic', 'LETTER', photosOnly, includePhotos);
-  };
-
-  /** Text + PDFs: shares the job-information PDF and the pictures PDF separately, like the original. */
-  const textJobWithPdf = async () => {
-    if (shareBusy) return;
-    setShareError(null);
-    setShareBusy('pdf');
-    try {
-      const d = details();
-      const infoBlob = await renderSharePdf(false, false);
-      const files = [new File([infoBlob], boardUpPdfFilename(d, invoiceDate, 'job information'), { type: 'application/pdf' })];
-      if (d.photos.length > 0) {
-        const photosBlob = await renderSharePdf(true, true);
-        files.push(new File([photosBlob], boardUpPdfFilename(d, invoiceDate, 'photos'), { type: 'application/pdf' }));
-      }
-      if (!canShareFiles(files)) {
-        setShareError('This browser can’t share files — use Print / Save PDF instead.');
-        return;
-      }
-      await shareFiles({
-        files,
-        title: `Board-up job${jobNumber ? ` ${jobNumber}` : ''}`,
-        text: buildBoardUpSmsText(d),
-      });
-    } catch (e) {
-      setShareError(e instanceof Error ? e.message : 'Could not prepare the PDFs.');
-    } finally {
-      setShareBusy(null);
-    }
-  };
-
-  /** Share photos: opens the native share sheet with the job photos attached. */
-  const shareJobPhotos = async () => {
-    if (shareBusy) return;
-    setShareError(null);
-    const items = photosRef.current;
-    if (items.length === 0) {
-      setShareError('No photos to share yet — add photos first.');
-      return;
-    }
-    setShareBusy('photos');
-    try {
-      const files: File[] = [];
-      for (let i = 0; i < items.length; i++) {
-        files.push(await urlToFile(items[i].url, `job-photo-${i + 1}.jpg`, 'image/jpeg'));
-      }
-      if (!canShareFiles(files)) {
-        setShareError('This browser can’t share files.');
-        return;
-      }
-      await shareFiles({ files, title: 'Job photos', text: boardUpPhotoCaption(details()) });
-    } catch (e) {
-      setShareError(e instanceof Error ? e.message : 'Could not share the photos.');
-    } finally {
-      setShareBusy(null);
-    }
   };
 
   /** Save condensed PDF: job summary + photos (4 per page, address captions), downloaded as a file. */
@@ -616,33 +552,52 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
   /** Email PDF: shares the combined job PDF (summary + photos, 4 per page with address
    * captions) with the full job summary as the message. Opens the native share sheet
    * so the PDF can be sent through Gmail; falls back to a download + email draft. */
+  /**
+   * Email PDF: two taps. The first tap builds the combined job PDF (summary +
+   * photos, 4 per page with address captions); the second tap opens the native
+   * share sheet. Splitting it this way keeps the share() call inside a real
+   * user gesture — building the PDF takes longer than the browser's tap
+   * window, which is what caused the "must be handling a user gesture" error.
+   */
   const emailPdf = async () => {
     if (shareBusy) return;
+    const d = details();
+    const subject = `Board-up job${jobNumber ? ` #${jobNumber}` : ''} — ${d.streetAddress || 'new job'}`;
+    const body = buildBoardUpSummary(d, jobNumber);
+    // Second tap: the prepared file shares inside this tap's gesture.
+    if (pdfReady) {
+      setShareError(null);
+      try {
+        const result = await shareFiles({ files: [pdfReady], title: subject, text: body });
+        if (result === 'shared') setPdfReady(null);
+      } catch {
+        setShareError('Could not open the share sheet — try Save PDF instead.');
+      }
+      return;
+    }
     setShareError(null);
     setShareBusy('condensed');
     try {
-      const d = details();
       const blob = await renderSharePdf(false, true);
       const name = boardUpPdfFilename(d, invoiceDate, 'condensed');
       const file = new File([blob], name, { type: 'application/pdf' });
-      const subject = `Board-up job${jobNumber ? ` #${jobNumber}` : ''} — ${d.streetAddress || 'new job'}`;
-      const body = buildBoardUpSummary(d, jobNumber);
-      if (canShareFiles([file])) {
-        await shareFiles({ files: [file], title: subject, text: body });
+      if (!canShareFiles([file])) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        setShareError('This browser can’t share files — the PDF downloaded. Attach it to the email draft.');
+        window.location.href = `mailto:${encodeURIComponent(d.emailTo.trim())}?subject=${encodeURIComponent(
+          subject,
+        )}&body=${encodeURIComponent(body)}`;
         return;
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-      setShareError('This browser can’t share files — the PDF downloaded. Attach it to the email draft.');
-      window.location.href = `mailto:${encodeURIComponent(d.emailTo.trim())}?subject=${encodeURIComponent(
-        subject,
-      )}&body=${encodeURIComponent(body)}`;
+      // Ready — the next tap shares it.
+      setPdfReady(file);
     } catch (e) {
       setShareError(e instanceof Error ? e.message : 'Could not build the PDF.');
     } finally {
@@ -1022,7 +977,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
             {photos.map((p) => (
               <div key={p.path} style={{ position: 'relative', width: 96, height: 96 }}>
                 <img
-                  src={p.url}
+                  src={p.thumbUrl || p.url}
                   alt="Job photo"
                   style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8, border: '1px solid #ddd' }}
                 />
@@ -1115,20 +1070,11 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         <Button id="bu-textjob" variant="secondary" onClick={textJob} disabled={shareBusy !== null}>
           Text this job
         </Button>
-        <Button id="bu-textpdf" variant="secondary" onClick={textJobWithPdf} disabled={shareBusy !== null}>
-          {shareBusy === 'pdf' ? 'Preparing…' : 'Text + PDFs'}
-        </Button>
-        <Button id="bu-sharephotos" variant="secondary" onClick={shareJobPhotos} disabled={shareBusy !== null}>
-          {shareBusy === 'photos' ? 'Preparing…' : 'Share photos'}
-        </Button>
-        <Button id="bu-copysms" variant="secondary" onClick={copySmsText} disabled={shareBusy !== null}>
-          Copy SMS text
-        </Button>
         <Button id="bu-condensed" variant="secondary" onClick={saveCondensedPdf} disabled={shareBusy !== null}>
-          {shareBusy === 'condensed' ? 'Building…' : 'Save condensed PDF'}
+          {shareBusy === 'condensed' && !pdfReady ? 'Building…' : 'Save PDF'}
         </Button>
         <Button id="bu-emailpdf" variant="secondary" onClick={emailPdf} disabled={shareBusy !== null}>
-          {shareBusy === 'condensed' ? 'Preparing…' : 'Email PDF'}
+          {shareBusy === 'condensed' ? 'Building…' : pdfReady ? 'Tap to share PDF' : 'Email PDF'}
         </Button>
         {isOwner && (
           <Button id="bu-deletejob" variant="danger" onClick={deleteJob} disabled={shareBusy !== null}>
@@ -1136,9 +1082,9 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
           </Button>
         )}
       </div>
-      {smsCopied && (
+      {pdfReady && (
         <div style={{ marginBottom: 12, color: '#15803d', fontSize: 14, fontWeight: 600 }}>
-          Copied — paste it into your text message.
+          PDF is ready — tap “Tap to share PDF” to send it.
         </div>
       )}
     </div>

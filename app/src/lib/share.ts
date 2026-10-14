@@ -1,5 +1,5 @@
 /**
- * Web Share API helpers for the board-up job screen ("Text + PDF", "Share photos").
+ * Web Share API helpers for the board-up job screen ("Email PDF" share).
  * On mobile this opens the native share sheet (Messages, Mail, Drive, …) with
  * the files attached. Desktop browsers mostly can't share files — callers
  * should check canShareFiles() first and show a fallback message.
