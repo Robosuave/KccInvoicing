@@ -37,6 +37,8 @@ export interface Business {
   archived_at: string | null;
   created_at: string;
   updated_at: string;
+  /** When true, members see all this business's invoices (migration 0031). */
+  agents_see_all_invoices: boolean;
 }
 
 export interface Customer {

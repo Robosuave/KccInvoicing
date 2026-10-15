@@ -17,7 +17,7 @@ alter table public.businesses
 
 update public.businesses
 set agents_see_all_invoices = true
-where name = 'Aquick Board-up'
+where display_name = 'Aquick Board-up'
   and agents_see_all_invoices = false;
 
 -- 3. Access check: same as 0028, plus the shared-visibility exception.
