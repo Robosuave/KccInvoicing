@@ -93,7 +93,7 @@ export default function Invoices() {
       jobs++;
       const d = asBoardUpDetails(inv.boardup_details);
       if (d.urgency.startsWith('Emergency')) emergency++;
-      sheets += estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors).sheets;
+      sheets += estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors, d.acUnits).sheets;
     }
     return { jobs, emergency, sheets };
   }, [invoices, isBoardUp]);

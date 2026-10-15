@@ -12,6 +12,8 @@
 export interface BoardUpDetails {
   cityName: string;
   otherCustomerName: string;
+  /** Who called the job in (Dan's crew-entry "Caller name"). */
+  callerName: string;
   streetAddress: string;
   city: string;
   phone: string;
@@ -27,9 +29,17 @@ export interface BoardUpDetails {
   doors: number;
   sliders: number;
   garageDoors: number;
+  /** AC units to board (Dan's crew-entry "AC" opening type). */
+  acUnits: number;
   otherOpenings: string;
   crew: string;
   additionalCrew: string;
+  /** Hasp & lock count + per-lock combination (Dan's crew-entry locks section). */
+  haspLocks: number;
+  haspLockCombos: string[];
+  /** Lock & chain count + per-lock combination. */
+  chainLocks: number;
+  chainLockCombos: string[];
   accessNotes: string;
   emailTo: string;
   textTo: string;
@@ -40,11 +50,13 @@ export interface BoardUpDetails {
   doorMeasurements: string[];
   sliderMeasurements: string[];
   garageMeasurements: string[];
+  acMeasurements: string[];
 }
 
 export const EMPTY_BOARDUP: BoardUpDetails = {
   cityName: '',
   otherCustomerName: '',
+  callerName: '',
   streetAddress: '',
   city: '',
   phone: '',
@@ -59,9 +71,14 @@ export const EMPTY_BOARDUP: BoardUpDetails = {
   doors: 0,
   sliders: 0,
   garageDoors: 0,
+  acUnits: 0,
   otherOpenings: '',
   crew: 'Dan',
   additionalCrew: '',
+  haspLocks: 0,
+  haspLockCombos: [],
+  chainLocks: 0,
+  chainLockCombos: [],
   accessNotes: '',
   emailTo: '',
   textTo: '',
@@ -70,6 +87,7 @@ export const EMPTY_BOARDUP: BoardUpDetails = {
   doorMeasurements: [],
   sliderMeasurements: [],
   garageMeasurements: [],
+  acMeasurements: [],
 };
 
 export const CITY_NAME_OPTIONS = [
@@ -113,9 +131,45 @@ export const SERVICE_NEEDED_OPTIONS = [
   'Board removal',
 ];
 
-export const URGENCY_OPTIONS = ['Emergency — now', 'Today', 'Within 24 hrs', 'Scheduled'];
+export const URGENCY_OPTIONS = ['Emergency — dispatch now', 'Today', 'Scheduled', 'Not urgent'];
+
+/** Retired urgency labels mapped to their replacements when reading old jobs. */
+export const URGENCY_MIGRATIONS: Record<string, string> = {
+  'Emergency — now': 'Emergency — dispatch now',
+  'Within 24 hrs': 'Scheduled',
+};
 
 export const CREW_OPTIONS = ['Unassigned', 'Dan', 'Dale', 'Rob'];
+
+/**
+ * Preset W×H measurement dropdown options from Dan's crew-entry app.
+ * Windows and doors get one combined W×H dropdown per opening; "Custom size"
+ * (the default) leaves the adjacent text box free for typing any size.
+ */
+export const CUSTOM_SIZE_OPTION = 'Custom size';
+export const WINDOW_MEASUREMENT_PRESETS = [
+  '36x50',
+  '36.25x50',
+  '36.5x50',
+  '36.75x50',
+  '37x48',
+  '37.25x48',
+  '37.5x48',
+  '37.75x48',
+];
+export const DOOR_MEASUREMENT_PRESETS = [
+  '36x80',
+  '36.25x80',
+  '36.5x80',
+  '36.75x80',
+  '37x80',
+  '37.25x80',
+  '37.5x80',
+  '36x81',
+  '36.25x81',
+  '36.5x81',
+  '36.75x81',
+];
 
 /** localStorage keys for cities added via the "Other" option (per device). */
 export const BOARDUP_CUSTOM_CITY_NAMES_KEY = 'boardup_custom_city_names';
@@ -213,7 +267,7 @@ export function boardUpPdfFilename(
 }
 
 export const BOARDUP_FORMULA_NOTE =
-  'Estimate uses 12 sq ft/window, 21/door, 32/slider, 64/garage + 15% waste. Planning only — measure on site.';
+  'Estimate uses 12 sq ft/window, 21/door, 32/slider, 64/garage, 12/AC + 15% waste. Planning only — measure on site.';
 
 /** Keeps a measurement array the same length as its opening count. */
 export function syncMeasurementCount(count: number, arr: string[]): string[] {
@@ -229,6 +283,7 @@ export function measurementSummaryLines(d: BoardUpDetails): string[] {
     ['Door', d.doorMeasurements],
     ['Slider / patio', d.sliderMeasurements],
     ['Garage door', d.garageMeasurements],
+    ['AC', d.acMeasurements],
   ];
   return groups
     .map(([label, arr]) => {
@@ -237,8 +292,22 @@ export function measurementSummaryLines(d: BoardUpDetails): string[] {
     })
     .filter((l): l is string => l !== null);
 }
+
+/** One summary line per lock type that has any combinations, e.g. "Hasp & lock combos: 4419, 8820". */
+export function lockSummaryLines(d: Pick<BoardUpDetails, 'haspLockCombos' | 'chainLockCombos'>): string[] {
+  const groups: [string, string[]][] = [
+    ['Hasp & lock', d.haspLockCombos],
+    ['Lock & chain', d.chainLockCombos],
+  ];
+  return groups
+    .map(([label, arr]) => {
+      const vals = arr.map((s) => s.trim()).filter(Boolean);
+      return vals.length > 0 ? `${label} combos: ${vals.join(', ')}` : null;
+    })
+    .filter((l): l is string => l !== null);
+}
 /** Sq ft per opening type, matching the source app. */
-const SQFT = { windows: 12, doors: 21, sliders: 32, garageDoors: 64 } as const;
+const SQFT = { windows: 12, doors: 21, sliders: 32, garageDoors: 64, acUnits: 12 } as const;
 const WASTE_FACTOR = 1.15;
 const SHEET_SQFT = 32; // a 4x8 plywood sheet
 
@@ -254,12 +323,19 @@ export interface BoardUpEstimate {
   sheets: number;
 }
 
-export function estimateBoardUp(windows: number, doors: number, sliders: number, garageDoors: number): BoardUpEstimate {
+export function estimateBoardUp(
+  windows: number,
+  doors: number,
+  sliders: number,
+  garageDoors: number,
+  acUnits = 0,
+): BoardUpEstimate {
   const w = Math.max(0, Math.floor(windows) || 0);
   const d = Math.max(0, Math.floor(doors) || 0);
   const s = Math.max(0, Math.floor(sliders) || 0);
   const g = Math.max(0, Math.floor(garageDoors) || 0);
-  const rawSqft = w * SQFT.windows + d * SQFT.doors + s * SQFT.sliders + g * SQFT.garageDoors;
+  const a = Math.max(0, Math.floor(acUnits) || 0);
+  const rawSqft = w * SQFT.windows + d * SQFT.doors + s * SQFT.sliders + g * SQFT.garageDoors + a * SQFT.acUnits;
   const sheets = Math.ceil((rawSqft * WASTE_FACTOR) / SHEET_SQFT);
   return { rawSqft, sqftCover: rawSqft, sheets };
 }
@@ -290,16 +366,20 @@ export interface BoardUpOutputOptions {
  * three read identically.
  */
 export function boardUpOutputRows(d: BoardUpDetails, opts: BoardUpOutputOptions = {}): [string, string][] {
-  const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors);
-  const total = d.windows + d.doors + d.sliders + d.garageDoors;
+  const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors, d.acUnits);
+  const total = d.windows + d.doors + d.sliders + d.garageDoors + d.acUnits;
   const cityState = d.city
     ? d.city.endsWith(' Florida')
       ? d.city.replace(/ Florida$/, ', Florida')
       : `${d.city}, Florida`
     : '';
   const detailParts = [
-    `${total} openings (${d.windows}W ${d.doors}D ${d.sliders}S ${d.garageDoors}G) — ${est.sheets} sheets est.`,
+    d.callerName.trim() ? `Caller: ${d.callerName.trim()}` : null,
+    `${total} openings (${d.windows}W ${d.doors}D ${d.sliders}S ${d.garageDoors}G${
+      d.acUnits > 0 ? ` ${d.acUnits}A` : ''
+    }) — ${est.sheets} sheets est.`,
     ...measurementSummaryLines(d),
+    ...lockSummaryLines(d),
     d.otherOpenings.trim() ? `Other openings: ${d.otherOpenings.trim()}` : null,
     d.accessNotes.trim() ? `Notes: ${d.accessNotes.trim()}` : null,
   ].filter((p): p is string => p !== null);
@@ -370,14 +450,14 @@ export function buildBoardUpCsv(rows: BoardUpCsvRow[]): string {
   const header = [
     'Job', 'Done', 'Date and time', 'City name', 'Address', 'City and state',
     'Phone number', 'Case', 'Requesting officer and badge', 'Structure type',
-    'Type of board up', 'When needed', 'Crew', 'Openings', 'Measurements',
-    'Sheets est.', 'Notes',
+    'Type of board up', 'When needed', 'Crew', 'Caller', 'Openings', 'Measurements',
+    'Locks', 'Sheets est.', 'Notes',
   ];
   const lines = [header.join(',')];
   for (const r of rows) {
     const d = r.details;
-    const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors);
-    const total = d.windows + d.doors + d.sliders + d.garageDoors;
+    const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors, d.acUnits);
+    const total = d.windows + d.doors + d.sliders + d.garageDoors + d.acUnits;
     const cityState = d.city
       ? d.city.endsWith(' Florida')
         ? d.city.replace(/ Florida$/, ', Florida')
@@ -398,8 +478,12 @@ export function buildBoardUpCsv(rows: BoardUpCsvRow[]): string {
         d.serviceNeeded,
         `${d.urgency}${d.neededBy ? ` (needed by ${fmtDateTime(d.neededBy)})` : ''}`,
         `${d.crew}${d.additionalCrew.trim() ? ` + ${d.additionalCrew.trim()}` : ''}`,
-        `${total} (${d.windows}W ${d.doors}D ${d.sliders}S ${d.garageDoors}G)`,
+        d.callerName.trim(),
+        `${total} (${d.windows}W ${d.doors}D ${d.sliders}S ${d.garageDoors}G${
+          d.acUnits > 0 ? ` ${d.acUnits}A` : ''
+        })`,
         measurementSummaryLines(d).join('; '),
+        lockSummaryLines(d).join('; '),
         String(est.sheets),
         d.accessNotes.trim(),
       ].map(csvCell).join(','),
@@ -433,9 +517,12 @@ export function asBoardUpDetails(raw: unknown): BoardUpDetails {
     if (typeof v !== 'string' || v === '') return v === '' ? '' : fallback;
     return (options as readonly string[]).includes(v) ? v : fallback;
   };
+  /** Map retired urgency labels to their replacements before validating. */
+  const urgencyVal = typeof r.urgency === 'string' ? URGENCY_MIGRATIONS[r.urgency] ?? r.urgency : r.urgency;
   return {
     cityName: opt(r.cityName, withCustomCities(CITY_NAME_OPTIONS, loadCustomCities(BOARDUP_CUSTOM_CITY_NAMES_KEY)), ''),
     otherCustomerName: str(r.otherCustomerName),
+    callerName: str(r.callerName),
     streetAddress: str(r.streetAddress),
     city: opt(r.city, withCustomCities(CITY_OPTIONS, loadCustomCities(BOARDUP_CUSTOM_CITIES_KEY)), ''),
     phone: str(r.phone),
@@ -443,16 +530,21 @@ export function asBoardUpDetails(raw: unknown): BoardUpDetails {
     requestingOfficer: str(r.requestingOfficer),
     propertyType: opt(r.propertyType, PROPERTY_TYPE_OPTIONS, 'Single-family'),
     serviceNeeded: opt(r.serviceNeeded, SERVICE_NEEDED_OPTIONS, 'Emergency board-up'),
-    urgency: opt(r.urgency, URGENCY_OPTIONS, 'Today'),
+    urgency: opt(urgencyVal, URGENCY_OPTIONS, 'Today'),
     neededBy: str(r.neededBy),
     referenceLink: str(r.referenceLink, 'https://aquick.kalekycomputer.com'),
     windows: num(r.windows),
     doors: num(r.doors),
     sliders: num(r.sliders),
     garageDoors: num(r.garageDoors),
+    acUnits: num(r.acUnits),
     otherOpenings: str(r.otherOpenings),
     crew: opt(r.crew, CREW_OPTIONS, 'Dan'),
     additionalCrew: str(r.additionalCrew),
+    haspLocks: num(r.haspLocks),
+    haspLockCombos: strArr(r.haspLockCombos),
+    chainLocks: num(r.chainLocks),
+    chainLockCombos: strArr(r.chainLockCombos),
     accessNotes: str(r.accessNotes),
     emailTo: str(r.emailTo),
     textTo: str(r.textTo),
@@ -461,5 +553,6 @@ export function asBoardUpDetails(raw: unknown): BoardUpDetails {
     doorMeasurements: strArr(r.doorMeasurements),
     sliderMeasurements: strArr(r.sliderMeasurements),
     garageMeasurements: strArr(r.garageMeasurements),
+    acMeasurements: strArr(r.acMeasurements),
   };
 }

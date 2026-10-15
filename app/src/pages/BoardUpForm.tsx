@@ -8,9 +8,12 @@ import {
   CREW_OPTIONS,
   CITY_NAME_OPTIONS,
   CITY_OPTIONS,
+  CUSTOM_SIZE_OPTION,
+  DOOR_MEASUREMENT_PRESETS,
   PROPERTY_TYPE_OPTIONS,
   SERVICE_NEEDED_OPTIONS,
   URGENCY_OPTIONS,
+  WINDOW_MEASUREMENT_PRESETS,
   asBoardUpDetails,
   boardUpPdfFilename,
   buildBoardUpSmsText,
@@ -78,6 +81,7 @@ const FLOW = [
   'bu-cityname',
   'bu-cityname-other',
   'bu-othercustomer',
+  'bu-caller',
   'bu-street',
   'bu-city',
   'bu-city-other',
@@ -156,9 +160,20 @@ function Stepper({
   );
 }
 
-type MeasurementKey = 'windowMeasurements' | 'doorMeasurements' | 'sliderMeasurements' | 'garageMeasurements';
+type MeasurementKey =
+  | 'windowMeasurements'
+  | 'doorMeasurements'
+  | 'sliderMeasurements'
+  | 'garageMeasurements'
+  | 'acMeasurements'
+  | 'haspLockCombos'
+  | 'chainLockCombos';
 
-/** Stepper plus one measurement box per counted opening, matching the source app. */
+/**
+ * Stepper plus one measurement/combination box per counted unit.
+ * Windows and doors also get Dan's crew-entry preset W×H dropdown; the text
+ * box stays as the custom-size escape hatch and both write the same value.
+ */
 function OpeningCounter({
   id,
   label,
@@ -169,6 +184,8 @@ function OpeningCounter({
   disabled,
   onCount,
   onMeasurement,
+  presets,
+  itemCaption,
 }: {
   id: string;
   label: string;
@@ -179,6 +196,10 @@ function OpeningCounter({
   disabled?: boolean;
   onCount: (v: number) => void;
   onMeasurement: (i: number, v: string) => void;
+  /** Preset W×H dropdown options; omit for free-text only. */
+  presets?: string[];
+  /** Caption above the per-unit boxes; defaults to "Measurements — one per …". */
+  itemCaption?: string;
 }) {
   return (
     <div>
@@ -186,20 +207,43 @@ function OpeningCounter({
       {count > 0 && (
         <div style={{ marginTop: 8 }}>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
-            Measurements — one per {label.toLowerCase()}
+            {itemCaption ?? `Measurements — one per ${label.toLowerCase()}`}
           </div>
           {measurements.map((m, i) => (
-            <Field key={i} label={`${singular} ${i + 1}`} htmlFor={`${id}-m${i}`}>
-              <TextField
-                id={`${id}-m${i}`}
-                value={m}
-                disabled={disabled}
-                onChange={(e) => onMeasurement(i, e.target.value)}
-                placeholder={placeholder}
-                style={{ maxWidth: 200 }}
-                enterKeyHint="next"
-              />
-            </Field>
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              {presets && (
+                <Field label={`${singular} ${i + 1} size`} htmlFor={`${id}-p${i}`}>
+                  <SelectField
+                    id={`${id}-p${i}`}
+                    style={{ maxWidth: 150 }}
+                    value={presets.includes(m) ? m : CUSTOM_SIZE_OPTION}
+                    disabled={disabled}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v !== CUSTOM_SIZE_OPTION) onMeasurement(i, v);
+                    }}
+                  >
+                    <option value={CUSTOM_SIZE_OPTION}>{CUSTOM_SIZE_OPTION}</option>
+                    {presets.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </SelectField>
+                </Field>
+              )}
+              <Field label={presets ? `${singular} ${i + 1} custom size` : `${singular} ${i + 1}`} htmlFor={`${id}-m${i}`}>
+                <TextField
+                  id={`${id}-m${i}`}
+                  value={m}
+                  disabled={disabled}
+                  onChange={(e) => onMeasurement(i, e.target.value)}
+                  placeholder={placeholder}
+                  style={{ maxWidth: 200 }}
+                  enterKeyHint="next"
+                />
+              </Field>
+            </div>
           ))}
         </div>
       )}
@@ -277,7 +321,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
 
   /** Opening count change: also grows/shrinks the measurement boxes to match. */
   const setOpeningCount = (
-    countKey: 'windows' | 'doors' | 'sliders' | 'garageDoors',
+    countKey: 'windows' | 'doors' | 'sliders' | 'garageDoors' | 'acUnits' | 'haspLocks' | 'chainLocks',
     mKey: MeasurementKey,
     v: number,
   ) => {
@@ -362,8 +406,8 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
   }, []);
 
   const est = useMemo(
-    () => estimateBoardUp(f.windows, f.doors, f.sliders, f.garageDoors),
-    [f.windows, f.doors, f.sliders, f.garageDoors],
+    () => estimateBoardUp(f.windows, f.doors, f.sliders, f.garageDoors, f.acUnits),
+    [f.windows, f.doors, f.sliders, f.garageDoors, f.acUnits],
   );
 
   const cityNameOptions = useMemo(
@@ -717,6 +761,18 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         />
       </Field>
 
+      <Field label="Caller name" htmlFor="bu-caller">
+        <TextField
+          id="bu-caller"
+          style={{ maxWidth: 300 }}
+          enterKeyHint="next"
+          value={f.callerName}
+          disabled={disabled}
+          onChange={(e) => set('callerName', e.target.value)}
+          placeholder="Who called the job in"
+        />
+      </Field>
+
       <Field label="Street address *" htmlFor="bu-street" error={fieldError('streetAddress')}>
         <TextField
           id="bu-street"
@@ -899,12 +955,14 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
           <OpeningCounter
             id="bu-win" label="Windows" singular="Window" count={f.windows}
             measurements={f.windowMeasurements} placeholder="e.g. 36x45" disabled={disabled}
+            presets={WINDOW_MEASUREMENT_PRESETS}
             onCount={(v) => setOpeningCount('windows', 'windowMeasurements', v)}
             onMeasurement={(i, v) => setMeasurement('windowMeasurements', i, v)}
           />
           <OpeningCounter
             id="bu-door" label="Doors" singular="Door" count={f.doors}
             measurements={f.doorMeasurements} placeholder="e.g. 38x81" disabled={disabled}
+            presets={DOOR_MEASUREMENT_PRESETS}
             onCount={(v) => setOpeningCount('doors', 'doorMeasurements', v)}
             onMeasurement={(i, v) => setMeasurement('doorMeasurements', i, v)}
           />
@@ -920,8 +978,34 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
             onCount={(v) => setOpeningCount('garageDoors', 'garageMeasurements', v)}
             onMeasurement={(i, v) => setMeasurement('garageMeasurements', i, v)}
           />
+          <OpeningCounter
+            id="bu-ac" label="AC units" singular="AC" count={f.acUnits}
+            measurements={f.acMeasurements} placeholder="e.g. 30x24" disabled={disabled}
+            onCount={(v) => setOpeningCount('acUnits', 'acMeasurements', v)}
+            onMeasurement={(i, v) => setMeasurement('acMeasurements', i, v)}
+          />
         </div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>{BOARDUP_FORMULA_NOTE}</div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h3 style={{ marginTop: 0, marginBottom: 4 }}>Locks &amp; hardware</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+          <OpeningCounter
+            id="bu-hasp" label="Hasp & Lock" singular="Hasp & Lock" count={f.haspLocks}
+            measurements={f.haspLockCombos} placeholder="e.g. 4419" disabled={disabled}
+            itemCaption="Combination — one per lock"
+            onCount={(v) => setOpeningCount('haspLocks', 'haspLockCombos', v)}
+            onMeasurement={(i, v) => setMeasurement('haspLockCombos', i, v)}
+          />
+          <OpeningCounter
+            id="bu-chain" label="Lock and Chain" singular="Lock and Chain" count={f.chainLocks}
+            measurements={f.chainLockCombos} placeholder="e.g. 8820" disabled={disabled}
+            itemCaption="Combination — one per lock"
+            onCount={(v) => setOpeningCount('chainLocks', 'chainLockCombos', v)}
+            onMeasurement={(i, v) => setMeasurement('chainLockCombos', i, v)}
+          />
+        </div>
       </div>
 
       <Field label="Other opening information" htmlFor="bu-otheropen">

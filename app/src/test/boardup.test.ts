@@ -50,8 +50,15 @@ describe('estimateBoardUp', () => {
 
   it('matches the source-app example: the formula note is shown verbatim', () => {
     expect(BOARDUP_FORMULA_NOTE).toBe(
-      'Estimate uses 12 sq ft/window, 21/door, 32/slider, 64/garage + 15% waste. Planning only — measure on site.',
+      'Estimate uses 12 sq ft/window, 21/door, 32/slider, 64/garage, 12/AC + 15% waste. Planning only — measure on site.',
     );
+  });
+
+  it('counts AC units at 12 sq ft each', () => {
+    // 1 AC = 12 sqft; sheets ceil(12*1.15/32) = 1
+    expect(estimateBoardUp(0, 0, 0, 0, 2)).toEqual({ rawSqft: 24, sqftCover: 24, sheets: 1 });
+    // AC stacks with the other types: 1 window (12) + 1 AC (12) = 24
+    expect(estimateBoardUp(1, 0, 0, 0, 1).rawSqft).toBe(24);
   });
 });
 
@@ -432,7 +439,7 @@ describe('buildBoardUpCsv', () => {
     ]);
     const lines = csv.split('\n');
     expect(lines[0]).toBe(
-      'Job,Done,Date and time,City name,Address,City and state,Phone number,Case,Requesting officer and badge,Structure type,Type of board up,When needed,Crew,Openings,Measurements,Sheets est.,Notes',
+      'Job,Done,Date and time,City name,Address,City and state,Phone number,Case,Requesting officer and badge,Structure type,Type of board up,When needed,Crew,Caller,Openings,Measurements,Locks,Sheets est.,Notes',
     );
     expect(lines).toHaveLength(2);
     expect(lines[1]).toContain('QB-12,Yes,');
@@ -458,5 +465,68 @@ describe('buildBoardUpCsv', () => {
 
   it('returns just the header when there are no jobs', () => {
     expect(buildBoardUpCsv([]).split('\n')).toHaveLength(1);
+  });
+});
+
+describe('crew-entry parity fields', () => {
+  it('exposes the exact window/door preset lists from the crew-entry app', async () => {
+    const { WINDOW_MEASUREMENT_PRESETS, DOOR_MEASUREMENT_PRESETS, CUSTOM_SIZE_OPTION } =
+      await import('../lib/boardup');
+    expect(CUSTOM_SIZE_OPTION).toBe('Custom size');
+    expect(WINDOW_MEASUREMENT_PRESETS).toEqual([
+      '36x50', '36.25x50', '36.5x50', '36.75x50',
+      '37x48', '37.25x48', '37.5x48', '37.75x48',
+    ]);
+    expect(DOOR_MEASUREMENT_PRESETS).toEqual([
+      '36x80', '36.25x80', '36.5x80', '36.75x80',
+      '37x80', '37.25x80', '37.5x80',
+      '36x81', '36.25x81', '36.5x81', '36.75x81',
+    ]);
+  });
+
+  it('summarizes lock combinations per type', async () => {
+    const { lockSummaryLines } = await import('../lib/boardup');
+    const d = { ...EMPTY_BOARDUP, haspLockCombos: ['4419', ''], chainLockCombos: ['8820'] };
+    expect(lockSummaryLines(d)).toEqual([
+      'Hasp & lock combos: 4419',
+      'Lock & chain combos: 8820',
+    ]);
+    expect(lockSummaryLines(EMPTY_BOARDUP)).toEqual([]);
+  });
+
+  it('migrates retired urgency labels when reading old jobs', () => {
+    expect(asBoardUpDetails({ urgency: 'Emergency — now' }).urgency).toBe('Emergency — dispatch now');
+    expect(asBoardUpDetails({ urgency: 'Within 24 hrs' }).urgency).toBe('Scheduled');
+    expect(asBoardUpDetails({ urgency: 'Today' }).urgency).toBe('Today');
+  });
+
+  it('includes caller, AC, and locks in the job details output', () => {
+    const d = {
+      ...EMPTY_BOARDUP,
+      callerName: 'Maria',
+      windows: 1,
+      acUnits: 1,
+      windowMeasurements: ['37x48'],
+      acMeasurements: ['30x24'],
+      haspLocks: 1,
+      haspLockCombos: ['4419'],
+    };
+    const rows = boardUpOutputRows(d, { jobDateTime: '2026-10-15T18:00:00' });
+    const details = rows.find(([label]) => label === 'Job details')?.[1] ?? '';
+    expect(details).toContain('Caller: Maria');
+    expect(details).toContain('2 openings (1W 0D 0S 0G 1A)');
+    expect(details).toContain('AC measurements: 30x24');
+    expect(details).toContain('Hasp & lock combos: 4419');
+  });
+
+  it('guards the new fields when reading stored jobs', () => {
+    const d = asBoardUpDetails({ acUnits: 'x', haspLocks: -2, haspLockCombos: 'nope', callerName: 42 });
+    expect(d.acUnits).toBe(0);
+    expect(d.haspLocks).toBe(0);
+    expect(d.haspLockCombos).toEqual([]);
+    expect(d.callerName).toBe('');
+    expect(d.acMeasurements).toEqual([]);
+    expect(d.chainLocks).toBe(0);
+    expect(d.chainLockCombos).toEqual([]);
   });
 });

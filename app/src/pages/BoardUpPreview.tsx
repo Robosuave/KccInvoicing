@@ -6,6 +6,8 @@ import {
   boardUpPhotoCaption,
   chunkArray,
   estimateBoardUp,
+  lockSummaryLines,
+  measurementSummaryLines,
   type BoardUpDetails,
 } from '../lib/boardup';
 import type { BoardUpPhoto } from './BoardUpForm';
@@ -43,7 +45,7 @@ export default function BoardUpPreviewBody({
   logoUrl: string | null;
 }) {
   const d = asBoardUpDetails(details);
-  const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors);
+  const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors, d.acUnits);
   /** Property address captioned under every photo, matching the source app. */
   const caption = boardUpPhotoCaption(d);
   return (
@@ -93,6 +95,7 @@ export default function BoardUpPreviewBody({
 
       <Row label="City" value={d.cityName} />
       {d.otherCustomerName && <Row label="Customer" value={d.otherCustomerName} />}
+      {d.callerName && <Row label="Caller name" value={d.callerName} />}
       <Row label="Street address" value={d.streetAddress + (d.city ? `, ${d.city}` : '')} />
       {d.phone && <Row label="Phone" value={d.phone} />}
       {d.caseNumber && <Row label="Case number" value={d.caseNumber} />}
@@ -117,6 +120,9 @@ export default function BoardUpPreviewBody({
         <span>
           Garage doors: <strong>{d.garageDoors}</strong>
         </span>
+        <span>
+          AC units: <strong>{d.acUnits}</strong>
+        </span>
       </div>
       <div
         style={{
@@ -136,6 +142,12 @@ export default function BoardUpPreviewBody({
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>{BOARDUP_FORMULA_NOTE}</div>
 
       {d.otherOpenings && <Row label="Other openings" value={d.otherOpenings} />}
+      {measurementSummaryLines(d).map((line) => (
+        <Row key={line} label="Measurements" value={line} />
+      ))}
+      {lockSummaryLines(d).map((line) => (
+        <Row key={line} label="Locks" value={line} />
+      ))}
       <Row label="Crew" value={d.crew + (d.additionalCrew ? ` + ${d.additionalCrew}` : '')} />
       {d.accessNotes && <Row label="Access / hazards" value={d.accessNotes} />}
 

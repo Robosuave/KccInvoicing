@@ -274,7 +274,7 @@ function BoardUpPhotosBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUr
 /** Board-up job sheet body: all intake fields, live material estimate, and job photos. */
 function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: string[] }) {
   const d = asBoardUpDetails(snap.boardup_details);
-  const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors);
+  const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors, d.acUnits);
   /** Property address printed under every photo, matching the source app. */
   const caption = boardUpPhotoCaption(d);
   /** Robert's 12-line output layout; "Date and time" is when the job came in. */
