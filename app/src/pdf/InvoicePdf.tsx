@@ -83,6 +83,10 @@ const styles = StyleSheet.create({
   buPhotoCell: { width: '48%', marginRight: '2%', marginBottom: 10 },
   buPhotoImg: { width: '100%', height: 190, objectFit: 'cover' },
   buPhotoCaption: { fontSize: 8, color: '#5b6470', marginTop: 3 },
+  /** Screenshot-style photo page header: "{BUSINESS} — JOB PHOTOS" + count + address. */
+  buPhotosTitle: { fontSize: 15, fontWeight: 'bold', marginTop: 10, marginBottom: 2 },
+  buPhotosCount: { fontSize: 11, fontWeight: 'bold', color: '#c2410c', marginBottom: 2 },
+  buPhotosAddr: { fontSize: 10, marginBottom: 4 },
 });
 
 function addressLines(b: InvoiceSnapshot['business']): string[] {
@@ -255,16 +259,52 @@ function BoardUpPhotosBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUr
   /** Property address printed under every photo, matching the source app. */
   const caption = boardUpPhotoCaption(d);
   return (
+    <BoardUpPhotoPages
+      businessName={snap.business.display_name}
+      caption={caption}
+      photoUrls={photoUrls}
+      withTitle={false}
+    />
+  );
+}
+
+/**
+ * Photo pages in the customer's screenshot style: "{BUSINESS} — JOB PHOTOS"
+ * header, "{N} PICTURES • PAGE X OF Y" count line, property address, then a
+ * 2×2 grid with the address captioned under every photo.
+ */
+function BoardUpPhotoPages({
+  businessName,
+  caption,
+  photoUrls,
+  withTitle,
+}: {
+  businessName: string;
+  caption: string;
+  photoUrls: string[];
+  /** The photos-only document already titles itself via the page header. */
+  withTitle: boolean;
+}) {
+  const totalPages = Math.max(1, Math.ceil(photoUrls.length / PHOTOS_PER_PDF_PAGE));
+  return (
     <View>
-      <Text style={styles.sectionLabel}>Job photos{caption !== '' ? ` — ${caption}` : ''} ({photoUrls.length})</Text>
       {chunkArray(photoUrls, PHOTOS_PER_PDF_PAGE).map((page, pi) => (
-        <View key={pi} style={styles.buPhotoPage} wrap={false} break={pi > 0}>
-          {page.map((url, i) => (
-            <View key={i} style={styles.buPhotoCell}>
-              <Image src={url} style={styles.buPhotoImg} />
-              {caption !== '' && <Text style={styles.buPhotoCaption}>{caption}</Text>}
-            </View>
-          ))}
+        <View key={pi} wrap={false} break={pi > 0}>
+          {withTitle && (
+            <Text style={styles.buPhotosTitle}>{businessName.toUpperCase()} — JOB PHOTOS</Text>
+          )}
+          <Text style={styles.buPhotosCount}>
+            {photoUrls.length} PICTURES • PAGE {pi + 1} OF {totalPages}
+          </Text>
+          {caption !== '' && <Text style={styles.buPhotosAddr}>{caption}</Text>}
+          <View style={styles.buPhotoPage}>
+            {page.map((url, i) => (
+              <View key={i} style={styles.buPhotoCell}>
+                <Image src={url} style={styles.buPhotoImg} />
+                {caption !== '' && <Text style={styles.buPhotoCaption}>{caption}</Text>}
+              </View>
+            ))}
+          </View>
         </View>
       ))}
     </View>
@@ -302,19 +342,12 @@ function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: st
       </View>
       <Text style={styles.buFormula}>{BOARDUP_FORMULA_NOTE}</Text>
       {photoUrls.length > 0 && (
-        <View>
-          <Text style={styles.sectionLabel}>Photos ({photoUrls.length})</Text>
-          {chunkArray(photoUrls, PHOTOS_PER_PDF_PAGE).map((page, pi) => (
-            <View key={pi} style={styles.buPhotoPage} wrap={false} break={pi > 0}>
-              {page.map((url, i) => (
-                <View key={i} style={styles.buPhotoCell}>
-                  <Image src={url} style={styles.buPhotoImg} />
-                  {caption !== '' && <Text style={styles.buPhotoCaption}>{caption}</Text>}
-                </View>
-              ))}
-            </View>
-          ))}
-        </View>
+        <BoardUpPhotoPages
+          businessName={snap.business.display_name}
+          caption={caption}
+          photoUrls={photoUrls}
+          withTitle
+        />
       )}
     </View>
   );
