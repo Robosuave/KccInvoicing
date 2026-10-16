@@ -312,20 +312,21 @@ function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: st
   const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors, d.acUnits);
   /** Property address printed under every photo, matching the source app. */
   const caption = boardUpPhotoCaption(d);
-  /** Robert's 12-line output layout; "Date and time" is when the job came in. */
-  const rows: [string, string][] = boardUpOutputRows(d, {
+  /** Robert's 12-line output layout; "Date and time" is when the job came in.
+   * Values only, no field labels — the same layout as the SMS text he asked for. */
+  const values: string[] = boardUpOutputRows(d, {
     jobDateTime: snap.job_created_at ?? snap.issued_at ?? null,
-  }).filter(([, v]) => v !== '');
+  })
+    .filter(([, v]) => v !== '')
+    .flatMap(([, v]) => v.split('\n'))
+    .filter((v) => v !== '');
   return (
     <View>
-      {rows
-        .filter(([, v]) => v)
-        .map(([label, value]) => (
-          <View key={label} style={styles.buRow}>
-            <Text style={styles.buLabel}>{label}:</Text>
-            <Text style={styles.buValue}>{value}</Text>
-          </View>
-        ))}
+      {values.map((v, i) => (
+        <Text key={i} style={styles.buRow}>
+          {v}
+        </Text>
+      ))}
       <View style={styles.buEstBox}>
         <Text style={styles.buEstTitle}>{est.sheets} PLYWOOD SHEETS EST.</Text>
         <Text style={styles.buEstMeta}>
