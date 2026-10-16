@@ -267,7 +267,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   /** Which file-share action is currently preparing its files. */
-  const [shareBusy, setShareBusy] = useState<'condensed' | 'delete' | null>(null);
+  const [shareBusy, setShareBusy] = useState<'condensed' | 'pictures' | 'delete' | null>(null);
   /** Combined PDF prepared by the first "Email PDF" tap, shared on the second tap. */
   const [pdfReady, setPdfReady] = useState<File | null>(null);
   /** Cities added via "Other", remembered per device. */
@@ -574,13 +574,13 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     return renderInvoicePdfBlob(snap, 'classic', 'LETTER', photosOnly, includePhotos);
   };
 
-  /** Save condensed PDF: job summary + photos (4 per page, address captions), downloaded as a file. */
+  /** Save condensed PDF: job summary only (photos live in the separate pictures PDF). */
   const saveCondensedPdf = async () => {
     if (shareBusy) return;
     setShareError(null);
     setShareBusy('condensed');
     try {
-      const blob = await renderSharePdf(false, true);
+      const blob = await renderSharePdf(false, false);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -596,15 +596,38 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     }
   };
 
-  /** Email PDF: shares the combined job PDF (summary + photos, 4 per page with address
-   * captions) with the full job summary as the message. Opens the native share sheet
-   * so the PDF can be sent through Gmail; falls back to a download + email draft. */
+  /** Save pictures PDF: photos only, 4 per page with the "A QUICK BOARD UP SERVICE —
+   * JOB PHOTOS" header, picture count, and address banner under every photo. */
+  const savePicturesPdf = async () => {
+    if (shareBusy) return;
+    setShareError(null);
+    setShareBusy('pictures');
+    try {
+      const blob = await renderSharePdf(true, true);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = boardUpPdfFilename(details(), invoiceDate, 'photos');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e) {
+      setShareError(e instanceof Error ? e.message : 'Could not build the pictures PDF.');
+    } finally {
+      setShareBusy(null);
+    }
+  };
+
+  /** Email PDF: shares the job-detail PDF (summary only — photos are a separate
+   * pictures PDF) with the full job summary as the message. Opens the native share
+   * sheet so the PDF can be sent through Gmail; falls back to a download + email draft. */
   /**
-   * Email PDF: two taps. The first tap builds the combined job PDF (summary +
-   * photos, 4 per page with address captions); the second tap opens the native
-   * share sheet. Splitting it this way keeps the share() call inside a real
-   * user gesture — building the PDF takes longer than the browser's tap
-   * window, which is what caused the "must be handling a user gesture" error.
+   * Email PDF: two taps. The first tap builds the job-detail PDF (summary only);
+   * the second tap opens the native share sheet. Splitting it this way keeps the
+   * share() call inside a real user gesture — building the PDF takes longer than
+   * the browser's tap window, which is what caused the "must be handling a user
+   * gesture" error.
    */
   const emailPdf = async () => {
     if (shareBusy) return;
@@ -625,7 +648,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     setShareError(null);
     setShareBusy('condensed');
     try {
-      const blob = await renderSharePdf(false, true);
+      const blob = await renderSharePdf(false, false);
       const name = boardUpPdfFilename(d, invoiceDate, 'condensed');
       const file = new File([blob], name, { type: 'application/pdf' });
       if (!canShareFiles([file])) {
@@ -1159,6 +1182,9 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         </Button>
         <Button id="bu-condensed" variant="secondary" onClick={saveCondensedPdf} disabled={shareBusy !== null}>
           {shareBusy === 'condensed' && !pdfReady ? 'Building…' : 'Save PDF'}
+        </Button>
+        <Button id="bu-pictures" variant="secondary" onClick={savePicturesPdf} disabled={shareBusy !== null}>
+          {shareBusy === 'pictures' ? 'Building…' : 'Pictures PDF'}
         </Button>
         <Button id="bu-emailpdf" variant="secondary" onClick={emailPdf} disabled={shareBusy !== null}>
           {shareBusy === 'condensed' ? 'Building…' : pdfReady ? 'Tap to share PDF' : 'Email PDF'}

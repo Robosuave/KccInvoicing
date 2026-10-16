@@ -266,7 +266,7 @@ function BoardUpPhotosBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUr
   /** Property address printed under every photo, matching the source app. */
   const caption = boardUpPhotoCaption(d);
   return (
-    <BoardUpPhotoPages caption={caption} photoUrls={photoUrls} withTitle={false} />
+    <BoardUpPhotoPages caption={caption} photoUrls={photoUrls} />
   );
 }
 
@@ -278,21 +278,16 @@ function BoardUpPhotosBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUr
 function BoardUpPhotoPages({
   caption,
   photoUrls,
-  withTitle,
 }: {
   caption: string;
   photoUrls: string[];
-  /** The photos-only document already titles itself via the page header. */
-  withTitle: boolean;
 }) {
   const totalPages = Math.max(1, Math.ceil(photoUrls.length / PHOTOS_PER_PDF_PAGE));
   return (
     <View>
       {chunkArray(photoUrls, PHOTOS_PER_PDF_PAGE).map((page, pi) => (
         <View key={pi} wrap={false} break={pi > 0}>
-          {withTitle && (
-            <Text style={styles.buPhotosTitle}>A QUICK BOARD UP SERVICE — JOB PHOTOS</Text>
-          )}
+          <Text style={styles.buPhotosTitle}>A QUICK BOARD UP SERVICE — JOB PHOTOS</Text>
           <Text style={styles.buPhotosCount}>
             {photoUrls.length} PICTURES • PAGE {pi + 1} OF {totalPages}
           </Text>
@@ -342,7 +337,7 @@ function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: st
       </View>
       <Text style={styles.buFormula}>{BOARDUP_FORMULA_NOTE}</Text>
       {photoUrls.length > 0 && (
-        <BoardUpPhotoPages caption={caption} photoUrls={photoUrls} withTitle />
+        <BoardUpPhotoPages caption={caption} photoUrls={photoUrls} />
       )}
     </View>
   );
@@ -398,9 +393,7 @@ export function InvoicePdf({
     return (
       <Document title={`Aquick Job Photos ${snapshot.invoice_number}`} author={snapshot.business.display_name}>
         <Page size={label} style={pageStyle}>
-          <Header snap={snapshot} style={style} logoUrl={logoUrl} title="JOB PHOTOS" subtitle={subtitle} />
           <BoardUpPhotosBody snap={snapshot} photoUrls={photoUrls} />
-          <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} fixed />
         </Page>
       </Document>
     );
