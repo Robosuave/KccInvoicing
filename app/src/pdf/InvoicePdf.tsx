@@ -81,8 +81,15 @@ const styles = StyleSheet.create({
   buFormula: { fontSize: 8, color: '#5b6470', marginBottom: 10 },
   buPhotoPage: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6, marginBottom: 2 },
   buPhotoCell: { width: '48%', marginRight: '2%', marginBottom: 10 },
-  buPhotoImg: { width: '100%', height: 190, objectFit: 'cover' },
-  buPhotoCaption: { fontSize: 8, color: '#5b6470', marginTop: 3 },
+  buPhotoImg: { width: '100%', height: 230, objectFit: 'contain', backgroundColor: '#efe9de' },
+  /** Dark address banner under each photo, matching the reference PDF. */
+  buPhotoCaption: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    backgroundColor: '#22303f',
+    padding: 6,
+  },
   /** Screenshot-style photo page header: "{BUSINESS} — JOB PHOTOS" + count + address. */
   buPhotosTitle: { fontSize: 15, fontWeight: 'bold', marginTop: 10, marginBottom: 2 },
   buPhotosCount: { fontSize: 11, fontWeight: 'bold', color: '#c2410c', marginBottom: 2 },
@@ -259,12 +266,7 @@ function BoardUpPhotosBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUr
   /** Property address printed under every photo, matching the source app. */
   const caption = boardUpPhotoCaption(d);
   return (
-    <BoardUpPhotoPages
-      businessName={snap.business.display_name}
-      caption={caption}
-      photoUrls={photoUrls}
-      withTitle={false}
-    />
+    <BoardUpPhotoPages caption={caption} photoUrls={photoUrls} withTitle={false} />
   );
 }
 
@@ -274,12 +276,10 @@ function BoardUpPhotosBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUr
  * 2×2 grid with the address captioned under every photo.
  */
 function BoardUpPhotoPages({
-  businessName,
   caption,
   photoUrls,
   withTitle,
 }: {
-  businessName: string;
   caption: string;
   photoUrls: string[];
   /** The photos-only document already titles itself via the page header. */
@@ -291,7 +291,7 @@ function BoardUpPhotoPages({
       {chunkArray(photoUrls, PHOTOS_PER_PDF_PAGE).map((page, pi) => (
         <View key={pi} wrap={false} break={pi > 0}>
           {withTitle && (
-            <Text style={styles.buPhotosTitle}>{businessName.toUpperCase()} — JOB PHOTOS</Text>
+            <Text style={styles.buPhotosTitle}>A QUICK BOARD UP SERVICE — JOB PHOTOS</Text>
           )}
           <Text style={styles.buPhotosCount}>
             {photoUrls.length} PICTURES • PAGE {pi + 1} OF {totalPages}
@@ -342,12 +342,7 @@ function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: st
       </View>
       <Text style={styles.buFormula}>{BOARDUP_FORMULA_NOTE}</Text>
       {photoUrls.length > 0 && (
-        <BoardUpPhotoPages
-          businessName={snap.business.display_name}
-          caption={caption}
-          photoUrls={photoUrls}
-          withTitle
-        />
+        <BoardUpPhotoPages caption={caption} photoUrls={photoUrls} withTitle />
       )}
     </View>
   );
