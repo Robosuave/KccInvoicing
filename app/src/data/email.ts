@@ -69,3 +69,45 @@ export function emailStatusLabel(status: InvoiceEmail['status']): string {
       return 'Email failed';
   }
 }
+
+export interface BoardUpAttachment {
+  filename: string;
+  /** Base64-encoded file content (no data: prefix). */
+  content: string;
+}
+
+export interface SendBoardUpEmailInput {
+  business_id: string;
+  to: string;
+  subject?: string;
+  message?: string;
+  attachments: BoardUpAttachment[];
+}
+
+/** Calls the send-boardup-email edge function. Throws with the server's message on failure. */
+export async function sendBoardUpEmail(input: SendBoardUpEmailInput): Promise<{ ok: true }> {
+  const sb = requireSupabase();
+  const { data, error } = await sb.functions.invoke('send-boardup-email', { body: input });
+  if (error) {
+    const msg =
+      (data as { error?: string } | null)?.error ||
+      (error as { message?: string })?.message ||
+      'Could not send the email.';
+    throw new Error(msg);
+  }
+  return data as { ok: true };
+}
+
+/** Blob -> base64 string (no data: prefix), for edge-function attachments. */
+export function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const comma = result.indexOf(',');
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(new Error('Could not read the PDF file.'));
+    reader.readAsDataURL(blob);
+  });
+}
