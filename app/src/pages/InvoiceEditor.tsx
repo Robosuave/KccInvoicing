@@ -1499,7 +1499,13 @@ export default function InvoiceEditor() {
           </div>
         </div>
 
-        {previewEl}
+        {template === 'boardup' ? (
+          /* Aquick: no side preview on screen — the form's own PDF buttons are
+             the output. Kept in the DOM (hidden) so Print still works. */
+          <div className="print-only-preview">{previewEl}</div>
+        ) : (
+          previewEl
+        )}
       </div>
 
       {showPreview && (

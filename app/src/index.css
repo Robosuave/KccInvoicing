@@ -262,6 +262,9 @@ textarea.input { min-height: 96px; resize: vertical; }
 /* ---------- invoice editor ---------- */
 
 .editor-layout { display: grid; grid-template-columns: 1fr; gap: 20px; }
+/* Aquick board-up: the side invoice preview stays out of sight on screen
+   (the job form's own PDF buttons are the output) but prints normally. */
+.print-only-preview { display: none; }
 @media (min-width: 1080px) {
   .editor-layout { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); align-items: start; }
 }
@@ -363,6 +366,7 @@ textarea.input { min-height: 96px; resize: vertical; }
 
 @media print {
   .sidebar, .topbar, .no-print, .alert, .scrim, .badge-draft { display: none !important; }
+  .print-only-preview { display: block !important; }
   .app-shell { display: block !important; min-height: 0 !important; }
   .main { display: block !important; }
   .content { padding: 0; max-width: none; }
