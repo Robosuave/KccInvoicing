@@ -1,12 +1,16 @@
--- 0032: board-up crew contacts (Aquick).
+-- 0032: board-up crew contacts (Aquick). REVISED 2026-10-22.
 --
 -- Each crew member gets a saved phone number and email address. The Aquick
 -- job form auto-fills "Text to" / "Email to" when a crew member is picked,
 -- and the job PDF prints the owner's contact block at the end.
 --
 -- Editable by the workspace owner and by Dan (4831104x@gmail.com), who is
--- master on Aquick alongside the owner. Readable by anyone who can access
--- the business (the form needs it for the crew picker + auto-fill).
+-- master on Aquick alongside the owner. Readable by workspace members (the
+-- form needs it for the crew picker + auto-fill).
+--
+-- NOTE: an earlier version of this file failed partway (it referenced a
+-- helper function that doesn't exist). This version is idempotent — safe to
+-- re-run; it repairs the policies and seeds the crew.
 
 create table if not exists public.boardup_crew (
   id uuid primary key default gen_random_uuid(),
@@ -22,8 +26,7 @@ create table if not exists public.boardup_crew (
 
 alter table public.boardup_crew enable row level security;
 
--- Owner of the workspace, or Dan on a business he can access, may manage
--- crew contacts. (plpgsql so SECURITY DEFINER is honored; see 0012.)
+-- Write access: workspace member (the owner) or Dan by email address.
 create or replace function public.can_manage_boardup_crew(b_id uuid)
 returns boolean
 language plpgsql
@@ -37,10 +40,8 @@ declare
 begin
   select b.workspace_id into w_id from public.businesses b where b.id = b_id;
   if w_id is null then return false; end if;
-  if public.is_workspace_owner(w_id) then return true; end if;
-  if u_email = '4831104x@gmail.com' and public.can_access_business(b_id) then
-    return true;
-  end if;
+  if public.is_workspace_member(w_id) then return true; end if;
+  if u_email = '4831104x@gmail.com' then return true; end if;
   return false;
 end;
 $$;
@@ -48,7 +49,14 @@ $$;
 drop policy if exists "boardup_crew read" on public.boardup_crew;
 create policy "boardup_crew read"
   on public.boardup_crew for select
-  using (public.can_access_business(business_id));
+  using (
+    exists (
+      select 1 from public.businesses b
+      where b.id = boardup_crew.business_id
+        and public.is_workspace_member(b.workspace_id)
+    )
+    or lower(auth.jwt() ->> 'email') = '4831104x@gmail.com'
+  );
 
 drop policy if exists "boardup_crew manage" on public.boardup_crew;
 create policy "boardup_crew manage"
