@@ -130,6 +130,39 @@ export function formatPhotoDateTime(raw: string | null | undefined): string {
 }
 
 /**
+ * Parse raw EXIF "YYYY:MM:DD HH:MM:SS" into a local-time Date (photos are
+ * taken in Robert's timezone). Null when unparseable.
+ */
+export function exifRawToDate(raw: string | null | undefined): Date | null {
+  if (!raw) return null;
+  const m = /^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?$/.exec(raw.trim());
+  if (!m) return null;
+  const d = new Date(
+    Number(m[1]),
+    Number(m[2]) - 1,
+    Number(m[3]),
+    Number(m[4]),
+    Number(m[5]),
+    Number(m[6] ?? '0'),
+  );
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Format a millisecond duration as "47 min" / "1 hr 5 min".
+ * '' when negative or invalid.
+ */
+export function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '';
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  const hrLabel = hrs === 1 ? 'hr' : 'hrs';
+  return rem === 0 ? `${hrs} ${hrLabel}` : `${hrs} ${hrLabel} ${rem} min`;
+}
+
+/**
  * ISO-8601 timestamp (e.g. the job's created_at) -> "Oct 21, 2026, 2:30 PM"
  * in the viewer's local timezone. Returns '' when unparseable.
  */

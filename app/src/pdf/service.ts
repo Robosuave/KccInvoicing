@@ -131,13 +131,15 @@ export async function renderInvoicePdfBlob(
       const url = await boardUpPhotoSignedUrl(path);
       if (!url) continue;
       const raw = stored[path] ?? (await fetchPhotoDateTime(url));
-      photos.push({ url: await downscalePhotoForPdf(url), takenAt: formatPhotoDateTime(raw) });
+      photos.push({ url: await downscalePhotoForPdf(url), takenAt: formatPhotoDateTime(raw), takenAtRaw: raw });
     }
   } else {
     // Job-info PDF: no images embedded, but the timeline still needs the
     // taken-at times, so carry them without URLs.
     for (const path of paths) {
-      if (stored[path]) photos.push({ url: '', takenAt: formatPhotoDateTime(stored[path]) });
+      if (stored[path]) {
+        photos.push({ url: '', takenAt: formatPhotoDateTime(stored[path]), takenAtRaw: stored[path] });
+      }
     }
   }
   const renderWith = async (url: string | undefined) => {

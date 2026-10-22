@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatIsoDateTime, formatPhotoDateTime, parseExifDateTime } from '../lib/exif';
+import {
+  exifRawToDate,
+  formatDuration,
+  formatIsoDateTime,
+  formatPhotoDateTime,
+  parseExifDateTime,
+} from '../lib/exif';
 
 /**
  * Build a minimal JPEG holding one EXIF ASCII tag, so the parser is tested
@@ -115,6 +121,36 @@ describe('parseExifDateTime', () => {
   it('returns null for truncated garbage instead of throwing', () => {
     expect(parseExifDateTime(new ArrayBuffer(0))).toBeNull();
     expect(parseExifDateTime(new Uint8Array([0xff, 0xd8, 0xff]).buffer as ArrayBuffer)).toBeNull();
+  });
+});
+
+describe('exifRawToDate', () => {
+  it('parses raw EXIF into a local-time Date', () => {
+    const d = exifRawToDate('2026:10:21 14:30:05');
+    expect(d).not.toBeNull();
+    expect(d!.getFullYear()).toBe(2026);
+    expect(d!.getMonth()).toBe(9);
+    expect(d!.getDate()).toBe(21);
+    expect(d!.getHours()).toBe(14);
+    expect(d!.getMinutes()).toBe(30);
+  });
+  it('returns null for bad input', () => {
+    expect(exifRawToDate(null)).toBeNull();
+    expect(exifRawToDate('')).toBeNull();
+    expect(exifRawToDate('garbage')).toBeNull();
+  });
+});
+
+describe('formatDuration', () => {
+  it('formats minutes and hours', () => {
+    expect(formatDuration(47 * 60000)).toBe('47 min');
+    expect(formatDuration(65 * 60000)).toBe('1 hr 5 min');
+    expect(formatDuration(2 * 3600000)).toBe('2 hrs');
+    expect(formatDuration(90 * 60000)).toBe('1 hr 30 min');
+  });
+  it('returns empty string for negative or invalid input', () => {
+    expect(formatDuration(-1000)).toBe('');
+    expect(formatDuration(NaN)).toBe('');
   });
 });
 

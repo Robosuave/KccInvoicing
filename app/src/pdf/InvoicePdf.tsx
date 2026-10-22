@@ -1,6 +1,6 @@
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import type { InvoiceSnapshot, SnapshotLine } from '../lib/snapshot';
-import { formatIsoDateTime } from '../lib/exif';
+import { exifRawToDate, formatDuration, formatIsoDateTime } from '../lib/exif';
 import {
   BOARDUP_FORMULA_NOTE,
   PHOTOS_PER_PDF_PAGE,
@@ -102,14 +102,33 @@ const styles = StyleSheet.create({
   buPhotoTakenAt: { fontSize: 8.5, color: '#4b5563', marginTop: 3 },
   /** Labeled job timeline box at the top of the job detail PDF. */
   buTimeline: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f1f5f9',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 6,
-    padding: 8,
-    marginBottom: 10,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
   },
-  buTimelineRow: { fontSize: 10, marginBottom: 2, color: '#1f2937' },
+  buTimelineTitle: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#64748b',
+    marginBottom: 6,
+  },
+  buTimelineRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 3,
+  },
+  buTimelineLabel: { fontSize: 10, color: '#475569' },
+  buTimelineValue: { fontSize: 10, fontWeight: 'bold', color: '#0f172a' },
+  buTimelineTotal: {
+    marginTop: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#cbd5e1',
+  },
+  buTimelineTotalValue: { fontSize: 11, fontWeight: 'bold', color: '#1d4ed8' },
 });
 
 function addressLines(b: InvoiceSnapshot['business']): string[] {
@@ -276,10 +295,13 @@ function CommissionBody({ snap }: { snap: InvoiceSnapshot }) {
   );
 }
 
-/** One board-up job photo for the PDF: display URL + formatted taken-at time ('' when unknown). */
+/** One board-up job photo for the PDF: display URL + taken-at time. */
 export interface BoardUpPhotoItem {
   url: string;
+  /** Formatted taken-at time ('' when unknown). */
   takenAt: string;
+  /** Raw EXIF "YYYY:MM:DD HH:MM:SS" (null when unknown) — for duration math. */
+  takenAtRaw: string | null;
 }
 
 /**
@@ -287,17 +309,28 @@ export interface BoardUpPhotoItem {
  * - First input: when the job came in (invoice created_at).
  * - Start job: first photo's taken-at time.
  * - End job: last photo's taken-at time.
+ * - Time to job site: first photo time minus job input time.
  * Each is '' when unknown.
  */
 export function boardUpTimeline(
   snap: InvoiceSnapshot,
   photos: BoardUpPhotoItem[],
-): { firstInput: string; startJob: string; endJob: string } {
+): { firstInput: string; startJob: string; endJob: string; timeToSite: string } {
   const withTime = photos.filter((p) => p.takenAt !== '');
+  const firstInputIso = snap.job_created_at ?? snap.issued_at ?? null;
+  let timeToSite = '';
+  if (firstInputIso && withTime.length > 0 && withTime[0].takenAtRaw) {
+    const inputDate = new Date(firstInputIso);
+    const startDate = exifRawToDate(withTime[0].takenAtRaw);
+    if (!Number.isNaN(inputDate.getTime()) && startDate) {
+      timeToSite = formatDuration(startDate.getTime() - inputDate.getTime());
+    }
+  }
   return {
-    firstInput: formatIsoDateTime(snap.job_created_at ?? snap.issued_at),
+    firstInput: formatIsoDateTime(firstInputIso),
     startJob: withTime.length > 0 ? withTime[0].takenAt : '',
     endJob: withTime.length > 0 ? withTime[withTime.length - 1].takenAt : '',
+    timeToSite,
   };
 }
 
@@ -371,19 +404,39 @@ function BoardUpBody({
     .flatMap(([, v]) => v.split('\n'))
     .filter((v) => v !== '');
   const timeline = boardUpTimeline(snap, photos);
-  const showTimeline = timeline.firstInput !== '' || timeline.startJob !== '' || timeline.endJob !== '';
+  const showTimeline =
+    timeline.firstInput !== '' ||
+    timeline.startJob !== '' ||
+    timeline.endJob !== '' ||
+    timeline.timeToSite !== '';
   return (
     <View>
       {showTimeline && (
         <View style={styles.buTimeline}>
+          <Text style={styles.buTimelineTitle}>JOB TIMELINE</Text>
           {timeline.firstInput !== '' && (
-            <Text style={styles.buTimelineRow}>First input: {timeline.firstInput}</Text>
+            <View style={styles.buTimelineRow}>
+              <Text style={styles.buTimelineLabel}>First input</Text>
+              <Text style={styles.buTimelineValue}>{timeline.firstInput}</Text>
+            </View>
           )}
           {timeline.startJob !== '' && (
-            <Text style={styles.buTimelineRow}>Start job: {timeline.startJob}</Text>
+            <View style={styles.buTimelineRow}>
+              <Text style={styles.buTimelineLabel}>Start job</Text>
+              <Text style={styles.buTimelineValue}>{timeline.startJob}</Text>
+            </View>
           )}
           {timeline.endJob !== '' && (
-            <Text style={styles.buTimelineRow}>End job: {timeline.endJob}</Text>
+            <View style={styles.buTimelineRow}>
+              <Text style={styles.buTimelineLabel}>End job</Text>
+              <Text style={styles.buTimelineValue}>{timeline.endJob}</Text>
+            </View>
+          )}
+          {timeline.timeToSite !== '' && (
+            <View style={[styles.buTimelineRow, styles.buTimelineTotal]}>
+              <Text style={styles.buTimelineLabel}>Time to job site</Text>
+              <Text style={styles.buTimelineTotalValue}>{timeline.timeToSite}</Text>
+            </View>
           )}
         </View>
       )}
