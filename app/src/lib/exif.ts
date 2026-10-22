@@ -181,16 +181,26 @@ export function formatIsoDateTime(iso: string | null | undefined): string {
 
 /**
  * Fetch the first 64KB of a photo URL (EXIF lives at the start of the file)
- * and extract its capture time. Null on any failure — a missing date must
- * never block the PDF.
+ * and extract its capture time. Falls back to a full fetch if the ranged
+ * request is rejected (some CORS setups block the Range header). Null on
+ * any failure — a missing date must never block the PDF.
  */
 export async function fetchPhotoDateTime(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url, { headers: { Range: 'bytes=0-65535' } });
+  const tryFetch = async (init?: RequestInit): Promise<string | null> => {
+    const res = await fetch(url, init);
     if (!res.ok && res.status !== 206) return null;
     const buf = await res.arrayBuffer();
     if (!buf || buf.byteLength < 16) return null;
     return parseExifDateTime(buf);
+  };
+  try {
+    const ranged = await tryFetch({ headers: { Range: 'bytes=0-65535' } });
+    if (ranged) return ranged;
+  } catch {
+    /* fall through to the full fetch */
+  }
+  try {
+    return await tryFetch();
   } catch {
     return null;
   }

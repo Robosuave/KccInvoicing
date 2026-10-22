@@ -135,11 +135,17 @@ export async function renderInvoicePdfBlob(
     }
   } else {
     // Job-info PDF: no images embedded, but the timeline still needs the
-    // taken-at times, so carry them without URLs.
+    // taken-at times. Use stored upload-time EXIF; fall back to reading EXIF
+    // from the file (covers photos uploaded before this feature).
     for (const path of paths) {
-      if (stored[path]) {
-        photos.push({ url: '', takenAt: formatPhotoDateTime(stored[path]), takenAtRaw: stored[path] });
+      const raw = stored[path] ?? null;
+      if (raw) {
+        photos.push({ url: '', takenAt: formatPhotoDateTime(raw), takenAtRaw: raw });
+        continue;
       }
+      const url = await boardUpPhotoSignedUrl(path);
+      const fetched = url ? await fetchPhotoDateTime(url) : null;
+      photos.push({ url: '', takenAt: formatPhotoDateTime(fetched), takenAtRaw: fetched });
     }
   }
   const renderWith = async (url: string | undefined) => {
