@@ -1,8 +1,9 @@
 import { pdf } from '@react-pdf/renderer';
-import { InvoicePdf, invoicePdfFilename, type PdfPageSize, type InvoiceStyle } from './InvoicePdf';
-export type { InvoiceStyle } from './InvoicePdf';
+import { InvoicePdf, invoicePdfFilename, type PdfPageSize, type InvoiceStyle, type BoardUpPhotoItem } from './InvoicePdf';
+export type { InvoiceStyle, BoardUpPhotoItem } from './InvoicePdf';
 import { ReceiptPdf, receiptPdfFilename } from './ReceiptPdf';
 import { requireSupabase } from '../lib/supabase';
+import { fetchPhotoDateTime, formatPhotoDateTime } from '../lib/exif';
 import { getInvoice } from '../data/invoices';
 import { getBusiness } from '../data/businesses';
 import { getCustomer } from '../data/customers';
@@ -28,22 +29,36 @@ async function resolveLogoUrl(snapshot: InvoiceSnapshot): Promise<string | undef
   }
 }
 
-async function resolveBoardUpPhotoUrls(snapshot: InvoiceSnapshot): Promise<string[]> {
+/** Storage paths of the board-up job photos (template 'boardup' only). */
+function boardUpPhotoPaths(snapshot: InvoiceSnapshot): string[] {
   if (snapshot.template !== 'boardup') return [];
   const rec = snapshot.boardup_details;
   const paths = rec && Array.isArray(rec.photos) ? rec.photos.filter((p): p is string => typeof p === 'string') : [];
-  if (paths.length === 0) return [];
-  const sb = requireSupabase();
-  const urls: string[] = [];
-  for (const path of paths) {
-    try {
-      const { data, error } = await sb.storage.from('invoice-attachments').createSignedUrl(path, 600);
-      if (!error && data?.signedUrl) urls.push(data.signedUrl);
-    } catch {
-      /* one bad photo must not block the PDF */
-    }
+  return paths;
+}
+
+async function boardUpPhotoSignedUrl(path: string): Promise<string | null> {
+  try {
+    const sb = requireSupabase();
+    const { data, error } = await sb.storage.from('invoice-attachments').createSignedUrl(path, 600);
+    if (!error && data?.signedUrl) return data.signedUrl;
+  } catch {
+    /* one bad photo must not block the PDF */
   }
-  return urls;
+  return null;
+}
+
+/** EXIF capture times stored at upload (photoTakenAt), keyed by storage path. */
+function storedPhotoTakenAt(snapshot: InvoiceSnapshot): Record<string, string> {
+  const rec = snapshot.boardup_details;
+  if (!rec || typeof rec !== 'object' || Array.isArray(rec)) return {};
+  const v = (rec as Record<string, unknown>).photoTakenAt;
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof val === 'string' && val) out[k] = val;
+  }
+  return out;
 }
 
 /**
@@ -105,12 +120,28 @@ export async function renderInvoicePdfBlob(
   includePhotos = true,
 ): Promise<Blob> {
   const logoUrl = await resolveLogoUrl(snapshot);
-  const photoUrls = includePhotos ? await resolveBoardUpPhotoUrls(snapshot) : [];
-  // Compress photos before embedding: full-resolution phone photos would
-  // otherwise make multi-photo PDFs tens of megabytes (unemailable).
-  const pdfPhotoUrls = await Promise.all(photoUrls.map((u) => downscalePhotoForPdf(u)));
+  const paths = boardUpPhotoPaths(snapshot);
+  const stored = storedPhotoTakenAt(snapshot);
+  // Capture time: prefer the EXIF read at upload; fall back to reading EXIF
+  // from the original file now (covers photos uploaded before this feature).
+  // The canvas downscale strips EXIF, so the fallback reads before compressing.
+  let photos: BoardUpPhotoItem[] = [];
+  if (includePhotos) {
+    for (const path of paths) {
+      const url = await boardUpPhotoSignedUrl(path);
+      if (!url) continue;
+      const raw = stored[path] ?? (await fetchPhotoDateTime(url));
+      photos.push({ url: await downscalePhotoForPdf(url), takenAt: formatPhotoDateTime(raw) });
+    }
+  } else {
+    // Job-info PDF: no images embedded, but the timeline still needs the
+    // taken-at times, so carry them without URLs.
+    for (const path of paths) {
+      if (stored[path]) photos.push({ url: '', takenAt: formatPhotoDateTime(stored[path]) });
+    }
+  }
   const renderWith = async (url: string | undefined) => {
-    const element = InvoicePdf({ snapshot, style, pageSize, logoUrl: url, photoUrls: pdfPhotoUrls, photosOnly });
+    const element = InvoicePdf({ snapshot, style, pageSize, logoUrl: url, photos, includePhotos, photosOnly });
     const instance = pdf(element);
     // Ensure the reconciler has flushed: on some Safari/React versions the
     // initial updateContainer doesn't synchronously set container.document.

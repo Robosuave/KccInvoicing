@@ -101,6 +101,17 @@ describe('asBoardUpDetails', () => {
     expect(crewContactFor('Nobody', contacts)).toBeNull();
     expect(crewContactFor('', contacts)).toBeNull();
   });
+
+  it('keeps EXIF capture times keyed by photo path, dropping junk', () => {
+    expect(EMPTY_BOARDUP.photoTakenAt).toEqual({});
+    const d = asBoardUpDetails({
+      photos: ['a.jpg', 'b.jpg'],
+      photoTakenAt: { 'a.jpg': '2026:10:21 14:30:05', 'b.jpg': 'not a date', 'c.jpg': 42 },
+    });
+    expect(d.photoTakenAt).toEqual({ 'a.jpg': '2026:10:21 14:30:05' });
+    expect(asBoardUpDetails({ photoTakenAt: null }).photoTakenAt).toEqual({});
+    expect(asBoardUpDetails({ photoTakenAt: ['x'] }).photoTakenAt).toEqual({});
+  });
 });
 
 describe('boardUpOutputRows', () => {

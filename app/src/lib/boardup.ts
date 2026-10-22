@@ -45,6 +45,12 @@ export interface BoardUpDetails {
   textTo: string;
   /** Storage paths (invoice-attachments bucket) of job photos. */
   photos: string[];
+  /**
+   * EXIF capture time per photo, read at upload: storage path ->
+   * raw "YYYY:MM:DD HH:MM:SS". Powers the per-photo timestamps and the
+   * Start job / End job timeline on the PDFs.
+   */
+  photoTakenAt: Record<string, string>;
   /** Per-opening measurements, e.g. ["36x45"] — one entry per counted opening. */
   windowMeasurements: string[];
   doorMeasurements: string[];
@@ -101,6 +107,7 @@ export const EMPTY_BOARDUP: BoardUpDetails = {
   emailTo: DEFAULT_CREW_EMAIL,
   textTo: '',
   photos: [],
+  photoTakenAt: {},
   windowMeasurements: [],
   doorMeasurements: [],
   sliderMeasurements: [],
@@ -530,6 +537,15 @@ export function asBoardUpDetails(raw: unknown): BoardUpDetails {
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
   const str = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback);
   const strArr = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+  /** EXIF capture times keyed by photo storage path; drops anything malformed. */
+  const takenAtMap = (v: unknown): Record<string, string> => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+    const out: Record<string, string> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      if (typeof val === 'string' && /^\d{4}:\d{2}:\d{2} \d{2}:\d{2}(:\d{2})?$/.test(val)) out[k] = val;
+    }
+    return out;
+  };
   /** Dropdown field: keep '' (unselected) or a known option, else the default. */
   const opt = (v: unknown, options: readonly string[], fallback: string) => {
     if (typeof v !== 'string' || v === '') return v === '' ? '' : fallback;
@@ -567,6 +583,7 @@ export function asBoardUpDetails(raw: unknown): BoardUpDetails {
     emailTo: str(r.emailTo),
     textTo: str(r.textTo),
     photos: strArr(r.photos),
+    photoTakenAt: takenAtMap(r.photoTakenAt),
     windowMeasurements: strArr(r.windowMeasurements),
     doorMeasurements: strArr(r.doorMeasurements),
     sliderMeasurements: strArr(r.sliderMeasurements),

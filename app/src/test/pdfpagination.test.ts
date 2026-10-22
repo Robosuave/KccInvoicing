@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { pdf } from '@react-pdf/renderer';
-import { InvoicePdf } from '../pdf/InvoicePdf';
+import { InvoicePdf, boardUpTimeline } from '../pdf/InvoicePdf';
 import { buildBoardUpShareSnapshot } from '../lib/snapshot';
 import { EMPTY_BOARDUP } from '../lib/boardup';
 
@@ -39,6 +39,31 @@ function countPages(bytes: Uint8Array): number {
   return matches ? matches.length : 0;
 }
 
+describe('boardUpTimeline', () => {
+  it('labels first input, start job, and end job from photo taken-at times', () => {
+    const snapshot = boardUpSnapshot();
+    const t = boardUpTimeline(snapshot, [
+      { url: 'a', takenAt: 'Oct 21, 2026, 10:02 AM' },
+      { url: 'b', takenAt: '' },
+      { url: 'c', takenAt: 'Oct 21, 2026, 11:45 AM' },
+    ]);
+    expect(t.startJob).toBe('Oct 21, 2026, 10:02 AM');
+    expect(t.endJob).toBe('Oct 21, 2026, 11:45 AM');
+    // First input comes from the job's created_at (may be '' for a fresh draft).
+    expect(typeof t.firstInput).toBe('string');
+  });
+
+  it('returns empty start/end when no photo has a taken-at time', () => {
+    const snapshot = boardUpSnapshot();
+    const t = boardUpTimeline(snapshot, [
+      { url: 'a', takenAt: '' },
+      { url: 'b', takenAt: '' },
+    ]);
+    expect(t.startJob).toBe('');
+    expect(t.endJob).toBe('');
+  });
+});
+
 describe('board-up photos PDF pagination', () => {
   it('puts 6 photos on exactly 2 pages (4 + 2), not one', async () => {
     const snapshot = boardUpSnapshot();
@@ -46,7 +71,7 @@ describe('board-up photos PDF pagination', () => {
       snapshot,
       style: 'classic',
       pageSize: 'LETTER',
-      photoUrls: [PIXEL, PIXEL, PIXEL, PIXEL, PIXEL, PIXEL],
+      photos: [PIXEL, PIXEL, PIXEL, PIXEL, PIXEL, PIXEL].map((url) => ({ url, takenAt: '' })),
       photosOnly: true,
     });
     const blob = await pdf(element).toBlob();
@@ -60,7 +85,7 @@ describe('board-up photos PDF pagination', () => {
       snapshot,
       style: 'classic',
       pageSize: 'LETTER',
-      photoUrls: [PIXEL, PIXEL, PIXEL, PIXEL],
+      photos: [PIXEL, PIXEL, PIXEL, PIXEL].map((url) => ({ url, takenAt: '' })),
       photosOnly: true,
     });
     const blob = await pdf(element).toBlob();

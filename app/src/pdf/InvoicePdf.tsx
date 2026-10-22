@@ -1,5 +1,6 @@
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import type { InvoiceSnapshot, SnapshotLine } from '../lib/snapshot';
+import { formatIsoDateTime } from '../lib/exif';
 import {
   BOARDUP_FORMULA_NOTE,
   PHOTOS_PER_PDF_PAGE,
@@ -97,6 +98,18 @@ const styles = StyleSheet.create({
   buPhotosTitle: { fontSize: 15, fontWeight: 'bold', marginTop: 10, marginBottom: 2 },
   buPhotosCount: { fontSize: 11, fontWeight: 'bold', color: '#c2410c', marginBottom: 2 },
   buPhotosAddr: { fontSize: 10, marginBottom: 4 },
+  /** Taken-at date/time under each job photo. */
+  buPhotoTakenAt: { fontSize: 8.5, color: '#4b5563', marginTop: 3 },
+  /** Labeled job timeline box at the top of the job detail PDF. */
+  buTimeline: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 6,
+    padding: 8,
+    marginBottom: 10,
+  },
+  buTimelineRow: { fontSize: 10, marginBottom: 2, color: '#1f2937' },
 });
 
 function addressLines(b: InvoiceSnapshot['business']): string[] {
@@ -263,13 +276,38 @@ function CommissionBody({ snap }: { snap: InvoiceSnapshot }) {
   );
 }
 
+/** One board-up job photo for the PDF: display URL + formatted taken-at time ('' when unknown). */
+export interface BoardUpPhotoItem {
+  url: string;
+  takenAt: string;
+}
+
+/**
+ * The job timeline printed above the photo pages:
+ * - First input: when the job came in (invoice created_at).
+ * - Start job: first photo's taken-at time.
+ * - End job: last photo's taken-at time.
+ * Each is '' when unknown.
+ */
+export function boardUpTimeline(
+  snap: InvoiceSnapshot,
+  photos: BoardUpPhotoItem[],
+): { firstInput: string; startJob: string; endJob: string } {
+  const withTime = photos.filter((p) => p.takenAt !== '');
+  return {
+    firstInput: formatIsoDateTime(snap.job_created_at ?? snap.issued_at),
+    startJob: withTime.length > 0 ? withTime[0].takenAt : '',
+    endJob: withTime.length > 0 ? withTime[withTime.length - 1].takenAt : '',
+  };
+}
+
 /** Photos-only pages for the separate pictures PDF (matches the original's split PDFs). */
-function BoardUpPhotosBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: string[] }) {
+function BoardUpPhotosBody({ snap, photos }: { snap: InvoiceSnapshot; photos: BoardUpPhotoItem[] }) {
   const d = asBoardUpDetails(snap.boardup_details);
   /** Property address printed under every photo, matching the source app. */
   const caption = boardUpPhotoCaption(d);
   return (
-    <BoardUpPhotoPages caption={caption} photoUrls={photoUrls} />
+    <BoardUpPhotoPages caption={caption} photos={photos} />
   );
 }
 
@@ -280,26 +318,27 @@ function BoardUpPhotosBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUr
  */
 function BoardUpPhotoPages({
   caption,
-  photoUrls,
+  photos,
 }: {
   caption: string;
-  photoUrls: string[];
+  photos: BoardUpPhotoItem[];
 }) {
-  const totalPages = Math.max(1, Math.ceil(photoUrls.length / PHOTOS_PER_PDF_PAGE));
+  const totalPages = Math.max(1, Math.ceil(photos.length / PHOTOS_PER_PDF_PAGE));
   return (
     <View>
-      {chunkArray(photoUrls, PHOTOS_PER_PDF_PAGE).map((page, pi) => (
+      {chunkArray(photos, PHOTOS_PER_PDF_PAGE).map((page, pi) => (
         <View key={pi} wrap={false} break={pi > 0}>
           <Text style={styles.buPhotosTitle}>A QUICK BOARD UP SERVICE — JOB PHOTOS</Text>
           <Text style={styles.buPhotosCount}>
-            {photoUrls.length} PICTURES • PAGE {pi + 1} OF {totalPages}
+            {photos.length} PICTURES • PAGE {pi + 1} OF {totalPages}
           </Text>
           {caption !== '' && <Text style={styles.buPhotosAddr}>{caption}</Text>}
           <View style={styles.buPhotoPage}>
-            {page.map((url, i) => (
+            {page.map((p, i) => (
               <View key={i} style={styles.buPhotoCell}>
-                <Image src={url} style={styles.buPhotoImg} />
+                <Image src={p.url} style={styles.buPhotoImg} />
                 {caption !== '' && <Text style={styles.buPhotoCaption}>{caption}</Text>}
+                {p.takenAt !== '' && <Text style={styles.buPhotoTakenAt}>{p.takenAt}</Text>}
               </View>
             ))}
           </View>
@@ -310,7 +349,15 @@ function BoardUpPhotoPages({
 }
 
 /** Board-up job sheet body: all intake fields, live material estimate, and job photos. */
-function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: string[] }) {
+function BoardUpBody({
+  snap,
+  photos,
+  includePhotos,
+}: {
+  snap: InvoiceSnapshot;
+  photos: BoardUpPhotoItem[];
+  includePhotos: boolean;
+}) {
   const d = asBoardUpDetails(snap.boardup_details);
   const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors, d.acUnits);
   /** Property address printed under every photo, matching the source app. */
@@ -323,8 +370,23 @@ function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: st
     .filter(([, v]) => v !== '')
     .flatMap(([, v]) => v.split('\n'))
     .filter((v) => v !== '');
+  const timeline = boardUpTimeline(snap, photos);
+  const showTimeline = timeline.firstInput !== '' || timeline.startJob !== '' || timeline.endJob !== '';
   return (
     <View>
+      {showTimeline && (
+        <View style={styles.buTimeline}>
+          {timeline.firstInput !== '' && (
+            <Text style={styles.buTimelineRow}>First input: {timeline.firstInput}</Text>
+          )}
+          {timeline.startJob !== '' && (
+            <Text style={styles.buTimelineRow}>Start job: {timeline.startJob}</Text>
+          )}
+          {timeline.endJob !== '' && (
+            <Text style={styles.buTimelineRow}>End job: {timeline.endJob}</Text>
+          )}
+        </View>
+      )}
       {values.map((v, i) => (
         <Text key={i} style={styles.buRow}>
           {v}
@@ -351,8 +413,8 @@ function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: st
           )}
         </View>
       )}
-      {photoUrls.length > 0 && (
-        <BoardUpPhotoPages caption={caption} photoUrls={photoUrls} />
+      {includePhotos && photos.length > 0 && (
+        <BoardUpPhotoPages caption={caption} photos={photos} />
       )}
     </View>
   );
@@ -363,15 +425,18 @@ export function InvoicePdf({
   style = 'classic',
   pageSize = 'LETTER',
   logoUrl,
-  photoUrls = [],
+  photos = [],
+  includePhotos = true,
   photosOnly = false,
 }: {
   snapshot: InvoiceSnapshot;
   style?: InvoiceStyle;
   pageSize?: PdfPageSize;
   logoUrl?: string;
-  /** Resolved view URLs for board-up job photos (template 'boardup' only). */
-  photoUrls?: string[];
+  /** Resolved board-up job photos with taken-at times (template 'boardup' only). */
+  photos?: BoardUpPhotoItem[];
+  /** When false, photo pages are omitted (the timeline still uses taken-at times). */
+  includePhotos?: boolean;
   /** Photos-only board-up document (the separate pictures PDF). */
   photosOnly?: boolean;
 }) {
@@ -408,7 +473,7 @@ export function InvoicePdf({
     return (
       <Document title={`Aquick Job Photos ${snapshot.invoice_number}`} author={snapshot.business.display_name}>
         <Page size={label} style={pageStyle}>
-          <BoardUpPhotosBody snap={snapshot} photoUrls={photoUrls} />
+          <BoardUpPhotosBody snap={snapshot} photos={photos} />
         </Page>
       </Document>
     );
@@ -419,7 +484,7 @@ export function InvoicePdf({
       <Document title={`Aquick Job ${snapshot.invoice_number}`} author={snapshot.business.display_name}>
         <Page size={label} style={pageStyle}>
           <Header snap={snapshot} style={style} logoUrl={logoUrl} title={title} subtitle={subtitle} />
-          <BoardUpBody snap={snapshot} photoUrls={photoUrls} />
+          <BoardUpBody snap={snapshot} photos={photos} includePhotos={includePhotos} />
           <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} fixed />
         </Page>
       </Document>
