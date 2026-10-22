@@ -1345,23 +1345,32 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       </div>
 
       <Field label="Email to" htmlFor="bu-emailto" error={fieldError('emailTo')}>
-        <SelectField
-          id="bu-emailto"
-          style={{ maxWidth: 320 }}
-          value={emailIsCustom || !f.emailTo.trim() ? '__custom' : f.emailTo.trim()}
-          disabled={disabled}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v !== '__custom') set('emailTo', v);
-          }}
-        >
-          {crewEmails.map((e) => (
-            <option key={e.email} value={e.email}>
-              {e.name} — {e.email}
-            </option>
-          ))}
-          <option value="__custom">Type a different address…</option>
-        </SelectField>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <SelectField
+            id="bu-emailto"
+            style={{ maxWidth: 320 }}
+            value={emailIsCustom || !f.emailTo.trim() ? '__custom' : f.emailTo.trim()}
+            disabled={disabled}
+            onChange={(e) => {
+              const v = e.target.value;
+              // Picking "type a different address" clears the field so the
+              // custom input stays open instead of snapping back to Dan.
+              set('emailTo', v === '__custom' ? '' : v);
+            }}
+          >
+            {crewEmails.map((e) => (
+              <option key={e.email} value={e.email}>
+                {e.name} — {e.email}
+              </option>
+            ))}
+            <option value="__custom">Type a different address…</option>
+          </SelectField>
+          {canManageCrew && !disabled && (
+            <Button variant="secondary" size="sm" onClick={openCrewEditor}>
+              Edit crew
+            </Button>
+          )}
+        </div>
         {(emailIsCustom || !f.emailTo.trim()) && (
           <TextField
             id="bu-emailto-custom"
