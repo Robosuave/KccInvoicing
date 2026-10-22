@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Field, SelectField, TextArea, TextField } from '../components/ui';
+import { Alert, Button, Field, Modal, SelectField, TextArea, TextField } from '../components/ui';
+import { useAuth } from '../auth/AuthContext';
 import { digitsOnly, formatPhone, isValidPhone, PHONE_HINT } from '../lib/phone';
 import {
   BOARDUP_CUSTOM_CITIES_KEY,
@@ -9,6 +10,7 @@ import {
   CITY_NAME_OPTIONS,
   CITY_OPTIONS,
   CUSTOM_SIZE_OPTION,
+  DEFAULT_CREW_EMAIL,
   DOOR_MEASUREMENT_PRESETS,
   PROPERTY_TYPE_OPTIONS,
   SERVICE_NEEDED_OPTIONS,
@@ -18,15 +20,18 @@ import {
   boardUpPdfFilename,
   buildBoardUpSmsText,
   buildBoardUpSummary,
+  crewContactFor,
   syncMeasurementCount,
   estimateBoardUp,
   loadCustomCities,
   rememberCustomCity,
   withCustomCities,
+  type BoardUpCrewContact,
   type BoardUpDetails,
 } from '../lib/boardup';
 import { boardUpPhotoUrl, removeBoardUpPhoto, uploadBoardUpPhoto } from '../data/attachments';
 import { deleteInvoiceDeep } from '../data/invoices';
+import { listCrewContacts, saveCrewContacts } from '../data/crew';
 import { buildBoardUpShareSnapshot } from '../lib/snapshot';
 import { blobToBase64, sendBoardUpEmail } from '../data/email';
 import { downscalePhotoForPdf, renderInvoicePdfBlob } from '../pdf/service';
@@ -290,6 +295,118 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
   /** Latest full details, kept in sync so async photo handlers never use stale fields. */
   const detailsRef = useRef<BoardUpDetails>(asBoardUpDetails(initial));
 
+  const { user } = useAuth();
+  /** Crew contacts are editable by the owner and by Dan (master on Aquick). */
+  const canManageCrew =
+    isOwner || (user?.email ?? '').toLowerCase() === DEFAULT_CREW_EMAIL.toLowerCase();
+  const [crewContacts, setCrewContacts] = useState<BoardUpCrewContact[]>([]);
+  const [crewLoaded, setCrewLoaded] = useState(false);
+  const [crewEditorOpen, setCrewEditorOpen] = useState(false);
+  const [crewDraft, setCrewDraft] = useState<Array<{ id?: string; name: string; phone: string; email: string }>>([]);
+  const [crewSaveError, setCrewSaveError] = useState<string | null>(null);
+  const [crewSaving, setCrewSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const contacts = await listCrewContacts(businessId);
+      if (!cancelled) {
+        setCrewContacts(contacts);
+        setCrewLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
+  /** Crew picker options: DB contacts when loaded, hardcoded fallback otherwise. */
+  const crewOptions = useMemo(() => {
+    const names =
+      crewLoaded && crewContacts.length > 0 ? crewContacts.map((c) => c.name) : CREW_OPTIONS.slice(1);
+    const opts = ['Unassigned', ...names];
+    if (f.crew && f.crew !== 'Unassigned' && !opts.includes(f.crew)) opts.push(f.crew);
+    return opts;
+  }, [crewContacts, crewLoaded, f.crew]);
+
+  /** Picking a crew member auto-fills their saved phone + email. */
+  const pickCrew = (name: string) => {
+    const contact = crewContactFor(name, crewContacts);
+    applyDetails({
+      ...detailsRef.current,
+      crew: name,
+      textTo: contact ? contact.phone : '',
+      emailTo: contact ? contact.email : DEFAULT_CREW_EMAIL,
+    });
+    setInvalidFields((prev) => {
+      if (!prev.has('crew')) return prev;
+      const next = new Set(prev);
+      next.delete('crew');
+      return next;
+    });
+  };
+
+  /** "Email to" choices: saved crew emails, defaulting to Dan's address. */
+  const crewEmails = useMemo(() => {
+    const list = crewContacts
+      .filter((c) => c.email.trim())
+      .map((c) => ({ name: c.name, email: c.email.trim() }));
+    if (!list.some((e) => e.email.toLowerCase() === DEFAULT_CREW_EMAIL.toLowerCase())) {
+      list.unshift({ name: 'Dan', email: DEFAULT_CREW_EMAIL });
+    }
+    return list;
+  }, [crewContacts]);
+  const emailIsCustom =
+    f.emailTo.trim() !== '' &&
+    !crewEmails.some((e) => e.email.toLowerCase() === f.emailTo.trim().toLowerCase());
+
+  const openCrewEditor = () => {
+    setCrewDraft(crewContacts.map((c) => ({ id: c.id, name: c.name, phone: c.phone, email: c.email })));
+    setCrewSaveError(null);
+    setCrewEditorOpen(true);
+  };
+  const updateCrewDraftRow = (i: number, patch: Partial<{ name: string; phone: string; email: string }>) => {
+    setCrewDraft((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  };
+  const blurCrewDraftPhone = (i: number) => {
+    setCrewDraft((prev) =>
+      prev.map((r, j) => (j === i ? { ...r, phone: formatPhone(r.phone) } : r)),
+    );
+  };
+  const saveCrewDraft = async () => {
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    for (const r of crewDraft) {
+      if (!r.name.trim()) {
+        setCrewSaveError('Every crew member needs a name.');
+        return;
+      }
+      if (r.phone.trim() && !isValidPhone(r.phone)) {
+        setCrewSaveError(`"${r.name.trim()}" phone number is not valid — ${PHONE_HINT}.`);
+        return;
+      }
+      if (r.email.trim() && !emailRe.test(r.email.trim())) {
+        setCrewSaveError(`"${r.name.trim()}" email address is not valid.`);
+        return;
+      }
+    }
+    const names = crewDraft.map((r) => r.name.trim().toLowerCase());
+    if (new Set(names).size !== names.length) {
+      setCrewSaveError('Crew member names must be unique.');
+      return;
+    }
+    setCrewSaving(true);
+    setCrewSaveError(null);
+    try {
+      await saveCrewContacts(businessId, crewDraft);
+      setCrewContacts(await listCrewContacts(businessId));
+      setCrewEditorOpen(false);
+    } catch (e) {
+      setCrewSaveError(e instanceof Error ? e.message : 'Could not save crew contacts.');
+    } finally {
+      setCrewSaving(false);
+    }
+  };
+
   const setPhotosAndNotify = (next: PhotoItem[]) => {
     setPhotos(next);
     setShareDone(null);
@@ -433,6 +550,10 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       errs.push('Street address is required.');
       invalid.push('streetAddress');
     }
+    if (!cur.crew || cur.crew === 'Unassigned') {
+      errs.push('Choose the crew member.');
+      invalid.push('crew');
+    }
     if (cur.phone.trim() && !isValidPhone(cur.phone)) {
       errs.push(`Phone number format is not valid — ${PHONE_HINT}.`);
       invalid.push('phone');
@@ -563,12 +684,18 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
 
   /** Renders the job sheet PDF from live form state (draft or issued). */
   const renderSharePdf = async (photosOnly = false, includePhotos = true): Promise<Blob> => {
+    const contacts = crewLoaded ? crewContacts : await listCrewContacts(businessId);
+    const rob = crewContactFor('Rob', contacts);
     const snap = buildBoardUpShareSnapshot({
       business,
       details: detailsRef.current as unknown as Record<string, unknown>,
       jobNumber,
       invoiceDate,
       jobCreatedAt: jobCreatedAt ?? null,
+      crewContact:
+        rob && (rob.phone.trim() || rob.email.trim())
+          ? { name: 'Rob Kaleky', phone: formatPhone(rob.phone), email: rob.email.trim() }
+          : null,
     });
     return renderInvoicePdfBlob(snap, 'classic', 'LETTER', photosOnly, includePhotos);
   };
@@ -1029,15 +1156,94 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         />
       </Field>
 
-      <Field label="Crew" htmlFor="bu-crew">
-        <SelectField id="bu-crew" style={{ maxWidth: 190 }} value={f.crew} disabled={disabled} onChange={(e) => set('crew', e.target.value)}>
-          {CREW_OPTIONS.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </SelectField>
+      <Field
+        label="Crew"
+        htmlFor="bu-crew"
+        error={!f.crew || f.crew === 'Unassigned' ? 'Choose the crew member.' : fieldError('crew')}
+      >
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <SelectField
+            id="bu-crew"
+            style={{ maxWidth: 190 }}
+            value={f.crew}
+            disabled={disabled}
+            onChange={(e) => pickCrew(e.target.value)}
+          >
+            {crewOptions.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </SelectField>
+          {canManageCrew && !disabled && (
+            <Button variant="secondary" size="sm" onClick={openCrewEditor}>
+              Edit crew
+            </Button>
+          )}
+        </div>
       </Field>
+
+      {crewEditorOpen && (
+        <Modal title="Crew contacts" onClose={() => setCrewEditorOpen(false)}>
+          <p className="hint" style={{ marginTop: 0 }}>
+            Phone and email save per crew member. Picking a crew member on the job fills in
+            &ldquo;Text to&rdquo; and &ldquo;Email to&rdquo; automatically.
+          </p>
+          {crewDraft.map((row, i) => (
+            <div
+              key={row.id ?? `new-${i}`}
+              style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}
+            >
+              <TextField
+                placeholder="Name"
+                value={row.name}
+                onChange={(e) => updateCrewDraftRow(i, { name: e.target.value })}
+                style={{ maxWidth: 110 }}
+                aria-label="Crew member name"
+              />
+              <TextField
+                placeholder="(954) 555-0123"
+                value={row.phone}
+                onChange={(e) => updateCrewDraftRow(i, { phone: e.target.value })}
+                onBlur={() => blurCrewDraftPhone(i)}
+                style={{ maxWidth: 150 }}
+                inputMode="tel"
+                aria-label="Crew member phone"
+              />
+              <TextField
+                placeholder="email@example.com"
+                value={row.email}
+                onChange={(e) => updateCrewDraftRow(i, { email: e.target.value })}
+                style={{ maxWidth: 210 }}
+                inputMode="email"
+                aria-label="Crew member email"
+              />
+              <Button variant="danger" size="sm" onClick={() => setCrewDraft((prev) => prev.filter((_, j) => j !== i))}>
+                Remove
+              </Button>
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+            <Button
+              variant="secondary"
+              onClick={() => setCrewDraft((prev) => [...prev, { name: '', phone: '', email: '' }])}
+            >
+              Add crew member
+            </Button>
+            <Button onClick={saveCrewDraft} disabled={crewSaving}>
+              {crewSaving ? 'Saving…' : 'Save'}
+            </Button>
+            <Button variant="secondary" onClick={() => setCrewEditorOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+          {crewSaveError && (
+            <div style={{ marginTop: 8 }}>
+              <Alert kind="error">{crewSaveError}</Alert>
+            </div>
+          )}
+        </Modal>
+      )}
 
       <Field label="Additional crew name (optional)" htmlFor="bu-addcrew">
         <TextField
@@ -1126,17 +1332,37 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         )}
       </div>
 
-      <Field label="Email to (optional)" htmlFor="bu-emailto" error={fieldError('emailTo')}>
-        <TextField
+      <Field label="Email to" htmlFor="bu-emailto" error={fieldError('emailTo')}>
+        <SelectField
           id="bu-emailto"
           style={{ maxWidth: 320 }}
-          enterKeyHint="next"
-          inputMode="email"
-          value={f.emailTo}
+          value={emailIsCustom || !f.emailTo.trim() ? '__custom' : f.emailTo.trim()}
           disabled={disabled}
-          onChange={(e) => set('emailTo', e.target.value)}
-          placeholder="dispatch@example.com"
-        />
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v !== '__custom') set('emailTo', v);
+          }}
+        >
+          {crewEmails.map((e) => (
+            <option key={e.email} value={e.email}>
+              {e.name} — {e.email}
+            </option>
+          ))}
+          <option value="__custom">Type a different address…</option>
+        </SelectField>
+        {(emailIsCustom || !f.emailTo.trim()) && (
+          <TextField
+            id="bu-emailto-custom"
+            style={{ maxWidth: 320, marginTop: 6 }}
+            enterKeyHint="next"
+            inputMode="email"
+            value={f.emailTo}
+            disabled={disabled}
+            onChange={(e) => set('emailTo', e.target.value)}
+            placeholder="dispatch@example.com"
+            aria-label="Custom email address"
+          />
+        )}
       </Field>
 
       <Field label="Text to — phone (optional)" htmlFor="bu-textto" error={fieldError('textTo')} hint={PHONE_HINT}>

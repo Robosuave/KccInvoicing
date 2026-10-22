@@ -83,6 +83,11 @@ export interface InvoiceSnapshot {
   boardup_details: Record<string, unknown> | null;
   /** When the board-up job came in (invoice created_at); null for other templates. */
   job_created_at: string | null;
+  /**
+   * Owner contact block printed at the end of board-up job PDFs
+   * (template 'boardup' only). Null when not set.
+   */
+  boardup_crew_contact?: { name: string; phone: string; email: string } | null;
   totals: {
     subtotal_cents: number;
     discount_cents: number;
@@ -121,9 +126,11 @@ export function buildBoardUpShareSnapshot(args: {
   invoiceDate: string;
   /** When the job came in — feeds the PDF "Date and time" line. */
   jobCreatedAt?: string | null;
+  /** Owner contact block for the end of the job PDF (template 'boardup'). */
+  crewContact?: { name: string; phone: string; email: string } | null;
 }): InvoiceSnapshot {
-  const { business, details, jobNumber, invoiceDate, jobCreatedAt } = args;
-  return buildLiveSnapshot({
+  const { business, details, jobNumber, invoiceDate, jobCreatedAt, crewContact } = args;
+  const snap = buildLiveSnapshot({
     invoice: {
       invoice_number: jobNumber, template: 'boardup', currency: 'USD',
       invoice_date: invoiceDate, created_at: jobCreatedAt ?? null, due_date: null, po_number: null,
@@ -142,6 +149,8 @@ export function buildBoardUpShareSnapshot(args: {
     customer: null,
     lines: [],
   });
+  snap.boardup_crew_contact = crewContact ?? null;
+  return snap;
 }
 
 /**
