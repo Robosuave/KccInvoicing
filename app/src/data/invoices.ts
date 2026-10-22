@@ -160,6 +160,9 @@ export async function createRevision(issuedId: string, reason: string): Promise<
     agent_name: original.agent_name,
     second_agent_name: original.second_agent_name,
     property_address: original.property_address,
+    // Board-up jobs carry all their data (fields, photos, photo times) in
+    // boardup_details — a revision must copy it, or the draft comes out blank.
+    boardup_details: (original as { boardup_details?: Record<string, unknown> | null }).boardup_details ?? null,
     lines: lines.map((l) => ({
       item_id: l.item_id,
       description: l.description,
