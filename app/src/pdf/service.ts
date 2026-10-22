@@ -3,7 +3,8 @@ import { InvoicePdf, invoicePdfFilename, type PdfPageSize, type InvoiceStyle, ty
 export type { InvoiceStyle, BoardUpPhotoItem } from './InvoicePdf';
 import { ReceiptPdf, receiptPdfFilename } from './ReceiptPdf';
 import { requireSupabase } from '../lib/supabase';
-import { fetchPhotoDateTime, formatPhotoDateTime } from '../lib/exif';
+import { fetchPhotoDateTime, formatPhotoDateTime, isoToExifRaw } from '../lib/exif';
+import { boardUpPhotoUploadedAt } from '../data/attachments';
 import { getInvoice } from '../data/invoices';
 import { getBusiness } from '../data/businesses';
 import { getCustomer } from '../data/customers';
@@ -112,6 +113,25 @@ export async function downscalePhotoForPdf(url: string): Promise<string> {
   }
 }
 
+/**
+ * Best-effort capture time for one photo, as raw "YYYY:MM:DD HH:MM:SS":
+ * stored upload-time EXIF first, then EXIF read from the file, then the
+ * storage upload time (photos go up at the job site, so it's within minutes
+ * of the shot). Null only when every source fails.
+ */
+async function photoTakenAtRaw(
+  path: string,
+  stored: Record<string, string>,
+  url: string | null,
+): Promise<string | null> {
+  if (stored[path]) return stored[path];
+  if (url) {
+    const fromExif = await fetchPhotoDateTime(url);
+    if (fromExif) return fromExif;
+  }
+  return isoToExifRaw(await boardUpPhotoUploadedAt(path));
+}
+
 export async function renderInvoicePdfBlob(
   snapshot: InvoiceSnapshot,
   style: InvoiceStyle = 'classic',
@@ -122,30 +142,25 @@ export async function renderInvoicePdfBlob(
   const logoUrl = await resolveLogoUrl(snapshot);
   const paths = boardUpPhotoPaths(snapshot);
   const stored = storedPhotoTakenAt(snapshot);
-  // Capture time: prefer the EXIF read at upload; fall back to reading EXIF
-  // from the original file now (covers photos uploaded before this feature).
-  // The canvas downscale strips EXIF, so the fallback reads before compressing.
+  // Capture time per photo: stored upload-time EXIF, else EXIF read from the
+  // file now (covers photos uploaded before this feature), else the storage
+  // upload time. The canvas downscale strips EXIF, so the file read happens
+  // before compressing.
   let photos: BoardUpPhotoItem[] = [];
   if (includePhotos) {
     for (const path of paths) {
       const url = await boardUpPhotoSignedUrl(path);
       if (!url) continue;
-      const raw = stored[path] ?? (await fetchPhotoDateTime(url));
+      const raw = await photoTakenAtRaw(path, stored, url);
       photos.push({ url: await downscalePhotoForPdf(url), takenAt: formatPhotoDateTime(raw), takenAtRaw: raw });
     }
   } else {
     // Job-info PDF: no images embedded, but the timeline still needs the
-    // taken-at times. Use stored upload-time EXIF; fall back to reading EXIF
-    // from the file (covers photos uploaded before this feature).
+    // taken-at times, resolved the same way as the photos PDF.
     for (const path of paths) {
-      const raw = stored[path] ?? null;
-      if (raw) {
-        photos.push({ url: '', takenAt: formatPhotoDateTime(raw), takenAtRaw: raw });
-        continue;
-      }
       const url = await boardUpPhotoSignedUrl(path);
-      const fetched = url ? await fetchPhotoDateTime(url) : null;
-      photos.push({ url: '', takenAt: formatPhotoDateTime(fetched), takenAtRaw: fetched });
+      const raw = await photoTakenAtRaw(path, stored, url);
+      photos.push({ url: '', takenAt: formatPhotoDateTime(raw), takenAtRaw: raw });
     }
   }
   const renderWith = async (url: string | undefined) => {

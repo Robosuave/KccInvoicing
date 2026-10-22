@@ -126,3 +126,24 @@ export async function boardUpPhotoUrl(path: string): Promise<string> {
   if (error || !data?.signedUrl) throw error ?? new Error('Could not create photo link.');
   return data.signedUrl;
 }
+
+/**
+ * Storage upload time (ISO-8601) of a board-up photo, or null.
+ * Last-resort taken-at time for photos whose EXIF can't be read — photos are
+ * uploaded at the job site, so upload time is within minutes of the shot.
+ */
+export async function boardUpPhotoUploadedAt(path: string): Promise<string | null> {
+  try {
+    const sb = requireSupabase();
+    const slash = path.lastIndexOf('/');
+    if (slash <= 0) return null;
+    const dir = path.slice(0, slash);
+    const name = path.slice(slash + 1);
+    const { data, error } = await sb.storage.from(BUCKET).list(dir, { search: name });
+    if (error || !data) return null;
+    const match = data.find((f) => f.name === name);
+    return match?.created_at ?? null;
+  } catch {
+    return null;
+  }
+}

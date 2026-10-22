@@ -163,6 +163,20 @@ export function formatDuration(ms: number): string {
 }
 
 /**
+ * ISO-8601 timestamp -> raw EXIF-style "YYYY:MM:DD HH:MM:SS" in the viewer's
+ * local timezone. Normalizes the storage upload time into the same shape as
+ * EXIF capture times so both flow through the same formatting and timeline
+ * math. Null when unparseable.
+ */
+export function isoToExifRaw(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}:${p(d.getMonth() + 1)}:${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/**
  * ISO-8601 timestamp (e.g. the job's created_at) -> "Oct 21, 2026, 2:30 PM"
  * in the viewer's local timezone. Returns '' when unparseable.
  */

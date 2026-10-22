@@ -4,6 +4,7 @@ import {
   formatDuration,
   formatIsoDateTime,
   formatPhotoDateTime,
+  isoToExifRaw,
   parseExifDateTime,
 } from '../lib/exif';
 
@@ -169,6 +170,20 @@ describe('formatIsoDateTime', () => {
     expect(formatIsoDateTime(null)).toBe('');
     expect(formatIsoDateTime('')).toBe('');
     expect(formatIsoDateTime('not a date')).toBe('');
+  });
+});
+
+describe('isoToExifRaw', () => {
+  it('converts an ISO timestamp to EXIF-style raw in local time', () => {
+    const d = new Date('2026-10-21T19:34:05Z');
+    const p = (n: number) => String(n).padStart(2, '0');
+    const expected = `${d.getFullYear()}:${p(d.getMonth() + 1)}:${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    expect(isoToExifRaw('2026-10-21T19:34:05Z')).toBe(expected);
+  });
+  it('returns null for missing or invalid input', () => {
+    expect(isoToExifRaw(null)).toBeNull();
+    expect(isoToExifRaw('')).toBeNull();
+    expect(isoToExifRaw('not a date')).toBeNull();
   });
 });
 
