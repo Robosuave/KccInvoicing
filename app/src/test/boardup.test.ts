@@ -11,6 +11,7 @@ import {
   buildBoardUpCsv,
   buildBoardUpSmsText,
   buildBoardUpSummary,
+  crewContactFor,
   measurementSummaryLines,
   syncMeasurementCount,
   chunkArray,
@@ -68,11 +69,12 @@ describe('asBoardUpDetails', () => {
     expect(asBoardUpDetails(undefined)).toEqual(EMPTY_BOARDUP);
   });
 
-  it('keeps source-app defaults (Single-family, Emergency board-up, Today, Dan)', () => {
+  it('keeps source-app defaults (Single-family, Emergency board-up, Today, Unassigned crew, Dan email)', () => {
     expect(EMPTY_BOARDUP.propertyType).toBe('Single-family');
     expect(EMPTY_BOARDUP.serviceNeeded).toBe('Emergency board-up');
     expect(EMPTY_BOARDUP.urgency).toBe('Today');
-    expect(EMPTY_BOARDUP.crew).toBe('Dan');
+    expect(EMPTY_BOARDUP.crew).toBe('Unassigned');
+    expect(EMPTY_BOARDUP.emailTo).toBe('4831104x@gmail.com');
   });
 
   it('coerces photo paths to a string array and drops junk', () => {
@@ -80,11 +82,24 @@ describe('asBoardUpDetails', () => {
     expect(d.photos).toEqual(['a/b.jpg', 'c/d.png']);
   });
 
-  it('rejects invalid dropdown values, keeping defaults', () => {
+  it('rejects invalid dropdown values, keeping defaults (crew names come from the crew table)', () => {
     const d = asBoardUpDetails({ propertyType: 'Castle', crew: 'Nobody', urgency: 'Whenever' });
     expect(d.propertyType).toBe('Single-family');
-    expect(d.crew).toBe('Dan');
+    // Crew is no longer whitelisted here: names are managed in boardup_crew,
+    // so any stored string survives the round trip.
+    expect(d.crew).toBe('Nobody');
     expect(d.urgency).toBe('Today');
+  });
+
+  it('finds crew contacts case-insensitively', () => {
+    const contacts = [
+      { id: '1', name: 'Dan', phone: '(954) 483-1104', email: '4831104x@gmail.com' },
+      { id: '2', name: 'Rob', phone: '', email: '' },
+    ];
+    expect(crewContactFor('dan', contacts)?.email).toBe('4831104x@gmail.com');
+    expect(crewContactFor('DAN', contacts)?.phone).toBe('(954) 483-1104');
+    expect(crewContactFor('Nobody', contacts)).toBeNull();
+    expect(crewContactFor('', contacts)).toBeNull();
   });
 });
 

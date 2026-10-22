@@ -79,6 +79,9 @@ const styles = StyleSheet.create({
   buEstTitle: { fontSize: 13, fontWeight: 'bold', marginBottom: 2 },
   buEstMeta: { fontSize: 10.5 },
   buFormula: { fontSize: 8, color: '#5b6470', marginBottom: 10 },
+  buContact: { marginTop: 14, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#d1d5db' },
+  buContactName: { fontSize: 11, fontWeight: 'bold', marginBottom: 2 },
+  buContactLine: { fontSize: 10, color: '#374151', marginBottom: 1 },
   buPhotoPage: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6, marginBottom: 2 },
   buPhotoCell: { width: '48%', marginRight: '2%', marginBottom: 10 },
   buPhotoImg: { width: '100%', height: 230, objectFit: 'contain', backgroundColor: '#efe9de' },
@@ -337,6 +340,17 @@ function BoardUpBody({ snap, photoUrls }: { snap: InvoiceSnapshot; photoUrls: st
         </Text>
       </View>
       <Text style={styles.buFormula}>{BOARDUP_FORMULA_NOTE}</Text>
+      {snap.boardup_crew_contact && (snap.boardup_crew_contact.phone || snap.boardup_crew_contact.email) && (
+        <View style={styles.buContact}>
+          <Text style={styles.buContactName}>{snap.boardup_crew_contact.name}</Text>
+          {snap.boardup_crew_contact.phone && (
+            <Text style={styles.buContactLine}>{snap.boardup_crew_contact.phone}</Text>
+          )}
+          {snap.boardup_crew_contact.email && (
+            <Text style={styles.buContactLine}>{snap.boardup_crew_contact.email}</Text>
+          )}
+        </View>
+      )}
       {photoUrls.length > 0 && (
         <BoardUpPhotoPages caption={caption} photoUrls={photoUrls} />
       )}

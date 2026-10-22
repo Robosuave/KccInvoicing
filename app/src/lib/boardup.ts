@@ -53,6 +53,24 @@ export interface BoardUpDetails {
   acMeasurements: string[];
 }
 
+/** Default "Email to" on new board-up jobs (Dan's address). */
+export const DEFAULT_CREW_EMAIL = '4831104x@gmail.com';
+
+/** One crew member's saved contact, from the boardup_crew table. */
+export interface BoardUpCrewContact {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+}
+
+/** Find a crew contact by name (case-insensitive). */
+export function crewContactFor(name: string, contacts: BoardUpCrewContact[]): BoardUpCrewContact | null {
+  const n = name.trim().toLowerCase();
+  if (!n) return null;
+  return contacts.find((c) => c.name.trim().toLowerCase() === n) ?? null;
+}
+
 export const EMPTY_BOARDUP: BoardUpDetails = {
   cityName: '',
   otherCustomerName: '',
@@ -73,14 +91,14 @@ export const EMPTY_BOARDUP: BoardUpDetails = {
   garageDoors: 0,
   acUnits: 0,
   otherOpenings: '',
-  crew: 'Dan',
+  crew: 'Unassigned',
   additionalCrew: '',
   haspLocks: 0,
   haspLockCombos: [],
   chainLocks: 0,
   chainLockCombos: [],
   accessNotes: '',
-  emailTo: '',
+  emailTo: DEFAULT_CREW_EMAIL,
   textTo: '',
   photos: [],
   windowMeasurements: [],
@@ -539,7 +557,7 @@ export function asBoardUpDetails(raw: unknown): BoardUpDetails {
     garageDoors: num(r.garageDoors),
     acUnits: num(r.acUnits),
     otherOpenings: str(r.otherOpenings),
-    crew: opt(r.crew, CREW_OPTIONS, 'Dan'),
+    crew: str(r.crew) || 'Unassigned',
     additionalCrew: str(r.additionalCrew),
     haspLocks: num(r.haspLocks),
     haspLockCombos: strArr(r.haspLockCombos),
