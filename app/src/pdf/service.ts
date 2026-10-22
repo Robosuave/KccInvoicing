@@ -3,8 +3,7 @@ import { InvoicePdf, invoicePdfFilename, type PdfPageSize, type InvoiceStyle, ty
 export type { InvoiceStyle, BoardUpPhotoItem } from './InvoicePdf';
 import { ReceiptPdf, receiptPdfFilename } from './ReceiptPdf';
 import { requireSupabase } from '../lib/supabase';
-import { fetchPhotoDateTime, formatPhotoDateTime, isoToExifRaw } from '../lib/exif';
-import { boardUpPhotoUploadedAt } from '../data/attachments';
+import { fetchPhotoDateTime, formatPhotoDateTime } from '../lib/exif';
 import { getInvoice } from '../data/invoices';
 import { getBusiness } from '../data/businesses';
 import { getCustomer } from '../data/customers';
@@ -115,9 +114,9 @@ export async function downscalePhotoForPdf(url: string): Promise<string> {
 
 /**
  * Best-effort capture time for one photo, as raw "YYYY:MM:DD HH:MM:SS":
- * stored upload-time EXIF first, then EXIF read from the file, then the
- * storage upload time (photos go up at the job site, so it's within minutes
- * of the shot). Null only when every source fails.
+ * stored upload-time EXIF first, then EXIF read from the file itself
+ * (covers photos uploaded before this feature). Null when unreadable —
+ * never substitute the upload time, which is not the taken time.
  */
 async function photoTakenAtRaw(
   path: string,
@@ -125,11 +124,8 @@ async function photoTakenAtRaw(
   url: string | null,
 ): Promise<string | null> {
   if (stored[path]) return stored[path];
-  if (url) {
-    const fromExif = await fetchPhotoDateTime(url);
-    if (fromExif) return fromExif;
-  }
-  return isoToExifRaw(await boardUpPhotoUploadedAt(path));
+  if (url) return await fetchPhotoDateTime(url);
+  return null;
 }
 
 export async function renderInvoicePdfBlob(
