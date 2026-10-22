@@ -32,6 +32,7 @@ import {
 import { boardUpPhotoUrl, removeBoardUpPhoto, uploadBoardUpPhoto } from '../data/attachments';
 import { deleteInvoiceDeep } from '../data/invoices';
 import { listCrewContacts, saveCrewContacts } from '../data/crew';
+import { parseExifDateTime } from '../lib/exif';
 import { buildBoardUpShareSnapshot } from '../lib/snapshot';
 import { blobToBase64, sendBoardUpEmail } from '../data/email';
 import { downscalePhotoForPdf, renderInvoicePdfBlob } from '../pdf/service';
@@ -622,14 +623,23 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         return;
       }
       const next = [...photosRef.current];
+      const takenAt: Record<string, string> = { ...detailsRef.current.photoTakenAt };
       for (const file of valid) {
         const path = await uploadBoardUpPhoto(workspaceId, businessId, id, file);
         const url = await boardUpPhotoUrl(path);
+        // Capture the photo's EXIF date/time now, from the original file —
+        // the PDF downscale strips EXIF, so this is the reliable moment.
+        try {
+          const raw = parseExifDateTime(await file.arrayBuffer());
+          if (raw) takenAt[path] = raw;
+        } catch {
+          /* a missing date must never block the upload */
+        }
         next.push({ path, url, thumbUrl: await downscalePhotoForPdf(url) });
       }
       setPhotosAndNotify(next);
       const paths = next.map((p) => p.path);
-      const d = { ...detailsRef.current, photos: paths };
+      const d = { ...detailsRef.current, photos: paths, photoTakenAt: takenAt };
       detailsRef.current = d;
       setF(d);
       onChange(d);
@@ -652,7 +662,9 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     const next = photosRef.current.filter((p) => p.path !== path);
     setPhotosAndNotify(next);
     const paths = next.map((p) => p.path);
-    const d = { ...detailsRef.current, photos: paths };
+    const takenAt = { ...detailsRef.current.photoTakenAt };
+    delete takenAt[path];
+    const d = { ...detailsRef.current, photos: paths, photoTakenAt: takenAt };
     detailsRef.current = d;
     setF(d);
     onChange(d);
