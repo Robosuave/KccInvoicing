@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   exifRawToDate,
+  exifRawToInput,
+  fileModifiedToExifRaw,
   formatDuration,
   formatIsoDateTime,
   formatPhotoDateTime,
+  inputToExifRaw,
   isoToExifRaw,
   parseExifDateTime,
 } from '../lib/exif';
@@ -184,6 +187,34 @@ describe('isoToExifRaw', () => {
     expect(isoToExifRaw(null)).toBeNull();
     expect(isoToExifRaw('')).toBeNull();
     expect(isoToExifRaw('not a date')).toBeNull();
+  });
+});
+
+describe('exifRawToInput / inputToExifRaw', () => {
+  it('round-trips between EXIF raw and datetime-local', () => {
+    expect(exifRawToInput('2026:10:21 19:34:05')).toBe('2026-10-21T19:34');
+    expect(inputToExifRaw('2026-10-21T19:34')).toBe('2026:10:21 19:34:00');
+    expect(inputToExifRaw(exifRawToInput('2026:10:21 19:34:05'))).toBe('2026:10:21 19:34:00');
+  });
+  it('returns empty/null for bad input', () => {
+    expect(exifRawToInput(null)).toBe('');
+    expect(exifRawToInput('garbage')).toBe('');
+    expect(inputToExifRaw('')).toBeNull();
+    expect(inputToExifRaw('2026/10/21 19:34')).toBeNull();
+  });
+});
+
+describe('fileModifiedToExifRaw', () => {
+  it('converts a file timestamp to EXIF-style raw in local time', () => {
+    const ms = new Date('2026-10-21T19:34:05Z').getTime();
+    const d = new Date(ms);
+    const p = (n: number) => String(n).padStart(2, '0');
+    const expected = `${d.getFullYear()}:${p(d.getMonth() + 1)}:${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    expect(fileModifiedToExifRaw(ms)).toBe(expected);
+  });
+  it('returns null for bad input', () => {
+    expect(fileModifiedToExifRaw(0)).toBeNull();
+    expect(fileModifiedToExifRaw(NaN)).toBeNull();
   });
 });
 

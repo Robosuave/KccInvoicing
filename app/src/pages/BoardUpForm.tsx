@@ -32,7 +32,13 @@ import {
 import { boardUpPhotoUrl, removeBoardUpPhoto, uploadBoardUpPhoto } from '../data/attachments';
 import { deleteInvoiceDeep } from '../data/invoices';
 import { listCrewContacts, saveCrewContacts } from '../data/crew';
-import { parseExifDateTime } from '../lib/exif';
+import {
+  exifRawToInput,
+  fileModifiedToExifRaw,
+  formatPhotoDateTime,
+  inputToExifRaw,
+  parseExifDateTime,
+} from '../lib/exif';
 import { buildBoardUpShareSnapshot } from '../lib/snapshot';
 import { blobToBase64, sendBoardUpEmail } from '../data/email';
 import { downscalePhotoForPdf, renderInvoicePdfBlob } from '../pdf/service';
@@ -627,10 +633,12 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       for (const file of valid) {
         const path = await uploadBoardUpPhoto(workspaceId, businessId, id, file);
         const url = await boardUpPhotoUrl(path);
-        // Capture the photo's EXIF date/time now, from the original file —
-        // the PDF downscale strips EXIF, so this is the reliable moment.
+        // Capture the photo's date/time now, from the original file — the PDF
+        // downscale strips EXIF, so this is the reliable moment. Texted photos
+        // arrive with EXIF stripped, so fall back to the file's saved date.
         try {
-          const raw = parseExifDateTime(await file.arrayBuffer());
+          const raw =
+            parseExifDateTime(await file.arrayBuffer()) ?? fileModifiedToExifRaw(file.lastModified);
           if (raw) takenAt[path] = raw;
         } catch {
           /* a missing date must never block the upload */
@@ -669,6 +677,33 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     setF(d);
     onChange(d);
     onPhotosCommitted?.(d);
+  };
+
+  /** Set (or clear) one photo's taken time — manual correction for photos
+   * whose EXIF was stripped before upload (e.g. texted photos). */
+  const setPhotoTakenAt = (path: string, raw: string | null) => {
+    const takenAt = { ...(detailsRef.current.photoTakenAt ?? {}) };
+    if (raw) takenAt[path] = raw;
+    else delete takenAt[path];
+    const d = { ...detailsRef.current, photoTakenAt: takenAt };
+    detailsRef.current = d;
+    setF(d);
+    onChange(d);
+  };
+
+  const [bulkPhotoTime, setBulkPhotoTime] = useState('');
+  /** Apply one taken time to every photo — the crew's texted batches come
+   * from a single job visit, so one timestamp usually covers them all. */
+  const applyBulkPhotoTime = () => {
+    const raw = inputToExifRaw(bulkPhotoTime);
+    if (!raw) return;
+    const takenAt = { ...(detailsRef.current.photoTakenAt ?? {}) };
+    for (const p of photosRef.current) takenAt[p.path] = raw;
+    const d = { ...detailsRef.current, photoTakenAt: takenAt };
+    detailsRef.current = d;
+    setF(d);
+    onChange(d);
+    setBulkPhotoTime('');
   };
 
   const emailJob = () => {
@@ -1287,39 +1322,76 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
           Photos{photos.length > 0 && ` (${photos.length})`}
         </h3>
         {photos.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-            {photos.map((p) => (
-              <div key={p.path} style={{ position: 'relative', width: 96, height: 96 }}>
-                <img
-                  src={p.thumbUrl || p.url}
-                  alt="Job photo"
-                  style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8, border: '1px solid #ddd' }}
+          <>
+            {!disabled && (
+              <div
+                style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}
+              >
+                <span className="hint" style={{ margin: 0 }}>
+                  Set all photo times:
+                </span>
+                <input
+                  type="datetime-local"
+                  aria-label="Set all photo times"
+                  value={bulkPhotoTime}
+                  onChange={(e) => setBulkPhotoTime(e.target.value)}
+                  style={{ fontSize: 13 }}
                 />
-                {!disabled && (
-                  <button
-                    type="button"
-                    aria-label="Remove photo"
-                    onClick={() => void removePhoto(p.path)}
-                    style={{
-                      position: 'absolute',
-                      top: -8,
-                      right: -8,
-                      width: 26,
-                      height: 26,
-                      borderRadius: '50%',
-                      border: '1px solid #ccc',
-                      background: '#fff',
-                      fontSize: 15,
-                      lineHeight: 1,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    ×
-                  </button>
-                )}
+                <Button variant="secondary" size="sm" onClick={applyBulkPhotoTime} disabled={!bulkPhotoTime}>
+                  Apply to all
+                </Button>
               </div>
-            ))}
-          </div>
+            )}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+              {photos.map((p) => (
+                <div key={p.path} style={{ width: 112 }}>
+                  <div style={{ position: 'relative', width: 96, height: 96 }}>
+                    <img
+                      src={p.thumbUrl || p.url}
+                      alt="Job photo"
+                      style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8, border: '1px solid #ddd' }}
+                    />
+                    {!disabled && (
+                      <button
+                        type="button"
+                        aria-label="Remove photo"
+                        onClick={() => void removePhoto(p.path)}
+                        style={{
+                          position: 'absolute',
+                          top: -8,
+                          right: -8,
+                          width: 26,
+                          height: 26,
+                          borderRadius: '50%',
+                          border: '1px solid #ccc',
+                          background: '#fff',
+                          fontSize: 15,
+                          lineHeight: 1,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                  {!disabled ? (
+                    <input
+                      type="datetime-local"
+                      aria-label="Photo taken time"
+                      title="When this photo was taken — tap to correct it"
+                      value={exifRawToInput(f.photoTakenAt?.[p.path])}
+                      onChange={(e) => setPhotoTakenAt(p.path, inputToExifRaw(e.target.value))}
+                      style={{ width: 112, fontSize: 11, marginTop: 4, padding: '2px 1px' }}
+                    />
+                  ) : (
+                    <div style={{ fontSize: 11, marginTop: 4, color: '#555' }}>
+                      {formatPhotoDateTime(f.photoTakenAt?.[p.path])}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
         )}
         {!disabled && (
           <>

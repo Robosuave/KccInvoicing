@@ -163,6 +163,41 @@ export function formatDuration(ms: number): string {
 }
 
 /**
+ * Raw EXIF "YYYY:MM:DD HH:MM:SS" -> HTML datetime-local "YYYY-MM-DDTHH:MM".
+ * '' when unparseable.
+ */
+export function exifRawToInput(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const m = /^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?/.exec(raw.trim());
+  if (!m) return '';
+  return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}`;
+}
+
+/**
+ * HTML datetime-local "YYYY-MM-DDTHH:MM" -> raw EXIF "YYYY:MM:DD HH:MM:SS".
+ * Null when unparseable.
+ */
+export function inputToExifRaw(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(v.trim());
+  if (!m) return null;
+  return `${m[1]}:${m[2]}:${m[3]} ${m[4]}:${m[5]}:00`;
+}
+
+/**
+ * File.lastModified (ms epoch) -> raw EXIF "YYYY:MM:DD HH:MM:SS" in local
+ * time. Used when a photo's own EXIF was stripped (e.g. texted photos):
+ * the file's saved date is the best remaining signal of when it arrived.
+ */
+export function fileModifiedToExifRaw(ms: number): string | null {
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return null;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}:${p(d.getMonth() + 1)}:${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/**
  * ISO-8601 timestamp -> raw EXIF-style "YYYY:MM:DD HH:MM:SS" in the viewer's
  * local timezone. Normalizes the storage upload time into the same shape as
  * EXIF capture times so both flow through the same formatting and timeline
