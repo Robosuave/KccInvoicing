@@ -146,7 +146,8 @@ export async function createRevision(issuedId: string, reason: string): Promise<
   const draft = await createDraft({
     business_id: original.business_id,
     customer_id: original.customer_id,
-    invoice_date: new Date().toISOString().slice(0, 10),
+    // A revision is the same job — keep the original job date, not today.
+    invoice_date: original.invoice_date,
     currency: original.currency,
     notes: original.notes,
     terms: original.terms,
@@ -176,7 +177,15 @@ export async function createRevision(issuedId: string, reason: string): Promise<
 
   await sb
     .from('invoices')
-    .update({ revision_of: issuedId, revision_no: original.revision_no + 1 })
+    .update({
+      revision_of: issuedId,
+      revision_no: original.revision_no + 1,
+      // "First input" on the timeline is the job's created_at — a revision is
+      // the same job, so carry the original time forward. Otherwise the
+      // timeline shows the revision's creation time and the time-to-job-site
+      // math goes negative and hides.
+      created_at: (original as { created_at?: string }).created_at ?? undefined,
+    })
     .eq('id', draft.id);
 
   await logAuditEvent(original.business_id, issuedId, 'revision_started', {
