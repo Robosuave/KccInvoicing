@@ -23,6 +23,7 @@ import {
   crewContactFor,
   syncMeasurementCount,
   estimateBoardUp,
+  measuredTotals,
   loadCustomCities,
   rememberCustomCity,
   withCustomCities,
@@ -533,6 +534,20 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     [f.windows, f.doors, f.sliders, f.garageDoors, f.acUnits],
   );
 
+  /** Measured totals from the actual sizes entered (Dan's crew-entry grand
+   * total); separate from the flat-rate SQ FT COVER estimate above. */
+  const measured = useMemo(
+    () =>
+      measuredTotals([
+        f.windowMeasurements,
+        f.doorMeasurements,
+        f.sliderMeasurements,
+        f.garageMeasurements,
+        f.acMeasurements,
+      ]),
+    [f.windowMeasurements, f.doorMeasurements, f.sliderMeasurements, f.garageMeasurements, f.acMeasurements],
+  );
+
   const cityNameOptions = useMemo(
     () => withCustomCities(CITY_NAME_OPTIONS, customCityNames),
     [customCityNames],
@@ -863,6 +878,20 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
 
   return (
     <div onKeyDown={enterToNext}>
+      {/* Job time (Dan's crew-entry "Time"); the job date is the Job date
+          field in the editor above this form. */}
+      <Field label="Job time" htmlFor="bu-jobtime">
+        <TextField
+          id="bu-jobtime"
+          style={{ maxWidth: 180 }}
+          type="time"
+          enterKeyHint="next"
+          value={f.jobTime}
+          disabled={disabled}
+          onChange={(e) => set('jobTime', e.target.value)}
+        />
+      </Field>
+
       {/* Estimate header */}
       <div
         style={{
@@ -1017,6 +1046,18 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         </Field>
       )}
 
+      <Field label="State" htmlFor="bu-state">
+        <TextField
+          id="bu-state"
+          style={{ maxWidth: 200 }}
+          enterKeyHint="next"
+          value={f.state}
+          disabled={disabled}
+          onChange={(e) => set('state', e.target.value)}
+          placeholder="Florida"
+        />
+      </Field>
+
       <Field label="Phone number" htmlFor="bu-phone" error={fieldError('phone')} hint={PHONE_HINT}>
         <TextField
           id="bu-phone"
@@ -1169,6 +1210,14 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
           />
         </div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>{BOARDUP_FORMULA_NOTE}</div>
+        <div style={{ fontSize: 13, marginTop: 8 }} aria-live="polite">
+          MEASUREMENT GRAND TOTAL: <strong>{measured.sqIn} sq in</strong> ·{' '}
+          <strong>{measured.sqFt.toFixed(2)} sq ft</strong>
+          <span style={{ color: 'var(--muted)' }}>
+            {' '}
+            (each W × H size rounded up to a whole square inch, then added; from the sizes entered above)
+          </span>
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>

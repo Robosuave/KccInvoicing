@@ -16,6 +16,11 @@ export interface BoardUpDetails {
   callerName: string;
   streetAddress: string;
   city: string;
+  /** State for the property address (Dan's crew-entry "State", prefilled Florida). */
+  state: string;
+  /** Job time of day (Dan's crew-entry "Time"); the job date itself is the
+   * invoice/job date shown in the editor above this form. */
+  jobTime: string;
   phone: string;
   caseNumber: string;
   requestingOfficer: string;
@@ -83,6 +88,8 @@ export const EMPTY_BOARDUP: BoardUpDetails = {
   callerName: '',
   streetAddress: '',
   city: '',
+  state: 'Florida',
+  jobTime: '',
   phone: '',
   caseNumber: '',
   requestingOfficer: '',
@@ -145,6 +152,9 @@ export const PROPERTY_TYPE_OPTIONS = [
   'Multi-unit',
   'Commercial',
   'Storefront',
+  // Added for parity with Dan's crew-entry app (existing options kept).
+  'Vacant lot / structure',
+  'Other',
 ];
 
 export const SERVICE_NEEDED_OPTIONS = [
@@ -154,6 +164,12 @@ export const SERVICE_NEEDED_OPTIONS = [
   'Break-in secure',
   'Fire damage board-up',
   'Board removal',
+  // Added for parity with Dan's crew-entry app (existing options kept).
+  'Board up',
+  'Re-board / repair',
+  'Secure property',
+  'Inspection / estimate',
+  'Other',
 ];
 
 export const URGENCY_OPTIONS = ['Emergency — dispatch now', 'Today', 'Scheduled', 'Not urgent'];
@@ -365,6 +381,36 @@ export function estimateBoardUp(
   return { rawSqft, sqftCover: rawSqft, sheets };
 }
 
+/** Totals measured from the actual W×H sizes entered, mirroring Dan's
+ * crew-entry "Measurement grand total": every W×H pair is rounded UP to a
+ * whole square inch, then added. Non-W×H entries are ignored. This is
+ * separate from the flat-rate SQ FT COVER estimate above and does not
+ * replace it. */
+export interface MeasuredTotals {
+  /** Sum of per-pair rounded-up square inches. */
+  sqIn: number;
+  /** sqIn / 144. */
+  sqFt: number;
+  /** Number of W×H pairs that contributed. */
+  pairs: number;
+}
+
+export function measuredTotals(
+  measurements: readonly (readonly string[])[],
+): MeasuredTotals {
+  let sqIn = 0;
+  let pairs = 0;
+  for (const list of measurements) {
+    for (const m of list) {
+      const match = /^\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*$/i.exec(m ?? '');
+      if (!match) continue;
+      sqIn += Math.ceil(parseFloat(match[1]) * parseFloat(match[2]));
+      pairs += 1;
+    }
+  }
+  return { sqIn, sqFt: sqIn / 144, pairs };
+}
+
 function fmtDateTime(v: string): string {
   if (!v) return '—';
   const d = new Date(v);
@@ -394,10 +440,17 @@ export function boardUpOutputRows(d: BoardUpDetails, opts: BoardUpOutputOptions 
   const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors, d.acUnits);
   const total = d.windows + d.doors + d.sliders + d.garageDoors + d.acUnits;
   const cityState = d.city
-    ? d.city.endsWith(' Florida')
-      ? d.city.replace(/ Florida$/, ', Florida')
-      : `${d.city}, Florida`
+    ? `${d.city.replace(/ Florida$/, '')}, ${d.state.trim() || 'Florida'}`
     : '';
+  // "Date and time": when a job time was entered, pair it with the job's
+  // date (from the caller-supplied timestamp); otherwise keep the old
+  // created-at behaviour.
+  const dateTimeValue = (() => {
+    const base = opts.jobDateTime ?? new Date().toISOString();
+    if (!d.jobTime.trim()) return base;
+    const datePart = base.slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(datePart) ? `${datePart}T${d.jobTime.trim()}` : base;
+  })();
   const detailParts = [
     d.callerName.trim() ? `Caller: ${d.callerName.trim()}` : null,
     `${total} openings (${d.windows}W ${d.doors}D ${d.sliders}S ${d.garageDoors}G${
@@ -409,7 +462,7 @@ export function boardUpOutputRows(d: BoardUpDetails, opts: BoardUpOutputOptions 
     d.accessNotes.trim() ? `Notes: ${d.accessNotes.trim()}` : null,
   ].filter((p): p is string => p !== null);
   return [
-    ['Date and time', fmtDateTime(opts.jobDateTime ?? new Date().toISOString())],
+    ['Date and time', fmtDateTime(dateTimeValue)],
     ['City name', d.cityName.trim()],
     ['Address', d.streetAddress.trim()],
     ['City and state', cityState],
@@ -484,9 +537,7 @@ export function buildBoardUpCsv(rows: BoardUpCsvRow[]): string {
     const est = estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors, d.acUnits);
     const total = d.windows + d.doors + d.sliders + d.garageDoors + d.acUnits;
     const cityState = d.city
-      ? d.city.endsWith(' Florida')
-        ? d.city.replace(/ Florida$/, ', Florida')
-        : `${d.city}, Florida`
+      ? `${d.city.replace(/ Florida$/, '')}, ${d.state.trim() || 'Florida'}`
       : '';
     lines.push(
       [
@@ -559,6 +610,8 @@ export function asBoardUpDetails(raw: unknown): BoardUpDetails {
     callerName: str(r.callerName),
     streetAddress: str(r.streetAddress),
     city: opt(r.city, withCustomCities(CITY_OPTIONS, loadCustomCities(BOARDUP_CUSTOM_CITIES_KEY)), ''),
+    state: str(r.state, 'Florida'),
+    jobTime: str(r.jobTime),
     phone: str(r.phone),
     caseNumber: str(r.caseNumber),
     requestingOfficer: str(r.requestingOfficer),

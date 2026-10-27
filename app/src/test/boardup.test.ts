@@ -16,6 +16,7 @@ import {
   syncMeasurementCount,
   chunkArray,
   estimateBoardUp,
+  measuredTotals,
   rememberCustomCity,
   withCustomCities,
 } from '../lib/boardup';
@@ -554,5 +555,52 @@ describe('crew-entry parity fields', () => {
     expect(d.acMeasurements).toEqual([]);
     expect(d.chainLocks).toBe(0);
     expect(d.chainLockCombos).toEqual([]);
+  });
+});
+
+describe('crew-entry parity round 2 (Oct 26, 2026 comparison)', () => {
+  it('adds the crew-entry property-type and service options without removing Aquick ones', async () => {
+    const { PROPERTY_TYPE_OPTIONS, SERVICE_NEEDED_OPTIONS } = await import('../lib/boardup');
+    expect(PROPERTY_TYPE_OPTIONS).toContain('Vacant lot / structure');
+    expect(PROPERTY_TYPE_OPTIONS).toContain('Other');
+    expect(PROPERTY_TYPE_OPTIONS).toContain('Storefront');
+    expect(SERVICE_NEEDED_OPTIONS).toContain('Board up');
+    expect(SERVICE_NEEDED_OPTIONS).toContain('Re-board / repair');
+    expect(SERVICE_NEEDED_OPTIONS).toContain('Secure property');
+    expect(SERVICE_NEEDED_OPTIONS).toContain('Inspection / estimate');
+    expect(SERVICE_NEEDED_OPTIONS).toContain('Other');
+    expect(SERVICE_NEEDED_OPTIONS).toContain('Hurricane / storm prep');
+  });
+
+  it('keeps state (default Florida) and job time when reading stored jobs', () => {
+    const d = asBoardUpDetails({ state: 'Florida', jobTime: '14:30' });
+    expect(d.state).toBe('Florida');
+    expect(d.jobTime).toBe('14:30');
+    expect(asBoardUpDetails({}).state).toBe('Florida');
+    expect(EMPTY_BOARDUP.state).toBe('Florida');
+  });
+
+  it('pairs an entered job time with the job date in the output rows', () => {
+    const d = { ...EMPTY_BOARDUP, jobTime: '14:30' };
+    const rows = boardUpOutputRows(d, { jobDateTime: '2026-10-15T18:00:00' });
+    expect(rows.find(([label]) => label === 'Date and time')?.[1]).toContain('2:30 PM');
+    const noTime = boardUpOutputRows(EMPTY_BOARDUP, { jobDateTime: '2026-10-15T18:00:00' });
+    expect(noTime.find(([label]) => label === 'Date and time')?.[1]).toContain('6:00 PM');
+  });
+
+  it('uses the state field in the City and state output row', () => {
+    const d = { ...EMPTY_BOARDUP, city: 'Hollywood Florida', state: 'Florida' };
+    const rows = boardUpOutputRows(d, { jobDateTime: '2026-10-15T18:00:00' });
+    expect(rows.find(([label]) => label === 'City and state')?.[1]).toBe('Hollywood, Florida');
+  });
+
+  it('measuredTotals rounds each WxH pair up to a whole square inch, then adds', () => {
+    // 36x50 = 1800; 36.25x50 = 1812.5 -> 1813; total 3613 sq in = 25.09 sq ft
+    expect(measuredTotals([['36x50', '36.25x50'], ['not a size']])).toEqual({
+      sqIn: 3613,
+      sqFt: 3613 / 144,
+      pairs: 2,
+    });
+    expect(measuredTotals([[], []])).toEqual({ sqIn: 0, sqFt: 0, pairs: 0 });
   });
 });
