@@ -397,3 +397,40 @@ textarea.input { min-height: 96px; resize: vertical; }
   .inv-footer { margin-top: 8px !important; font-size: 10px !important; }
   @page { size: Letter; margin: 0; }
 }
+
+/* ---------- Aquick board-up form, Dan's crew-entry layout (dark, 5 sections) ----------
+   Scoped to .bu-dark so the rest of the app keeps its light theme. */
+.bu-dark { background: #101216; color: #e8eaed; border-radius: 14px; padding: 16px; }
+.bu-dark .bu-head { margin-bottom: 16px; }
+.bu-dark .bu-head h1 { font-size: 30px; line-height: 1.15; margin: 0 0 6px; color: #fff; }
+.bu-dark .bu-head p { margin: 0 0 10px; color: #b7bdc7; font-size: 15px; }
+.bu-dark .bu-head-meta { font-size: 13px; color: #e8a33d; font-weight: 700; }
+.bu-dark .bu-note { margin-top: 12px; background: #1a1d23; border: 1px solid #2a2e36; border-radius: 10px; padding: 10px 12px; font-size: 14px; color: #c9ced6; }
+.bu-dark .bu-section { background: #1a1d23; border: 1px solid #2a2e36; border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+.bu-dark .bu-section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.bu-dark .bu-section-head h2 { font-size: 18px; margin: 0 0 2px; color: #fff; }
+.bu-dark .bu-section-head p { margin: 0; font-size: 13px; color: #9aa1ab; }
+.bu-dark .bu-section-num { font-size: 15px; font-weight: 700; color: #e8a33d; flex-shrink: 0; }
+.bu-dark .field label, .bu-dark .field > span { color: #c9ced6; }
+.bu-dark .field .hint { color: #9aa1ab; }
+.bu-dark .input { background: #24272e; border-color: #3a3f48; color: #f2f4f7; width: 100%; max-width: none; }
+.bu-dark select.input option { background: #24272e; color: #f2f4f7; }
+.bu-dark .field-invalid label { color: #f87171; }
+.bu-dark .btn-secondary { background: #24272e; border-color: #3a3f48; color: #f2f4f7; }
+.bu-dark .btn-secondary:hover:not(:disabled) { background: #2e323a; }
+.bu-dark .bu-stepper { display: inline-flex; align-items: stretch; border: 1px solid #3a3f48; border-radius: 10px; overflow: hidden; }
+.bu-dark .bu-stepper .btn { border: none; border-radius: 0; background: #24272e; color: #f2f4f7; min-width: 44px; }
+.bu-dark .bu-stepper-count { min-width: 44px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; color: #fff; background: #1a1d23; }
+.bu-dark .bu-estimate { background: #24272e; border: 1px solid #3a3f48; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; text-align: center; }
+.bu-dark .bu-estimate-label { font-size: 13px; font-weight: 700; letter-spacing: 1px; color: #e8a33d; }
+.bu-dark .bu-estimate-big { font-size: 34px; font-weight: 800; color: #fff; }
+.bu-dark .bu-estimate-sub { font-size: 13px; color: #c9ced6; }
+.bu-dark .bu-grandtotal { background: #24272e; border-radius: 10px; padding: 12px 14px; }
+.bu-dark .bu-grandtotal-title { font-weight: 700; color: #fff; }
+.bu-dark .bu-grandtotal-note { font-size: 13px; color: #9aa1ab; margin-bottom: 6px; }
+.bu-dark .bu-grandtotal-line { font-size: 17px; color: #fff; }
+.bu-dark .bu-photo-note { border: 1px dashed #3a3f48; border-radius: 10px; padding: 14px; text-align: center; margin-bottom: 12px; color: #c9ced6; }
+.bu-dark .bu-photo-note div { font-weight: 700; color: #fff; }
+.bu-dark .bu-photo-note p { margin: 4px 0 0; font-size: 13px; color: #9aa1ab; }
+.bu-dark .bu-sticky { position: sticky; bottom: 0; z-index: 5; background: #101216; border-top: 1px solid #2a2e36; padding: 12px 0 4px; display: flex; flex-wrap: wrap; gap: 8px; }
+.bu-dark .bu-sticky .btn-danger { flex: 0 0 auto; }

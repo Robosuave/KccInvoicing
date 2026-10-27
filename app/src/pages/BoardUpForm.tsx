@@ -141,7 +141,7 @@ function Stepper({
       <span id={`${id}-label`} style={{ fontWeight: 600, fontSize: 14 }}>
         {label}
       </span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+      <div className="bu-stepper" style={{ marginTop: 4 }}>
         <Button
           id={`${id}-minus`}
           variant="secondary"
@@ -151,12 +151,7 @@ function Stepper({
         >
           −
         </Button>
-        <span
-          role="status"
-          aria-live="polite"
-          aria-labelledby={`${id}-label`}
-          style={{ minWidth: 44, textAlign: 'center', fontSize: 20, fontWeight: 800 }}
-        >
+        <span role="status" aria-live="polite" aria-labelledby={`${id}-label`} className="bu-stepper-count">
           {value}
         </span>
         <Button
@@ -877,7 +872,21 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
   };
 
   return (
-    <div onKeyDown={enterToNext}>
+    <div onKeyDown={enterToNext} className="bu-dark">
+      <div className="bu-head">
+        <h1>Enter the completed job</h1>
+        <p>Fill in the job, add measurements and photos, then send the job from your phone.</p>
+        <div className="bu-head-meta">5 sections · one file</div>
+        <div className="bu-note">Email job PDF sends the job details plus photos.</div>
+      </div>
+      <section className="bu-section">
+        <div className="bu-section-head">
+          <div>
+            <h2>Job &amp; property</h2>
+            <p>Job date is set above · customer and property details.</p>
+          </div>
+          <span className="bu-section-num">01</span>
+        </div>
       {/* Job time (Dan's crew-entry "Time"); the job date is the Job date
           field in the editor above this form. */}
       <Field label="Job time" htmlFor="bu-jobtime">
@@ -891,26 +900,6 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
           onChange={(e) => set('jobTime', e.target.value)}
         />
       </Field>
-
-      {/* Estimate header */}
-      <div
-        style={{
-          background: '#eff6ff',
-          border: '1px solid #bfdbfe',
-          borderRadius: 10,
-          padding: '12px 14px',
-          marginBottom: 16,
-          textAlign: 'center',
-        }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1, color: '#1d4ed8' }}>PLYWOOD SHEETS EST.</div>
-        <div style={{ fontSize: 34, fontWeight: 800, color: '#1e3a8a' }} aria-live="polite">
-          {est.sheets}
-        </div>
-        <div style={{ fontSize: 13, color: '#374151' }}>
-          SQ FT COVER: <strong>{est.sqftCover}</strong> · 4×8 SHEETS: <strong>{est.sheets}</strong>
-        </div>
-      </div>
 
       <Field label="City name *" htmlFor="bu-cityname" error={fieldError('cityName')}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1112,6 +1101,15 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         </SelectField>
       </Field>
 
+      </section>
+      <section className="bu-section">
+        <div className="bu-section-head">
+          <div>
+            <h2>Board Up Details</h2>
+            <p>Service and crew assignment.</p>
+          </div>
+          <span className="bu-section-num">02</span>
+        </div>
       <Field label="Service needed" htmlFor="bu-service">
         <SelectField
           id="bu-service"
@@ -1128,26 +1126,20 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         </SelectField>
       </Field>
 
-      <div className="field">
-        <span style={{ fontWeight: 600, fontSize: 14 }} id="bu-urgency-label">
-          Urgency
-        </span>
-        <div role="radiogroup" aria-labelledby="bu-urgency-label" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 6 }}>
-          {URGENCY_OPTIONS.map((o, i) => (
-            <label key={o} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 15 }}>
-              <input
-                type="radio"
-                name="bu-urgency"
-                id={`bu-urg-${i}`}
-                checked={f.urgency === o}
-                disabled={disabled}
-                onChange={() => set('urgency', o)}
-              />
+      <Field label="Urgency" htmlFor="bu-urgency">
+        <SelectField
+          id="bu-urgency"
+          value={f.urgency}
+          disabled={disabled}
+          onChange={(e) => set('urgency', e.target.value)}
+        >
+          {URGENCY_OPTIONS.map((o) => (
+            <option key={o} value={o}>
               {o}
-            </label>
+            </option>
           ))}
-        </div>
-      </div>
+        </SelectField>
+      </Field>
 
       <Field label="Needed by" htmlFor="bu-neededby">
         <TextField
@@ -1170,85 +1162,6 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
           value={f.referenceLink}
           disabled={disabled}
           onChange={(e) => set('referenceLink', e.target.value)}
-        />
-      </Field>
-
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0, marginBottom: 4 }}>Openings</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
-          <OpeningCounter
-            id="bu-win" label="Windows" singular="Window" count={f.windows}
-            measurements={f.windowMeasurements} placeholder="e.g. 36x45" disabled={disabled}
-            presets={WINDOW_MEASUREMENT_PRESETS}
-            onCount={(v) => setOpeningCount('windows', 'windowMeasurements', v)}
-            onMeasurement={(i, v) => setMeasurement('windowMeasurements', i, v)}
-          />
-          <OpeningCounter
-            id="bu-door" label="Doors" singular="Door" count={f.doors}
-            measurements={f.doorMeasurements} placeholder="e.g. 38x81" disabled={disabled}
-            presets={DOOR_MEASUREMENT_PRESETS}
-            onCount={(v) => setOpeningCount('doors', 'doorMeasurements', v)}
-            onMeasurement={(i, v) => setMeasurement('doorMeasurements', i, v)}
-          />
-          <OpeningCounter
-            id="bu-slider" label="Sliders / patios" singular="Slider" count={f.sliders}
-            measurements={f.sliderMeasurements} placeholder="e.g. 72x80" disabled={disabled}
-            onCount={(v) => setOpeningCount('sliders', 'sliderMeasurements', v)}
-            onMeasurement={(i, v) => setMeasurement('sliderMeasurements', i, v)}
-          />
-          <OpeningCounter
-            id="bu-gar" label="Garage doors" singular="Garage door" count={f.garageDoors}
-            measurements={f.garageMeasurements} placeholder="e.g. 96x84" disabled={disabled}
-            onCount={(v) => setOpeningCount('garageDoors', 'garageMeasurements', v)}
-            onMeasurement={(i, v) => setMeasurement('garageMeasurements', i, v)}
-          />
-          <OpeningCounter
-            id="bu-ac" label="AC units" singular="AC" count={f.acUnits}
-            measurements={f.acMeasurements} placeholder="e.g. 30x24" disabled={disabled}
-            onCount={(v) => setOpeningCount('acUnits', 'acMeasurements', v)}
-            onMeasurement={(i, v) => setMeasurement('acMeasurements', i, v)}
-          />
-        </div>
-        <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>{BOARDUP_FORMULA_NOTE}</div>
-        <div style={{ fontSize: 13, marginTop: 8 }} aria-live="polite">
-          MEASUREMENT GRAND TOTAL: <strong>{measured.sqIn} sq in</strong> ·{' '}
-          <strong>{measured.sqFt.toFixed(2)} sq ft</strong>
-          <span style={{ color: 'var(--muted)' }}>
-            {' '}
-            (each W × H size rounded up to a whole square inch, then added; from the sizes entered above)
-          </span>
-        </div>
-      </div>
-
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0, marginBottom: 4 }}>Locks &amp; hardware</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
-          <OpeningCounter
-            id="bu-hasp" label="Hasp & Lock" singular="Hasp & Lock" count={f.haspLocks}
-            measurements={f.haspLockCombos} placeholder="e.g. 4419" disabled={disabled}
-            itemCaption="Combination — one per lock"
-            onCount={(v) => setOpeningCount('haspLocks', 'haspLockCombos', v)}
-            onMeasurement={(i, v) => setMeasurement('haspLockCombos', i, v)}
-          />
-          <OpeningCounter
-            id="bu-chain" label="Lock and Chain" singular="Lock and Chain" count={f.chainLocks}
-            measurements={f.chainLockCombos} placeholder="e.g. 8820" disabled={disabled}
-            itemCaption="Combination — one per lock"
-            onCount={(v) => setOpeningCount('chainLocks', 'chainLockCombos', v)}
-            onMeasurement={(i, v) => setMeasurement('chainLockCombos', i, v)}
-          />
-        </div>
-      </div>
-
-      <Field label="Other opening information" htmlFor="bu-otheropen">
-        <TextField
-          id="bu-otheropen"
-          style={{ maxWidth: 320 }}
-          enterKeyHint="next"
-          value={f.otherOpenings}
-          disabled={disabled}
-          onChange={(e) => set('otherOpenings', e.target.value)}
-          placeholder="e.g. 2nd-floor dormers"
         />
       </Field>
 
@@ -1365,11 +1278,118 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         />
       </Field>
 
+      </section>
+      <section className="bu-section">
+        <div className="bu-section-head">
+          <div>
+            <h2>Openings &amp; measurements</h2>
+            <p>Set the count. One measurement field appears for each opening.</p>
+          </div>
+          <span className="bu-section-num">03</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <OpeningCounter
+            id="bu-win" label="Windows" singular="Window" count={f.windows}
+            measurements={f.windowMeasurements} placeholder="e.g. 36x45" disabled={disabled}
+            presets={WINDOW_MEASUREMENT_PRESETS}
+            onCount={(v) => setOpeningCount('windows', 'windowMeasurements', v)}
+            onMeasurement={(i, v) => setMeasurement('windowMeasurements', i, v)}
+          />
+          <OpeningCounter
+            id="bu-door" label="Doors" singular="Door" count={f.doors}
+            measurements={f.doorMeasurements} placeholder="e.g. 38x81" disabled={disabled}
+            presets={DOOR_MEASUREMENT_PRESETS}
+            onCount={(v) => setOpeningCount('doors', 'doorMeasurements', v)}
+            onMeasurement={(i, v) => setMeasurement('doorMeasurements', i, v)}
+          />
+          <OpeningCounter
+            id="bu-slider" label="Sliders / patios" singular="Slider" count={f.sliders}
+            measurements={f.sliderMeasurements} placeholder="e.g. 72x80" disabled={disabled}
+            onCount={(v) => setOpeningCount('sliders', 'sliderMeasurements', v)}
+            onMeasurement={(i, v) => setMeasurement('sliderMeasurements', i, v)}
+          />
+          <OpeningCounter
+            id="bu-gar" label="Garage doors" singular="Garage door" count={f.garageDoors}
+            measurements={f.garageMeasurements} placeholder="e.g. 96x84" disabled={disabled}
+            onCount={(v) => setOpeningCount('garageDoors', 'garageMeasurements', v)}
+            onMeasurement={(i, v) => setMeasurement('garageMeasurements', i, v)}
+          />
+          <OpeningCounter
+            id="bu-ac" label="AC units" singular="AC" count={f.acUnits}
+            measurements={f.acMeasurements} placeholder="e.g. 30x24" disabled={disabled}
+            onCount={(v) => setOpeningCount('acUnits', 'acMeasurements', v)}
+            onMeasurement={(i, v) => setMeasurement('acMeasurements', i, v)}
+          />
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>{BOARDUP_FORMULA_NOTE}</div>
+      <Field label="Other opening information" htmlFor="bu-otheropen">
+        <TextField
+          id="bu-otheropen"
+          style={{ maxWidth: 320 }}
+          enterKeyHint="next"
+          value={f.otherOpenings}
+          disabled={disabled}
+          onChange={(e) => set('otherOpenings', e.target.value)}
+          placeholder="e.g. 2nd-floor dormers"
+        />
+      </Field>
+      {/* Estimate header — flat-rate cover, kept separate from the measured total below */}
+      <div className="bu-estimate">
+        <div className="bu-estimate-label">PLYWOOD SHEETS EST.</div>
+        <div className="bu-estimate-big" aria-live="polite">
+          {est.sheets}
+        </div>
+        <div className="bu-estimate-sub">
+          SQ FT COVER: <strong>{est.sqftCover}</strong> · 4×8 SHEETS: <strong>{est.sheets}</strong>
+        </div>
+      </div>
+        <div className="bu-grandtotal" aria-live="polite">
+          <div className="bu-grandtotal-title">Measurement grand total</div>
+          <div className="bu-grandtotal-note">
+            Every W × H pair is rounded up to a whole square inch, then added.
+          </div>
+          <div className="bu-grandtotal-line">
+            <strong>{measured.sqIn} sq in</strong>
+          </div>
+          <div className="bu-grandtotal-line">
+            <strong>{measured.sqFt.toFixed(2)} sq ft</strong>
+          </div>
+        </div>
+      </section>
+      <section className="bu-section">
+        <div className="bu-section-head">
+          <div>
+            <h2>Locks &amp; hardware</h2>
+            <p>Each item gets its own combination field.</p>
+          </div>
+          <span className="bu-section-num">04</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <OpeningCounter
+            id="bu-hasp" label="Hasp & Lock" singular="Hasp & Lock" count={f.haspLocks}
+            measurements={f.haspLockCombos} placeholder="e.g. 4419" disabled={disabled}
+            itemCaption="Combination — one per lock"
+            onCount={(v) => setOpeningCount('haspLocks', 'haspLockCombos', v)}
+            onMeasurement={(i, v) => setMeasurement('haspLockCombos', i, v)}
+          />
+          <OpeningCounter
+            id="bu-chain" label="Lock and Chain" singular="Lock and Chain" count={f.chainLocks}
+            measurements={f.chainLockCombos} placeholder="e.g. 8820" disabled={disabled}
+            itemCaption="Combination — one per lock"
+            onCount={(v) => setOpeningCount('chainLocks', 'chainLockCombos', v)}
+            onMeasurement={(i, v) => setMeasurement('chainLockCombos', i, v)}
+          />
+        </div>
+      </section>
       {/* Photos — plain mobile file input (image accept), NOT the timesheet attach pattern */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0, marginBottom: 8 }}>
-          Photos{photos.length > 0 && ` (${photos.length})`}
-        </h3>
+      <section className="bu-section">
+        <div className="bu-section-head">
+          <div>
+            <h2>Photos{photos.length > 0 && ` (${photos.length})`}</h2>
+            <p>Add the job photos Dan needs for the record.</p>
+          </div>
+          <span className="bu-section-num">05</span>
+        </div>
         {photos.length > 0 && (
           <>
             {!disabled && (
@@ -1442,6 +1462,12 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
             </div>
           </>
         )}
+        <div className="bu-photo-note">
+          <div>Photo Options</div>
+          <p>Take a new picture or choose one or more from your camera roll.</p>
+          <p>Photos are compressed before the job file is made.</p>
+          {photos.length === 0 && <p>No photos added.</p>}
+        </div>
         {!disabled && (
           <>
             <input
@@ -1463,8 +1489,14 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
             <Alert kind="error">{photoError}</Alert>
           </div>
         )}
-      </div>
-
+      </section>
+      <section className="bu-section">
+        <div className="bu-section-head">
+          <div>
+            <h2>Send to</h2>
+            <p>Who this job goes to when you send it.</p>
+          </div>
+        </div>
       <Field label="Email to" htmlFor="bu-emailto" error={fieldError('emailTo')}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <SelectField
@@ -1521,13 +1553,15 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         />
       </Field>
 
+      </section>
+
       {shareError && (
         <div style={{ marginBottom: 12 }}>
           <Alert kind="error">{shareError}</Alert>
         </div>
       )}
 
-      <div className="btn-row" style={{ marginBottom: 8 }}>
+      <div className="bu-sticky">
         <Button id="bu-emailjob" variant="secondary" onClick={emailJob} disabled={shareBusy !== null}>
           Email job text
         </Button>
