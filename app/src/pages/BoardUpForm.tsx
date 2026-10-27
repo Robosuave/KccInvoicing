@@ -14,6 +14,7 @@ import {
   DOOR_MEASUREMENT_PRESETS,
   PROPERTY_TYPE_OPTIONS,
   SERVICE_NEEDED_OPTIONS,
+  TWO_BY_FOUR_SIZES,
   URGENCY_OPTIONS,
   WINDOW_MEASUREMENT_PRESETS,
   asBoardUpDetails,
@@ -24,11 +25,13 @@ import {
   syncMeasurementCount,
   estimateBoardUp,
   measuredTotals,
+  twoByFourTotals,
   loadCustomCities,
   rememberCustomCity,
   withCustomCities,
   type BoardUpCrewContact,
   type BoardUpDetails,
+  type TwoByFourLine,
 } from '../lib/boardup';
 import { boardUpPhotoUrl, removeBoardUpPhoto, uploadBoardUpPhoto } from '../data/attachments';
 import { deleteInvoiceDeep } from '../data/invoices';
@@ -457,6 +460,24 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     arr[i] = v;
     applyDetails({ ...detailsRef.current, [mKey]: arr });
   };
+
+  /** Two by Fours lines (Dan's crew-entry section 04 block). */
+  const setTwoByFours = (next: TwoByFourLine[]) => {
+    applyDetails({ ...detailsRef.current, twoByFours: next });
+  };
+  const addTwoByFour = () => {
+    setTwoByFours([
+      ...detailsRef.current.twoByFours,
+      { size: '2 x 4 x 8', customLinealFeet: '', quantity: 1 },
+    ]);
+  };
+  const updateTwoByFour = (i: number, patch: Partial<TwoByFourLine>) => {
+    setTwoByFours(detailsRef.current.twoByFours.map((line, j) => (j === i ? { ...line, ...patch } : line)));
+  };
+  const removeTwoByFour = (i: number) => {
+    setTwoByFours(detailsRef.current.twoByFours.filter((_, j) => j !== i));
+  };
+  const twoByFourTotalsValue = twoByFourTotals(f.twoByFours);
 
   /**
    * Commit a city typed into an "Other" box: remember it for future jobs and
@@ -1380,6 +1401,77 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
             onMeasurement={(i, v) => setMeasurement('chainLockCombos', i, v)}
           />
         </div>
+        <div className="bu-two-by-fours">
+          <h3>Two by Fours</h3>
+          <p className="hint" style={{ marginTop: 0 }}>
+            Size, quantity, and lineal feet for each line.
+          </p>
+          {f.twoByFours.map((line, i) => (
+            <div key={i} className="bu-two-by-four-line">
+              <div className="bu-two-by-four-head">
+                <span>Two by Fours {i + 1}</span>
+                {!disabled && (
+                  <button type="button" aria-label={`Remove two by fours line ${i + 1}`} onClick={() => removeTwoByFour(i)}>
+                    ×
+                  </button>
+                )}
+              </div>
+              <Field label={`Two by Fours ${i + 1} size`} htmlFor={`bu-tbf-size-${i}`}>
+                <SelectField
+                  id={`bu-tbf-size-${i}`}
+                  value={line.size}
+                  disabled={disabled}
+                  onChange={(e) => updateTwoByFour(i, { size: e.target.value })}
+                >
+                  {TWO_BY_FOUR_SIZES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </SelectField>
+              </Field>
+              {line.size === 'Custom' && (
+                <Field label={`Two by Fours ${i + 1} custom lineal feet each`} htmlFor={`bu-tbf-feet-${i}`}>
+                  <TextField
+                    id={`bu-tbf-feet-${i}`}
+                    value={line.customLinealFeet}
+                    disabled={disabled}
+                    onChange={(e) => updateTwoByFour(i, { customLinealFeet: e.target.value })}
+                    placeholder="Lineal feet each – e.g. 12"
+                    inputMode="decimal"
+                  />
+                </Field>
+              )}
+              <Field label={`Two by Fours ${i + 1} quantity`} htmlFor={`bu-tbf-qty-${i}`}>
+                <SelectField
+                  id={`bu-tbf-qty-${i}`}
+                  value={String(line.quantity)}
+                  disabled={disabled}
+                  onChange={(e) => updateTwoByFour(i, { quantity: parseInt(e.target.value, 10) || 1 })}
+                >
+                  {Array.from({ length: 30 }, (_, n) => n + 1).map((n) => (
+                    <option key={n} value={String(n)}>
+                      {n}
+                    </option>
+                  ))}
+                </SelectField>
+              </Field>
+            </div>
+          ))}
+          {!disabled && (
+            <Button variant="secondary" onClick={addTwoByFour}>
+              Add two by fours
+            </Button>
+          )}
+          {f.twoByFours.length > 0 && (
+            <div className="bu-two-by-four-totals" aria-live="polite">
+              {twoByFourTotalsValue.linealFeet === null
+                ? `Total quantity: ${twoByFourTotalsValue.quantity} · Lineal feet not recorded for a custom line`
+                : `Total quantity: ${twoByFourTotalsValue.quantity} · Total lineal feet: ${twoByFourTotalsValue.linealFeet}`}
+            </div>
+          )}
+          <p className="hint">Separate from openings and not included in the opening total.</p>
+        </div>
       </section>
       {/* Photos — plain mobile file input (image accept), NOT the timesheet attach pattern */}
       <section className="bu-section">
@@ -1562,6 +1654,10 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
       )}
 
       <div className="bu-sticky">
+        <div className="bu-sticky-head">
+          <div>Ready when the job is complete</div>
+          <p>Send the job by email or text, or save it as a PDF.</p>
+        </div>
         <Button id="bu-emailjob" variant="secondary" onClick={emailJob} disabled={shareBusy !== null}>
           Email job text
         </Button>

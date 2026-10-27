@@ -17,6 +17,8 @@ import {
   chunkArray,
   estimateBoardUp,
   measuredTotals,
+  twoByFourSummaryLines,
+  twoByFourTotals,
   rememberCustomCity,
   withCustomCities,
 } from '../lib/boardup';
@@ -466,7 +468,7 @@ describe('buildBoardUpCsv', () => {
     ]);
     const lines = csv.split('\n');
     expect(lines[0]).toBe(
-      'Job,Done,Date and time,City name,Address,City and state,Phone number,Case,Requesting officer and badge,Structure type,Type of board up,When needed,Crew,Caller,Openings,Measurements,Locks,Sheets est.,Notes',
+      'Job,Done,Date and time,City name,Address,City and state,Phone number,Case,Requesting officer and badge,Structure type,Type of board up,When needed,Crew,Caller,Openings,Measurements,Locks,Sheets est.,Notes,Two by Fours',
     );
     expect(lines).toHaveLength(2);
     expect(lines[1]).toContain('QB-12,Yes,');
@@ -602,5 +604,48 @@ describe('crew-entry parity round 2 (Oct 26, 2026 comparison)', () => {
       pairs: 2,
     });
     expect(measuredTotals([[], []])).toEqual({ sqIn: 0, sqFt: 0, pairs: 0 });
+  });
+});
+
+describe('two by fours (Dan crew-entry update, Oct 26, 2026)', () => {
+  it('totals standard lines at 8 lineal feet each', () => {
+    expect(
+      twoByFourTotals([
+        { size: '2 x 4 x 8', customLinealFeet: '', quantity: 2 },
+        { size: '2 x 4 x 8', customLinealFeet: '', quantity: 1 },
+      ]),
+    ).toEqual({ quantity: 3, linealFeet: 24 });
+  });
+  it('reports no lineal feet when any line is custom', () => {
+    expect(
+      twoByFourTotals([
+        { size: '2 x 4 x 8', customLinealFeet: '', quantity: 1 },
+        { size: 'Custom', customLinealFeet: '12', quantity: 2 },
+      ]),
+    ).toEqual({ quantity: 3, linealFeet: null });
+  });
+  it('clamps quantity to 1-30 and defaults bad sizes when reading a saved job', () => {
+    const d = asBoardUpDetails({
+      twoByFours: [
+        { size: '2 x 4 x 12', customLinealFeet: '', quantity: 99 },
+        { size: 'Custom', customLinealFeet: '10', quantity: 0 },
+      ],
+    });
+    expect(d.twoByFours).toEqual([
+      { size: '2 x 4 x 8', customLinealFeet: '', quantity: 30 },
+      { size: 'Custom', customLinealFeet: '10', quantity: 1 },
+    ]);
+  });
+  it('appears in the job-details output and never touches the sheet estimate', () => {
+    const d = {
+      ...EMPTY_BOARDUP,
+      windows: 1,
+      twoByFours: [{ size: '2 x 4 x 8', customLinealFeet: '', quantity: 2 }],
+    };
+    const rows = Object.fromEntries(boardUpOutputRows(d));
+    expect(rows['Job details']).toContain('Two by Fours: 2 x 4 x 8 x2');
+    expect(rows['Job details']).toContain('Two by Fours total: 2 · Total lineal feet: 16');
+    expect(rows['Job details']).toContain('1 sheets est.');
+    expect(twoByFourSummaryLines({ ...EMPTY_BOARDUP, twoByFours: [] })).toEqual([]);
   });
 });

@@ -45,6 +45,12 @@ export interface BoardUpDetails {
   /** Lock & chain count + per-lock combination. */
   chainLocks: number;
   chainLockCombos: string[];
+  /**
+   * Two-by-four lines (Dan's crew-entry "Two by Fours" block, section 04):
+   * size, quantity, and lineal feet per line. Separate from openings and
+   * NOT included in the opening total or the plywood-sheet estimate.
+   */
+  twoByFours: TwoByFourLine[];
   accessNotes: string;
   emailTo: string;
   textTo: string;
@@ -62,6 +68,59 @@ export interface BoardUpDetails {
   sliderMeasurements: string[];
   garageMeasurements: string[];
   acMeasurements: string[];
+}
+
+/** One two-by-four line: standard size or Custom with its own lineal feet. */
+export interface TwoByFourLine {
+  size: string;
+  customLinealFeet: string;
+  quantity: number;
+}
+
+export const TWO_BY_FOUR_SIZES = ['2 x 4 x 8', 'Custom'];
+
+/** Lineal feet in one standard 2 x 4 x 8 board. */
+export const TWO_BY_FOUR_STANDARD_FEET = 8;
+
+/**
+ * Two-by-four totals: total quantity, and total lineal feet — null when any
+ * line is Custom, since Dan's app records no lineal feet for a custom line.
+ */
+export function twoByFourTotals(lines: readonly TwoByFourLine[]): {
+  quantity: number;
+  linealFeet: number | null;
+} {
+  let quantity = 0;
+  let linealFeet = 0;
+  let hasCustom = false;
+  for (const line of lines) {
+    const q = Math.max(1, Math.min(30, Math.floor(line.quantity) || 1));
+    quantity += q;
+    if (line.size === 'Custom') hasCustom = true;
+    else linealFeet += q * TWO_BY_FOUR_STANDARD_FEET;
+  }
+  return { quantity, linealFeet: hasCustom ? null : linealFeet };
+}
+
+/** One summary line per two-by-four entry, plus a totals line, for the
+ * job-details output (SMS, email, PDF). Empty when no lines are entered. */
+export function twoByFourSummaryLines(d: BoardUpDetails): string[] {
+  if (d.twoByFours.length === 0) return [];
+  const lines = d.twoByFours.map((line) => {
+    const q = Math.max(1, Math.min(30, Math.floor(line.quantity) || 1));
+    if (line.size === 'Custom') {
+      const feet = line.customLinealFeet.trim();
+      return `Two by Fours: Custom x${q}${feet ? ` (${feet} lineal feet each)` : ''}`;
+    }
+    return `Two by Fours: ${line.size} x${q}`;
+  });
+  const totals = twoByFourTotals(d.twoByFours);
+  lines.push(
+    totals.linealFeet === null
+      ? `Two by Fours total: ${totals.quantity} · Lineal feet not recorded for a custom line`
+      : `Two by Fours total: ${totals.quantity} · Total lineal feet: ${totals.linealFeet}`,
+  );
+  return lines;
 }
 
 /** Default "Email to" on new board-up jobs (Dan's address). */
@@ -110,6 +169,7 @@ export const EMPTY_BOARDUP: BoardUpDetails = {
   haspLockCombos: [],
   chainLocks: 0,
   chainLockCombos: [],
+  twoByFours: [],
   accessNotes: '',
   emailTo: DEFAULT_CREW_EMAIL,
   textTo: '',
@@ -458,6 +518,7 @@ export function boardUpOutputRows(d: BoardUpDetails, opts: BoardUpOutputOptions 
     }) — ${est.sheets} sheets est.`,
     ...measurementSummaryLines(d),
     ...lockSummaryLines(d),
+    ...twoByFourSummaryLines(d),
     d.otherOpenings.trim() ? `Other openings: ${d.otherOpenings.trim()}` : null,
     d.accessNotes.trim() ? `Notes: ${d.accessNotes.trim()}` : null,
   ].filter((p): p is string => p !== null);
@@ -529,7 +590,7 @@ export function buildBoardUpCsv(rows: BoardUpCsvRow[]): string {
     'Job', 'Done', 'Date and time', 'City name', 'Address', 'City and state',
     'Phone number', 'Case', 'Requesting officer and badge', 'Structure type',
     'Type of board up', 'When needed', 'Crew', 'Caller', 'Openings', 'Measurements',
-    'Locks', 'Sheets est.', 'Notes',
+    'Locks', 'Sheets est.', 'Notes', 'Two by Fours',
   ];
   const lines = [header.join(',')];
   for (const r of rows) {
@@ -562,6 +623,7 @@ export function buildBoardUpCsv(rows: BoardUpCsvRow[]): string {
         lockSummaryLines(d).join('; '),
         String(est.sheets),
         d.accessNotes.trim(),
+        twoByFourSummaryLines(d).join('; '),
       ].map(csvCell).join(','),
     );
   }
@@ -632,6 +694,21 @@ export function asBoardUpDetails(raw: unknown): BoardUpDetails {
     haspLockCombos: strArr(r.haspLockCombos),
     chainLocks: num(r.chainLocks),
     chainLockCombos: strArr(r.chainLockCombos),
+    twoByFours: Array.isArray(r.twoByFours)
+      ? (r.twoByFours as unknown[]).map((line) => {
+          const l = (line ?? {}) as Partial<TwoByFourLine>;
+          return {
+            size: TWO_BY_FOUR_SIZES.includes(typeof l.size === 'string' ? l.size : '')
+              ? (l.size as string)
+              : '2 x 4 x 8',
+            customLinealFeet: typeof l.customLinealFeet === 'string' ? l.customLinealFeet : '',
+            quantity:
+              typeof l.quantity === 'number' && Number.isFinite(l.quantity)
+                ? Math.max(1, Math.min(30, Math.floor(l.quantity)))
+                : 1,
+          };
+        })
+      : [],
     accessNotes: str(r.accessNotes),
     emailTo: str(r.emailTo),
     textTo: str(r.textTo),

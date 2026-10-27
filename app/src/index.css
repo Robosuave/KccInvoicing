@@ -434,3 +434,12 @@ textarea.input { min-height: 96px; resize: vertical; }
 .bu-dark .bu-photo-note p { margin: 4px 0 0; font-size: 13px; color: #9aa1ab; }
 .bu-dark .bu-sticky { position: sticky; bottom: 0; z-index: 5; background: #101216; border-top: 1px solid #2a2e36; padding: 12px 0 4px; display: flex; flex-wrap: wrap; gap: 8px; }
 .bu-dark .bu-sticky .btn-danger { flex: 0 0 auto; }
+.bu-dark .bu-two-by-fours { margin-top: 16px; border-top: 1px solid #2a2e36; padding-top: 14px; }
+.bu-dark .bu-two-by-fours h3 { margin: 0 0 4px; color: #fff; font-size: 16px; }
+.bu-dark .bu-two-by-four-line { background: #24272e; border: 1px solid #3a3f48; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+.bu-dark .bu-two-by-four-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; color: #fff; margin-bottom: 8px; }
+.bu-dark .bu-two-by-four-head button { background: transparent; border: 1px solid #3a3f48; color: #f2f4f7; border-radius: 50%; width: 28px; height: 28px; font-size: 18px; line-height: 1; cursor: pointer; }
+.bu-dark .bu-two-by-four-totals { font-weight: 700; color: #fff; margin-top: 10px; }
+.bu-dark .bu-sticky-head { flex-basis: 100%; }
+.bu-dark .bu-sticky-head div { font-weight: 700; color: #fff; }
+.bu-dark .bu-sticky-head p { margin: 0 0 4px; font-size: 13px; color: #9aa1ab; }
