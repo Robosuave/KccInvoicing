@@ -523,92 +523,111 @@ export interface CutList {
 }
 
 /**
- * Dan, Oct 26/28: real nesting cut list for 4×8 (48×96 in) sheets.
- * Pieces may be turned either way. A piece too big for one sheet is split
- * into numbered parts, each no bigger than a sheet (e.g. a 162×96 garage
- * door becomes four 40.5×96 parts), and every part is laid out.
+ * Dan, Oct 26/28: real nesting cut list for 4x8 (48x96 in) sheets, matching
+ * Dan's saving-app algorithm exactly (verified against his source zip,
+ * AQ-2026-10-28-0754, Oct 28, 2026). Pieces may be turned either way.
+ * An opening bigger than one sheet is split into sheet-sized grid parts:
+ * both orientations are tried, the grid with more full-sheet parts wins,
+ * then fewer parts, then the opening's own orientation. E.g. a 162x96
+ * garage door becomes 48x96, 48x96, 48x66, 48x66 (not four equal parts).
+ * Nesting is maximal-rectangles, best short-side fit across ALL sheets.
  * This is planning only and does NOT replace the flat-rate SQ FT COVER /
  * sheets estimate above, which stays as-is.
  */
 export function buildCutList(pieces: readonly CutPiece[]): CutList {
   const SHEET_W = 48;
   const SHEET_H = 96;
-  const parts: CutPiece[] = [];
+  const EPS = 1e-9;
+  type Part = CutPiece & { part: number; partCount: number };
+  const fitsOneSheet = (w: number, h: number) =>
+    (w <= SHEET_W && h <= SHEET_H) || (h <= SHEET_W && w <= SHEET_H);
+  const splitGrid = (label: string, w: number, h: number): Part[] => {
+    const cols = Math.ceil(w / SHEET_W - EPS);
+    const rows = Math.ceil(h / SHEET_H - EPS);
+    const raw: { w: number; h: number }[] = [];
+    for (let row = 0; row < rows; row++) {
+      const ch = Math.min(SHEET_H, h - row * SHEET_H);
+      for (let col = 0; col < cols; col++) {
+        const cw = Math.min(SHEET_W, w - col * SHEET_W);
+        if (cw > EPS && ch > EPS) raw.push({ w: cw, h: ch });
+      }
+    }
+    return raw.map((r, i) => ({ label, w: r.w, h: r.h, part: i + 1, partCount: raw.length }));
+  };
+  const splitOversized = (p: CutPiece): Part[] => {
+    const first = splitGrid(p.label, p.w, p.h);
+    const second = splitGrid(p.label, p.h, p.w);
+    if (!first.length) return second;
+    if (!second.length) return first;
+    const fullArea = (parts: Part[]) =>
+      parts.reduce((t, q) => t + (Math.abs(q.w - SHEET_W) < EPS && Math.abs(q.h - SHEET_H) < EPS ? q.w * q.h : 0), 0);
+    const f1 = fullArea(first);
+    const f2 = fullArea(second);
+    if (f2 !== f1) return f2 > f1 ? second : first;
+    if (second.length !== first.length) return second.length < first.length ? second : first;
+    return first;
+  };
   const oversized: CutList['oversized'] = [];
+  const layout: Part[] = [];
   for (const p of pieces) {
     if (!(p.w > 0 && p.h > 0)) continue;
-    const wChunks = Math.ceil(p.w / SHEET_W);
-    const hChunks = Math.ceil(p.h / SHEET_H);
-    const partCount = wChunks * hChunks;
-    if (partCount > 1) oversized.push({ label: p.label, size: `${p.w}x${p.h}`, partCount });
-    for (let wi = 0; wi < wChunks; wi++) {
-      for (let hi = 0; hi < hChunks; hi++) {
-        parts.push({
-          label: p.label,
-          w: p.w / wChunks,
-          h: p.h / hChunks,
-        });
-      }
+    if (fitsOneSheet(p.w, p.h)) { layout.push({ ...p, part: 1, partCount: 1 }); continue; }
+    const parts = splitOversized(p);
+    oversized.push({ label: p.label, size: `${p.w}x${p.h}`, partCount: parts.length });
+    layout.push(...parts);
+  }
+  // Largest area first, then longest side — Dan's order.
+  const sorted = [...layout].sort((a, b) => (b.w * b.h - a.w * a.h) || (Math.max(b.w, b.h) - Math.max(a.w, a.h)));
+  type FreeRect = { x: number; y: number; w: number; h: number };
+  type SheetState = { free: FreeRect[]; pieces: CutPlacement[] };
+  const sheets: SheetState[] = [];
+  const splitFree = (sheet: SheetState, placed: FreeRect) => {
+    const next: FreeRect[] = [];
+    for (const r of sheet.free) {
+      const overlaps = placed.x < r.x + r.w - EPS && placed.x + placed.w > r.x + EPS && placed.y < r.y + r.h - EPS && placed.y + placed.h > r.y + EPS;
+      if (!overlaps) { next.push(r); continue; }
+      if (placed.x > r.x + EPS) next.push({ x: r.x, y: r.y, w: placed.x - r.x, h: r.h });
+      if (placed.x + placed.w < r.x + r.w - EPS) next.push({ x: placed.x + placed.w, y: r.y, w: r.x + r.w - (placed.x + placed.w), h: r.h });
+      if (placed.y > r.y + EPS) next.push({ x: r.x, y: r.y, w: r.w, h: placed.y - r.y });
+      if (placed.y + placed.h < r.y + r.h - EPS) next.push({ x: r.x, y: placed.y + placed.h, w: r.w, h: r.y + r.h - (placed.y + placed.h) });
     }
-  }
-  // Assign part numbers per original opening, in order.
-  const counts = new Map<string, number>();
-  const numbered: (CutPiece & { part: number; partCount: number })[] = parts.map((p) => {
-    const key = `${p.label}|${p.w}x${p.h}`;
-    const n = (counts.get(key) ?? 0) + 1;
-    counts.set(key, n);
-    return { ...p, part: n, partCount: 1 };
-  });
-  // Fix partCount: recompute from oversized splits by label+size.
-  const byLabel = new Map<string, number>();
-  for (const p of pieces) {
-    const wChunks = Math.ceil(p.w / SHEET_W);
-    const hChunks = Math.ceil(p.h / SHEET_H);
-    byLabel.set(p.label, (byLabel.get(p.label) ?? 0) + wChunks * hChunks);
-  }
-  for (const p of numbered) p.partCount = byLabel.get(p.label) ?? 1;
-  // Guillotine packing: biggest pieces first, best short-side fit in free rects.
-  const sorted = [...numbered].sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h));
-  const sheets: CutPlacement[][] = [];
+    sheet.free = next.filter((r, i) => {
+      if (r.w <= EPS || r.h <= EPS) return false;
+      return !next.some((o, j) => {
+        if (j === i) return false;
+        const contained = r.x >= o.x - EPS && r.y >= o.y - EPS && r.x + r.w <= o.x + o.w + EPS && r.y + r.h <= o.y + o.h + EPS;
+        if (!contained) return false;
+        const oa = o.w * o.h; const ra = r.w * r.h;
+        return oa > ra + EPS || (Math.abs(oa - ra) <= EPS && j < i);
+      });
+    });
+  };
   for (const piece of sorted) {
-    let placed = false;
-    for (const sheet of sheets) {
-      const free: { x: number; y: number; w: number; h: number }[] = [{ x: 0, y: 0, w: SHEET_W, h: SHEET_H }];
-      for (const pl of sheet) {
-        const next: typeof free = [];
-        for (const r of free) {
-          if (pl.x >= r.x + r.w || pl.x + pl.w <= r.x || pl.y >= r.y + r.h || pl.y + pl.h <= r.y) {
-            next.push(r);
-            continue;
-          }
-          if (pl.x > r.x) next.push({ x: r.x, y: r.y, w: pl.x - r.x, h: r.h });
-          if (pl.x + pl.w < r.x + r.w) next.push({ x: pl.x + pl.w, y: r.y, w: r.x + r.w - (pl.x + pl.w), h: r.h });
-          if (pl.y > r.y) next.push({ x: r.x, y: r.y, w: r.w, h: pl.y - r.y });
-          if (pl.y + pl.h < r.y + r.h) next.push({ x: r.x, y: pl.y + pl.h, w: r.w, h: r.y + r.h - (pl.y + pl.h) });
-        }
-        free.splice(0, free.length, ...next);
-      }
-      let best: { r: (typeof free)[number]; w: number; h: number; score: number } | null = null;
-      for (const r of free) {
-        for (const [w, h] of [[piece.w, piece.h], [piece.h, piece.w]] as const) {
-          if (w > r.w + 1e-9 || h > r.h + 1e-9) continue;
-          const score = Math.min(r.w - w, r.h - h);
-          if (!best || score < best.score) best = { r, w, h, score };
+    type Cand = { sheetIndex: number; r: FreeRect; w: number; h: number; shortSide: number; waste: number };
+    const cands: Cand[] = [];
+    sheets.forEach((sheet, si) => {
+      for (const r of sheet.free) {
+        const dims = piece.w === piece.h ? [[piece.w, piece.h]] as const : [[piece.w, piece.h], [piece.h, piece.w]] as const;
+        for (const [w, h] of dims) {
+          if (w > r.w + EPS || h > r.h + EPS) continue;
+          cands.push({ sheetIndex: si, r, w, h, shortSide: Math.min(r.w - w, r.h - h), waste: r.w * r.h - w * h });
         }
       }
-      if (best) {
-        sheet.push({ ...piece, x: best.r.x, y: best.r.y, w: best.w, h: best.h });
-        placed = true;
-        break;
-      }
-    }
-    if (!placed) {
-      // Every split part fits one way or the other; orient it to fit.
+    });
+    cands.sort((a, b) => (a.shortSide - b.shortSide) || (a.waste - b.waste));
+    let best = cands[0];
+    if (!best) {
+      sheets.push({ free: [{ x: 0, y: 0, w: SHEET_W, h: SHEET_H }], pieces: [] });
+      const si = sheets.length - 1;
       const fits = piece.w <= SHEET_W && piece.h <= SHEET_H;
-      sheets.push([{ ...piece, x: 0, y: 0, w: fits ? piece.w : piece.h, h: fits ? piece.h : piece.w }]);
+      const w = fits ? piece.w : piece.h; const h = fits ? piece.h : piece.w;
+      best = { sheetIndex: si, r: { x: 0, y: 0, w: SHEET_W, h: SHEET_H }, w, h, shortSide: 0, waste: 0 };
     }
+    const sheet = sheets[best.sheetIndex]!;
+    sheet.pieces.push({ ...piece, x: best.r.x, y: best.r.y, w: best.w, h: best.h });
+    splitFree(sheet, { x: best.r.x, y: best.r.y, w: best.w, h: best.h });
   }
-  return { sheets, oversized, pieces: pieces.length };
+  return { sheets: sheets.map((s) => s.pieces), oversized, pieces: pieces.length };
 }
 
 function fmtDateTime(v: string): string {

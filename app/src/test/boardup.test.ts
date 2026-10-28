@@ -672,6 +672,8 @@ describe('Dan Oct 26-28 port', () => {
     expect(list.oversized).toEqual([{ label: 'Garage door 1', size: '162x96', partCount: 4 }]);
     const all = list.sheets.flat();
     expect(all.filter((p) => p.label === 'Garage door 1')).toHaveLength(4);
+    // Dan's exact split: the unrotated grid wins (three full sheets), not four equal parts.
+    expect(all.filter((p) => p.label === 'Garage door 1').map((p) => `${p.w}x${p.h}`).sort()).toEqual(['18x96', '48x96', '48x96', '48x96']);
     expect(all.every((p) => p.w <= 48 && p.h <= 96)).toBe(true);
   });
 
