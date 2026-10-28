@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
 import type { Customer, Invoice } from '../db/types';
-import { deleteDraft, listInvoices, setInvoiceCompleted } from '../data/drafts';
+import { deleteDraft, listInvoices, setBoardUpInvoiced, setInvoiceCompleted } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listBusinessMembers } from '../data/team';
 import { isOverdue } from '../data/invoices';
@@ -107,6 +107,17 @@ export default function Invoices() {
     }
   };
 
+  /** Dan, Oct 26: "Mark invoiced" flips to a green Invoiced badge, saved with the job. */
+  const toggleInvoiced = async (d: Invoice) => {
+    try {
+      const details = asBoardUpDetails(d.boardup_details);
+      await setBoardUpInvoiced(d.id, { ...details, invoiced: !details.invoiced });
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Update failed.');
+    }
+  };
+
   const downloadCsv = () => {
     const rows = invoices
       .filter((d) => d.template === 'boardup')
@@ -128,21 +139,27 @@ export default function Invoices() {
   };
 
   const q = search.trim().toLowerCase();
-  const visible = invoices.filter((d) => {
-    if (overdueOnly && !isOverdue(d)) return false;
-    if (!q) return true;
-    const hay = [
-      d.invoice_number ?? '',
-      d.po_number ?? '',
-      d.notes ?? '',
-      d.property_address ?? '',
-      d.agent_name ?? '',
-      d.customer_id ? customers[d.customer_id]?.name ?? '' : '',
-    ]
-      .join(' ')
-      .toLowerCase();
-    return hay.includes(q);
-  });
+  const visible = invoices
+    .filter((d) => {
+      if (overdueOnly && !isOverdue(d)) return false;
+      if (!q) return true;
+      const hay = [
+        d.invoice_number ?? '',
+        d.po_number ?? '',
+        d.notes ?? '',
+        d.property_address ?? '',
+        d.agent_name ?? '',
+        d.customer_id ? customers[d.customer_id]?.name ?? '' : '',
+      ]
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(q);
+    })
+    // Dan, Oct 26: board-up history sorts by the job's own date, newest first.
+    .sort((a, b) => {
+      if (a.template !== 'boardup' || b.template !== 'boardup') return 0;
+      return (b.invoice_date ?? '').localeCompare(a.invoice_date ?? '');
+    });
 
   return (
     <div>
@@ -320,6 +337,11 @@ export default function Invoices() {
                         <span className="badge badge-issued">DONE</span>
                       </div>
                     )}
+                    {d.template === 'boardup' && asBoardUpDetails(d.boardup_details).invoiced && (
+                      <div style={{ marginTop: 4 }}>
+                        <span className="badge badge-issued">✓ Invoiced</span>
+                      </div>
+                    )}
                   </td>
                   <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                     <Link className="btn btn-secondary btn-sm" to={`/invoices/${d.id}`}>
@@ -328,6 +350,11 @@ export default function Invoices() {
                     {d.template === 'boardup' && (
                       <Button variant="ghost" size="sm" onClick={() => toggleDone(d)}>
                         {d.completed ? 'Reopen' : 'Mark done'}
+                      </Button>
+                    )}{' '}
+                    {d.template === 'boardup' && (
+                      <Button variant="ghost" size="sm" onClick={() => toggleInvoiced(d)}>
+                        {asBoardUpDetails(d.boardup_details).invoiced ? '✓ Invoiced' : 'Mark invoiced'}
                       </Button>
                     )}{' '}
                     {d.status === 'draft' && (

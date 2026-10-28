@@ -339,8 +339,16 @@ function BoardUpPhotosBody({ snap, photos }: { snap: InvoiceSnapshot; photos: Bo
   const d = asBoardUpDetails(snap.boardup_details);
   /** Property address printed under every photo, matching the source app. */
   const caption = boardUpPhotoCaption(d);
+  // Dan, Oct 26: every picture page header prints the job date (+ time, when recorded).
+  const jobDate = snap.invoice_date
+    ? (() => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(snap.invoice_date);
+        const date = m ? `${parseInt(m[2], 10)}/${parseInt(m[3], 10)}/${m[1]}` : snap.invoice_date;
+        return d.jobTime.trim() ? `${date} ${d.jobTime.trim()}` : date;
+      })()
+    : '';
   return (
-    <BoardUpPhotoPages caption={caption} photos={photos} />
+    <BoardUpPhotoPages caption={caption} photos={photos} dateLabel={jobDate} />
   );
 }
 
@@ -352,9 +360,11 @@ function BoardUpPhotosBody({ snap, photos }: { snap: InvoiceSnapshot; photos: Bo
 function BoardUpPhotoPages({
   caption,
   photos,
+  dateLabel,
 }: {
   caption: string;
   photos: BoardUpPhotoItem[];
+  dateLabel?: string;
 }) {
   const totalPages = Math.max(1, Math.ceil(photos.length / PHOTOS_PER_PDF_PAGE));
   return (
@@ -364,6 +374,7 @@ function BoardUpPhotoPages({
           <Text style={styles.buPhotosTitle}>A QUICK BOARD UP SERVICE — JOB PHOTOS</Text>
           <Text style={styles.buPhotosCount}>
             {photos.length} PICTURES • PAGE {pi + 1} OF {totalPages}
+            {dateLabel ? ` • ${dateLabel}` : ''}
           </Text>
           {caption !== '' && <Text style={styles.buPhotosAddr}>{caption}</Text>}
           <View style={styles.buPhotoPage}>

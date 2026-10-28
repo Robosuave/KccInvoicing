@@ -468,7 +468,7 @@ describe('buildBoardUpCsv', () => {
     ]);
     const lines = csv.split('\n');
     expect(lines[0]).toBe(
-      'Job,Done,Date and time,City name,Address,City and state,Phone number,Case,Requesting officer and badge,Structure type,Type of board up,When needed,Crew,Caller,Openings,Measurements,Locks,Sheets est.,Notes,Two by Fours',
+      'Job,Done,Date and time,City name,Address,City and state,Phone number,Case,Requesting officer and badge,Structure type,Type of board up,When needed,Crew,Caller,Openings,Measurements,Locks,Sheets est.,Notes,Two by Fours,Invoiced',
     );
     expect(lines).toHaveLength(2);
     expect(lines[1]).toContain('QB-12,Yes,');
@@ -647,5 +647,36 @@ describe('two by fours (Dan crew-entry update, Oct 26, 2026)', () => {
     expect(rows['Job details']).toContain('Two by Fours total: 2 · Total lineal feet: 16');
     expect(rows['Job details']).toContain('1 sheets est.');
     expect(twoByFourSummaryLines({ ...EMPTY_BOARDUP, twoByFours: [] })).toEqual([]);
+  });
+});
+
+describe('Dan Oct 26-28 port', () => {
+  it('adds Open for inspection to service options and keeps it on round trip', async () => {
+    const { SERVICE_NEEDED_OPTIONS } = await import('../lib/boardup');
+    expect(SERVICE_NEEDED_OPTIONS).toContain('Open for inspection');
+    expect(asBoardUpDetails({ serviceNeeded: 'Open for inspection' }).serviceNeeded).toBe('Open for inspection');
+  });
+
+  it('extracts Other-opening sizes for the measured grand total', async () => {
+    const { otherOpeningSizes } = await import('../lib/boardup');
+    expect(otherOpeningSizes('18 x 16 display board, plus 36x45')).toEqual(['18x16', '36x45']);
+    expect(measuredTotals([otherOpeningSizes('18 x 16 display board')]).sqIn).toBe(288);
+  });
+
+  it('nests pieces and splits oversize openings into sheet-sized parts', async () => {
+    const { buildCutList } = await import('../lib/boardup');
+    const list = buildCutList([
+      { label: 'Garage door 1', w: 162, h: 96 },
+      { label: 'Window 1', w: 36, h: 45 },
+    ]);
+    expect(list.oversized).toEqual([{ label: 'Garage door 1', size: '162x96', partCount: 4 }]);
+    const all = list.sheets.flat();
+    expect(all.filter((p) => p.label === 'Garage door 1')).toHaveLength(4);
+    expect(all.every((p) => p.w <= 48 && p.h <= 96)).toBe(true);
+  });
+
+  it('keeps the invoiced flag on round trip', () => {
+    expect(asBoardUpDetails({ invoiced: true }).invoiced).toBe(true);
+    expect(asBoardUpDetails({}).invoiced).toBe(false);
   });
 });

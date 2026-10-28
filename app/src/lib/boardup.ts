@@ -68,6 +68,8 @@ export interface BoardUpDetails {
   sliderMeasurements: string[];
   garageMeasurements: string[];
   acMeasurements: string[];
+  /** Dan's Oct 26 "Mark invoiced" flag: green Invoiced badge on the job card. */
+  invoiced: boolean;
 }
 
 /** One two-by-four line: standard size or Custom with its own lineal feet. */
@@ -180,6 +182,7 @@ export const EMPTY_BOARDUP: BoardUpDetails = {
   sliderMeasurements: [],
   garageMeasurements: [],
   acMeasurements: [],
+  invoiced: false,
 };
 
 export const CITY_NAME_OPTIONS = [
@@ -229,6 +232,8 @@ export const SERVICE_NEEDED_OPTIONS = [
   'Re-board / repair',
   'Secure property',
   'Inspection / estimate',
+  // Dan, Oct 27: "Open for inspection" as a service option.
+  'Open for inspection',
   'Other',
 ];
 
@@ -471,6 +476,141 @@ export function measuredTotals(
   return { sqIn, sqFt: sqIn / 144, pairs };
 }
 
+/** Dan, Oct 28: number-picker ranges per opening type, [width, height] in inches. */
+export const MEASUREMENT_RANGES: Record<
+  'windows' | 'doors' | 'sliders' | 'garageDoors' | 'acUnits',
+  { w: [number, number]; h: [number, number] }
+> = {
+  windows: { w: [24, 75], h: [25, 80] },
+  doors: { w: [24, 48], h: [60, 96] },
+  sliders: { w: [30, 96], h: [80, 96] },
+  garageDoors: { w: [48, 250], h: [80, 96] },
+  acUnits: { w: [20, 48], h: [12, 48] },
+};
+
+/**
+ * Dan, Oct 26: a size typed in "Other opening information" counts toward the
+ * measured grand total, same rounding rule as every other opening. Extracts
+ * every W×H pair found in the free text (e.g. "18 x 16 display board").
+ */
+export function otherOpeningSizes(text: string): string[] {
+  const out: string[] = [];
+  const re = /(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text ?? '')) !== null) out.push(`${m[1]}x${m[2]}`);
+  return out;
+}
+
+/** One plywood piece, from a measurement, before any oversize split. */
+export interface CutPiece {
+  label: string;
+  w: number;
+  h: number;
+}
+
+export interface CutPlacement extends CutPiece {
+  part: number;
+  partCount: number;
+  x: number;
+  y: number;
+}
+
+export interface CutList {
+  sheets: CutPlacement[][];
+  /** Openings that had to be split, with their part count. */
+  oversized: { label: string; size: string; partCount: number }[];
+  pieces: number;
+}
+
+/**
+ * Dan, Oct 26/28: real nesting cut list for 4×8 (48×96 in) sheets.
+ * Pieces may be turned either way. A piece too big for one sheet is split
+ * into numbered parts, each no bigger than a sheet (e.g. a 162×96 garage
+ * door becomes four 40.5×96 parts), and every part is laid out.
+ * This is planning only and does NOT replace the flat-rate SQ FT COVER /
+ * sheets estimate above, which stays as-is.
+ */
+export function buildCutList(pieces: readonly CutPiece[]): CutList {
+  const SHEET_W = 48;
+  const SHEET_H = 96;
+  const parts: CutPiece[] = [];
+  const oversized: CutList['oversized'] = [];
+  for (const p of pieces) {
+    if (!(p.w > 0 && p.h > 0)) continue;
+    const wChunks = Math.ceil(p.w / SHEET_W);
+    const hChunks = Math.ceil(p.h / SHEET_H);
+    const partCount = wChunks * hChunks;
+    if (partCount > 1) oversized.push({ label: p.label, size: `${p.w}x${p.h}`, partCount });
+    for (let wi = 0; wi < wChunks; wi++) {
+      for (let hi = 0; hi < hChunks; hi++) {
+        parts.push({
+          label: p.label,
+          w: p.w / wChunks,
+          h: p.h / hChunks,
+        });
+      }
+    }
+  }
+  // Assign part numbers per original opening, in order.
+  const counts = new Map<string, number>();
+  const numbered: (CutPiece & { part: number; partCount: number })[] = parts.map((p) => {
+    const key = `${p.label}|${p.w}x${p.h}`;
+    const n = (counts.get(key) ?? 0) + 1;
+    counts.set(key, n);
+    return { ...p, part: n, partCount: 1 };
+  });
+  // Fix partCount: recompute from oversized splits by label+size.
+  const byLabel = new Map<string, number>();
+  for (const p of pieces) {
+    const wChunks = Math.ceil(p.w / SHEET_W);
+    const hChunks = Math.ceil(p.h / SHEET_H);
+    byLabel.set(p.label, (byLabel.get(p.label) ?? 0) + wChunks * hChunks);
+  }
+  for (const p of numbered) p.partCount = byLabel.get(p.label) ?? 1;
+  // Guillotine packing: biggest pieces first, best short-side fit in free rects.
+  const sorted = [...numbered].sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h));
+  const sheets: CutPlacement[][] = [];
+  for (const piece of sorted) {
+    let placed = false;
+    for (const sheet of sheets) {
+      const free: { x: number; y: number; w: number; h: number }[] = [{ x: 0, y: 0, w: SHEET_W, h: SHEET_H }];
+      for (const pl of sheet) {
+        const next: typeof free = [];
+        for (const r of free) {
+          if (pl.x >= r.x + r.w || pl.x + pl.w <= r.x || pl.y >= r.y + r.h || pl.y + pl.h <= r.y) {
+            next.push(r);
+            continue;
+          }
+          if (pl.x > r.x) next.push({ x: r.x, y: r.y, w: pl.x - r.x, h: r.h });
+          if (pl.x + pl.w < r.x + r.w) next.push({ x: pl.x + pl.w, y: r.y, w: r.x + r.w - (pl.x + pl.w), h: r.h });
+          if (pl.y > r.y) next.push({ x: r.x, y: r.y, w: r.w, h: pl.y - r.y });
+          if (pl.y + pl.h < r.y + r.h) next.push({ x: r.x, y: pl.y + pl.h, w: r.w, h: r.y + r.h - (pl.y + pl.h) });
+        }
+        free.splice(0, free.length, ...next);
+      }
+      let best: { r: (typeof free)[number]; w: number; h: number; score: number } | null = null;
+      for (const r of free) {
+        for (const [w, h] of [[piece.w, piece.h], [piece.h, piece.w]] as const) {
+          if (w > r.w + 1e-9 || h > r.h + 1e-9) continue;
+          const score = Math.min(r.w - w, r.h - h);
+          if (!best || score < best.score) best = { r, w, h, score };
+        }
+      }
+      if (best) {
+        sheet.push({ ...piece, x: best.r.x, y: best.r.y, w: best.w, h: best.h });
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      // Every split part fits one way or the other; orient it to fit.
+      const fits = piece.w <= SHEET_W && piece.h <= SHEET_H;
+      sheets.push([{ ...piece, x: 0, y: 0, w: fits ? piece.w : piece.h, h: fits ? piece.h : piece.w }]);
+    }
+  }
+  return { sheets, oversized, pieces: pieces.length };
+}
+
 function fmtDateTime(v: string): string {
   if (!v) return '—';
   const d = new Date(v);
@@ -590,7 +730,7 @@ export function buildBoardUpCsv(rows: BoardUpCsvRow[]): string {
     'Job', 'Done', 'Date and time', 'City name', 'Address', 'City and state',
     'Phone number', 'Case', 'Requesting officer and badge', 'Structure type',
     'Type of board up', 'When needed', 'Crew', 'Caller', 'Openings', 'Measurements',
-    'Locks', 'Sheets est.', 'Notes', 'Two by Fours',
+    'Locks', 'Sheets est.', 'Notes', 'Two by Fours', 'Invoiced',
   ];
   const lines = [header.join(',')];
   for (const r of rows) {
@@ -624,6 +764,7 @@ export function buildBoardUpCsv(rows: BoardUpCsvRow[]): string {
         String(est.sheets),
         d.accessNotes.trim(),
         twoByFourSummaryLines(d).join('; '),
+        d.invoiced ? 'Yes' : '',
       ].map(csvCell).join(','),
     );
   }
@@ -719,5 +860,6 @@ export function asBoardUpDetails(raw: unknown): BoardUpDetails {
     sliderMeasurements: strArr(r.sliderMeasurements),
     garageMeasurements: strArr(r.garageMeasurements),
     acMeasurements: strArr(r.acMeasurements),
+    invoiced: r.invoiced === true,
   };
 }

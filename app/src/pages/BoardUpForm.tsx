@@ -11,20 +11,21 @@ import {
   CITY_OPTIONS,
   CUSTOM_SIZE_OPTION,
   DEFAULT_CREW_EMAIL,
-  DOOR_MEASUREMENT_PRESETS,
+  MEASUREMENT_RANGES,
   PROPERTY_TYPE_OPTIONS,
   SERVICE_NEEDED_OPTIONS,
   TWO_BY_FOUR_SIZES,
   URGENCY_OPTIONS,
-  WINDOW_MEASUREMENT_PRESETS,
   asBoardUpDetails,
   boardUpPdfFilename,
   buildBoardUpSmsText,
   buildBoardUpSummary,
+  buildCutList,
   crewContactFor,
   syncMeasurementCount,
   estimateBoardUp,
   measuredTotals,
+  otherOpeningSizes,
   twoByFourTotals,
   loadCustomCities,
   rememberCustomCity,
@@ -180,10 +181,166 @@ type MeasurementKey =
   | 'haspLockCombos'
   | 'chainLockCombos';
 
+/** Dan, Oct 28: one measurement as whole-number + fraction pickers per dimension. */
+function MeasurementPicker({
+  id,
+  label,
+  value,
+  ranges,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  ranges: { w: [number, number]; h: [number, number] };
+  disabled?: boolean;
+  onChange: (v: string) => void;
+}) {
+  const FRACTIONS = [
+    { label: 'none', v: 0 },
+    { label: '1/4', v: 0.25 },
+    { label: '1/2', v: 0.5 },
+    { label: '3/4', v: 0.75 },
+  ];
+  const fmt = (n: number) => {
+    const r = Math.round(n * 100) / 100;
+    return Number.isInteger(r) ? String(r) : String(r).replace(/0$/, '');
+  };
+  const parsed = /^\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*$/i.exec(value ?? '');
+  // Pending half-entered dimensions live in local state until both sides are set.
+  const split = (n: number | null) => {
+    if (n === null) return { whole: '', frac: 0, custom: '' };
+    const whole = Math.floor(n);
+    const frac = n - whole;
+    const hit = FRACTIONS.find((f) => Math.abs(f.v - frac) < 0.011);
+    if (!hit) return { whole: '', frac: 0, custom: String(n) };
+    return { whole: String(whole), frac: hit.v, custom: '' };
+  };
+  const initW = split(parsed ? parseFloat(parsed[1]) : null);
+  const initH = split(parsed ? parseFloat(parsed[2]) : null);
+  const [wWhole, setWWhole] = useState(initW.whole);
+  const [wFrac, setWFrac] = useState(initW.frac);
+  const [wCustom, setWCustom] = useState(initW.custom);
+  const [wCustomMode, setWCustomMode] = useState(initW.custom !== '');
+  const [hWhole, setHWhole] = useState(initH.whole);
+  const [hFrac, setHFrac] = useState(initH.frac);
+  const [hCustom, setHCustom] = useState(initH.custom);
+  const [hCustomMode, setHCustomMode] = useState(initH.custom !== '');
+  // Resync when the saved value changes from outside (e.g. count change).
+  useEffect(() => {
+    const pw = split(parsed ? parseFloat(parsed[1]) : null);
+    const ph = split(parsed ? parseFloat(parsed[2]) : null);
+    setWWhole(pw.whole); setWFrac(pw.frac); setWCustom(pw.custom); setWCustomMode(pw.custom !== '');
+    setHWhole(ph.whole); setHFrac(ph.frac); setHCustom(ph.custom); setHCustomMode(ph.custom !== '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  // Unparseable saved value (e.g. free text): keep it exactly, in a text box.
+  if (value.trim() !== '' && !parsed) {
+    return (
+      <Field label={label} htmlFor={id}>
+        <TextField id={id} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} style={{ maxWidth: 200 }} />
+      </Field>
+    );
+  }
+  const dimVal = (whole: string, frac: number, custom: string): number | null => {
+    if (custom !== '') return parseFloat(custom);
+    if (whole === '') return null;
+    return parseFloat(whole) + frac;
+  };
+  const commit = (nw: { whole: string; frac: number; custom: string }, nh: { whole: string; frac: number; custom: string }) => {
+    const wv = dimVal(nw.whole, nw.frac, nw.custom);
+    const hv = dimVal(nh.whole, nh.frac, nh.custom);
+    if (wv !== null && hv !== null && !Number.isNaN(wv) && !Number.isNaN(hv)) onChange(`${fmt(wv)}x${fmt(hv)}`);
+  };
+  const dim = (
+    key: 'w' | 'h',
+    whole: string, frac: number, custom: string, customMode: boolean,
+    setWhole: (v: string) => void, setFrac: (v: number) => void, setCustom: (v: string) => void, setCustomMode: (v: boolean) => void,
+    other: { whole: string; frac: number; custom: string },
+  ) => {
+    const [min, max] = ranges[key];
+    const opts: string[] = [];
+    for (let n = min; n <= max; n++) opts.push(String(n));
+    const wholeVal = customMode ? '__custom' : whole;
+    return (
+      <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+        <SelectField
+          id={`${id}-${key}`}
+          style={{ maxWidth: 92 }}
+          value={wholeVal}
+          disabled={disabled}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === '__custom') {
+              setWhole(''); setCustom(''); setCustomMode(true);
+              return;
+            }
+            setWhole(v); setCustom(''); setCustomMode(false);
+            const next = { whole: v, frac, custom: '' };
+            const oth = other;
+            if (key === 'w') commit(next, oth); else commit(oth, next);
+          }}
+          aria-label={`${label} ${key === 'w' ? 'width' : 'height'}`}
+        >
+          <option value="">—</option>
+          {opts.map((o) => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+          <option value="__custom">Type a number…</option>
+        </SelectField>
+        {customMode && (
+          <TextField
+            id={`${id}-${key}-custom`}
+            style={{ maxWidth: 80 }}
+            type="number"
+            inputMode="decimal"
+            value={custom}
+            disabled={disabled}
+            onChange={(e) => {
+              setCustom(e.target.value);
+              const next = { whole: '', frac, custom: e.target.value };
+              const oth = other;
+              if (key === 'w') commit(next, oth); else commit(oth, next);
+            }}
+            aria-label={`${label} ${key === 'w' ? 'width' : 'height'} number`}
+          />
+        )}
+        <SelectField
+          id={`${id}-${key}f`}
+          style={{ maxWidth: 76 }}
+          value={String(frac)}
+          disabled={disabled}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            setFrac(v);
+            const next = { whole, frac: v, custom };
+            const oth = other;
+            if (key === 'w') commit(next, oth); else commit(oth, next);
+          }}
+          aria-label={`${label} ${key === 'w' ? 'width' : 'height'} fraction`}
+        >
+          {FRACTIONS.map((f) => (
+            <option key={f.label} value={String(f.v)}>{f.label}</option>
+          ))}
+        </SelectField>
+      </span>
+    );
+  };
+  return (
+    <Field label={label} htmlFor={`${id}-w`}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        {dim('w', wWhole, wFrac, wCustom, wCustomMode, setWWhole, setWFrac, setWCustom, setWCustomMode, { whole: hWhole, frac: hFrac, custom: hCustom })}
+        <span aria-hidden="true">×</span>
+        {dim('h', hWhole, hFrac, hCustom, hCustomMode, setHWhole, setHFrac, setHCustom, setHCustomMode, { whole: wWhole, frac: wFrac, custom: wCustom })}
+      </div>
+    </Field>
+  );
+}
+
 /**
  * Stepper plus one measurement/combination box per counted unit.
- * Windows and doors also get Dan's crew-entry preset W×H dropdown; the text
- * box stays as the custom-size escape hatch and both write the same value.
+ * Openings use Dan's Oct 28 number pickers; locks keep free-text combos.
  */
 function OpeningCounter({
   id,
@@ -196,6 +353,7 @@ function OpeningCounter({
   onCount,
   onMeasurement,
   presets,
+  pickerRanges,
   itemCaption,
 }: {
   id: string;
@@ -209,6 +367,8 @@ function OpeningCounter({
   onMeasurement: (i: number, v: string) => void;
   /** Preset W×H dropdown options; omit for free-text only. */
   presets?: string[];
+  /** Dan Oct 28 number-picker ranges; when set, replaces presets + text box. */
+  pickerRanges?: { w: [number, number]; h: [number, number] };
   /** Caption above the per-unit boxes; defaults to "Measurements — one per …". */
   itemCaption?: string;
 }) {
@@ -222,7 +382,16 @@ function OpeningCounter({
           </div>
           {measurements.map((m, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-              {presets && (
+              {pickerRanges ? (
+                <MeasurementPicker
+                  id={`${id}-m${i}`}
+                  label={`${singular} ${i + 1}`}
+                  value={m}
+                  ranges={pickerRanges}
+                  disabled={disabled}
+                  onChange={(v) => onMeasurement(i, v)}
+                />
+              ) : presets && (
                 <Field label={`${singular} ${i + 1} size`} htmlFor={`${id}-p${i}`}>
                   <SelectField
                     id={`${id}-p${i}`}
@@ -243,17 +412,19 @@ function OpeningCounter({
                   </SelectField>
                 </Field>
               )}
-              <Field label={presets ? `${singular} ${i + 1} custom size` : `${singular} ${i + 1}`} htmlFor={`${id}-m${i}`}>
-                <TextField
-                  id={`${id}-m${i}`}
-                  value={m}
-                  disabled={disabled}
-                  onChange={(e) => onMeasurement(i, e.target.value)}
-                  placeholder={placeholder}
-                  style={{ maxWidth: 200 }}
-                  enterKeyHint="next"
-                />
-              </Field>
+              {!pickerRanges && (
+                <Field label={presets ? `${singular} ${i + 1} custom size` : `${singular} ${i + 1}`} htmlFor={`${id}-m${i}`}>
+                  <TextField
+                    id={`${id}-m${i}`}
+                    value={m}
+                    disabled={disabled}
+                    onChange={(e) => onMeasurement(i, e.target.value)}
+                    placeholder={placeholder}
+                    style={{ maxWidth: 200 }}
+                    enterKeyHint="next"
+                  />
+                </Field>
+              )}
             </div>
           ))}
         </div>
@@ -551,7 +722,8 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
   );
 
   /** Measured totals from the actual sizes entered (Dan's crew-entry grand
-   * total); separate from the flat-rate SQ FT COVER estimate above. */
+   * total); separate from the flat-rate SQ FT COVER estimate above.
+   * Dan, Oct 26: sizes in "Other opening information" count too. */
   const measured = useMemo(
     () =>
       measuredTotals([
@@ -560,9 +732,33 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         f.sliderMeasurements,
         f.garageMeasurements,
         f.acMeasurements,
+        otherOpeningSizes(f.otherOpenings),
       ]),
-    [f.windowMeasurements, f.doorMeasurements, f.sliderMeasurements, f.garageMeasurements, f.acMeasurements],
+    [f.windowMeasurements, f.doorMeasurements, f.sliderMeasurements, f.garageMeasurements, f.acMeasurements, f.otherOpenings],
   );
+
+  /** Dan, Oct 26/28: nested cut list, with oversize openings split into parts. */
+  const cutList = useMemo(() => {
+    const pieces: { label: string; w: number; h: number }[] = [];
+    const groups: [string, string[]][] = [
+      ['Window', f.windowMeasurements],
+      ['Door', f.doorMeasurements],
+      ['Slider', f.sliderMeasurements],
+      ['Garage door', f.garageMeasurements],
+      ['AC', f.acMeasurements],
+    ];
+    for (const [label, arr] of groups) {
+      arr.forEach((m, i) => {
+        const match = /^\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*$/i.exec(m ?? '');
+        if (match) pieces.push({ label: `${label} ${i + 1}`, w: parseFloat(match[1]), h: parseFloat(match[2]) });
+      });
+    }
+    otherOpeningSizes(f.otherOpenings).forEach((m, i) => {
+      const match = /^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/.exec(m);
+      if (match) pieces.push({ label: `Other ${i + 1}`, w: parseFloat(match[1]), h: parseFloat(match[2]) });
+    });
+    return buildCutList(pieces);
+  }, [f.windowMeasurements, f.doorMeasurements, f.sliderMeasurements, f.garageMeasurements, f.acMeasurements, f.otherOpenings]);
 
   const cityNameOptions = useMemo(
     () => withCustomCities(CITY_NAME_OPTIONS, customCityNames),
@@ -892,11 +1088,60 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     if (v && isValidPhone(v)) set(key, formatPhone(v));
   };
 
+  /** Dan, Oct 28, scoped to new jobs only: a local backstop draft, so work
+   * typed before the required fields are filled (when the server autosave
+   * can't validate yet) survives closing the app. Saved jobs use the server
+   * draft, so this never overwrites a saved job. */
+  const [draftRestored, setDraftRestored] = useState(false);
+  const draftLoadedRef = useRef(false);
+  useEffect(() => {
+    if (disabled) return;
+    const key = `aquick-unsaved-draft-${businessId}-new`;
+    if (getDraftId()) {
+      try { localStorage.removeItem(key); } catch { /* ignore */ }
+      return;
+    }
+    if (draftLoadedRef.current) return;
+    draftLoadedRef.current = true;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const parsed = asBoardUpDetails(JSON.parse(raw));
+      if (JSON.stringify(parsed) === JSON.stringify(asBoardUpDetails(initial))) return;
+      applyDetails(parsed);
+      setDraftRestored(true);
+    } catch { /* corrupt draft — ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (disabled || getDraftId()) return;
+    if (!draftLoadedRef.current) return;
+    try {
+      localStorage.setItem(`aquick-unsaved-draft-${businessId}-new`, JSON.stringify(detailsRef.current));
+    } catch { /* storage full/unavailable — server autosave still applies */ }
+  }, [f, businessId, disabled]);
+
   return (
     <div onKeyDown={enterToNext} className="bu-dark">
       <div className="bu-head">
         <h1>Enter the completed job</h1>
         <p>Fill in the job, add measurements and photos, then send the job from your phone.</p>
+        {draftRestored && (
+          <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Draft restored — your unsaved changes are back.</span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                try { localStorage.removeItem(`aquick-unsaved-draft-${businessId}-new`); } catch { /* ignore */ }
+                applyDetails(asBoardUpDetails(initial));
+                setDraftRestored(false);
+              }}
+            >
+              Discard draft
+            </Button>
+          </div>
+        )}
         <div className="bu-head-meta">5 sections · one file</div>
         <div className="bu-note">Email job PDF sends the job details plus photos.</div>
       </div>
@@ -1312,32 +1557,35 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
           <OpeningCounter
             id="bu-win" label="Windows" singular="Window" count={f.windows}
             measurements={f.windowMeasurements} placeholder="e.g. 36x45" disabled={disabled}
-            presets={WINDOW_MEASUREMENT_PRESETS}
+            pickerRanges={MEASUREMENT_RANGES.windows}
             onCount={(v) => setOpeningCount('windows', 'windowMeasurements', v)}
             onMeasurement={(i, v) => setMeasurement('windowMeasurements', i, v)}
           />
           <OpeningCounter
             id="bu-door" label="Doors" singular="Door" count={f.doors}
             measurements={f.doorMeasurements} placeholder="e.g. 38x81" disabled={disabled}
-            presets={DOOR_MEASUREMENT_PRESETS}
+            pickerRanges={MEASUREMENT_RANGES.doors}
             onCount={(v) => setOpeningCount('doors', 'doorMeasurements', v)}
             onMeasurement={(i, v) => setMeasurement('doorMeasurements', i, v)}
           />
           <OpeningCounter
             id="bu-slider" label="Sliders / patios" singular="Slider" count={f.sliders}
             measurements={f.sliderMeasurements} placeholder="e.g. 72x80" disabled={disabled}
+            pickerRanges={MEASUREMENT_RANGES.sliders}
             onCount={(v) => setOpeningCount('sliders', 'sliderMeasurements', v)}
             onMeasurement={(i, v) => setMeasurement('sliderMeasurements', i, v)}
           />
           <OpeningCounter
             id="bu-gar" label="Garage doors" singular="Garage door" count={f.garageDoors}
             measurements={f.garageMeasurements} placeholder="e.g. 96x84" disabled={disabled}
+            pickerRanges={MEASUREMENT_RANGES.garageDoors}
             onCount={(v) => setOpeningCount('garageDoors', 'garageMeasurements', v)}
             onMeasurement={(i, v) => setMeasurement('garageMeasurements', i, v)}
           />
           <OpeningCounter
             id="bu-ac" label="AC units" singular="AC" count={f.acUnits}
             measurements={f.acMeasurements} placeholder="e.g. 30x24" disabled={disabled}
+            pickerRanges={MEASUREMENT_RANGES.acUnits}
             onCount={(v) => setOpeningCount('acUnits', 'acMeasurements', v)}
             onMeasurement={(i, v) => setMeasurement('acMeasurements', i, v)}
           />
@@ -1376,6 +1624,25 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
             <strong>{measured.sqFt.toFixed(2)} sq ft</strong>
           </div>
         </div>
+        {cutList.sheets.length > 0 && (
+          <div className="bu-grandtotal" aria-live="polite" style={{ marginTop: 12 }}>
+            <div className="bu-grandtotal-title">Cut list — {cutList.sheets.length} sheet{cutList.sheets.length === 1 ? '' : 's'} (nested)</div>
+            <div className="bu-grandtotal-note">
+              Pieces are nested into leftover sheet space and may be turned either way. Flat-rate sheets estimate above is unchanged.
+            </div>
+            {cutList.oversized.length > 0 && (
+              <div style={{ marginTop: 6, fontSize: 13 }}>
+                Oversized: {cutList.oversized.map((o) => `${o.label} ${o.size} → ${o.partCount} parts`).join('; ')}
+              </div>
+            )}
+            {cutList.sheets.map((sheet, si) => (
+              <div key={si} style={{ marginTop: 6, fontSize: 13 }}>
+                <strong>Sheet {si + 1}:</strong>{' '}
+                {sheet.map((p) => `${p.label}${p.partCount > 1 ? ` (part ${p.part})` : ''} ${p.w}x${p.h}`).join(', ')}
+              </div>
+            ))}
+          </div>
+        )}
       </section>
       <section className="bu-section">
         <div className="bu-section-head">
@@ -1388,14 +1655,14 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <OpeningCounter
             id="bu-hasp" label="Hasp & Lock" singular="Hasp & Lock" count={f.haspLocks}
-            measurements={f.haspLockCombos} placeholder="e.g. 4419" disabled={disabled}
+            measurements={f.haspLockCombos} placeholder="e.g. 32 35 76" disabled={disabled}
             itemCaption="Combination — one per lock"
             onCount={(v) => setOpeningCount('haspLocks', 'haspLockCombos', v)}
             onMeasurement={(i, v) => setMeasurement('haspLockCombos', i, v)}
           />
           <OpeningCounter
             id="bu-chain" label="Lock and Chain" singular="Lock and Chain" count={f.chainLocks}
-            measurements={f.chainLockCombos} placeholder="e.g. 8820" disabled={disabled}
+            measurements={f.chainLockCombos} placeholder="e.g. 32 35 76" disabled={disabled}
             itemCaption="Combination — one per lock"
             onCount={(v) => setOpeningCount('chainLocks', 'chainLockCombos', v)}
             onMeasurement={(i, v) => setMeasurement('chainLockCombos', i, v)}

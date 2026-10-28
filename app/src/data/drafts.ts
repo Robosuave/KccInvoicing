@@ -144,6 +144,13 @@ export async function setInvoiceCompleted(id: string, completed: boolean): Promi
   if (error) throw error;
 }
 
+/** Dan, Oct 26: toggle the "Mark invoiced" flag stored in boardup_details. */
+export async function setBoardUpInvoiced(id: string, details: unknown): Promise<void> {
+  const sb = requireSupabase();
+  const { error } = await sb.from('invoices').update({ boardup_details: details }).eq('id', id);
+  if (error) throw error;
+}
+
 export async function getDraft(id: string): Promise<{ invoice: Invoice; lines: InvoiceLine[] }> {
   const sb = requireSupabase();
   const { data: invoice, error: iErr } = await sb.from('invoices').select('*').eq('id', id).single();
