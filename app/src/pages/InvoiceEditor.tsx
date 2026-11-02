@@ -260,9 +260,9 @@ export default function InvoiceEditor() {
             itemId: l.item_id,
             // A null field from the database must never crash the render:
             // the preview and totals call .trim() on these values.
-            description: l.description ?? '',
-            quantity: l.quantity ?? '1',
-            unitLabel: l.unit_label ?? 'EA',
+            description: String(l.description ?? ''),
+            quantity: String(l.quantity ?? '1'),
+            unitLabel: String(l.unit_label ?? 'EA'),
             unitPrice: centsToDollars(l.unit_price_cents ?? 0),
             discount: l.discount_cents ? centsToDollars(l.discount_cents) : '',
             taxRate: l.tax_rate && l.tax_rate !== '0' ? rateToPct(l.tax_rate) : '',
@@ -367,12 +367,12 @@ export default function InvoiceEditor() {
       terms: terms || null,
       lines: isCommission ? [] : lines.map((l) => ({
         item_id: l.itemId,
-        description: (l.description ?? '').trim(),
-        quantity: (l.quantity ?? '').trim() || '1',
-        unit_label: (l.unitLabel ?? '').trim() || 'EA',
-        unit_price_cents: dollarsToCents((l.unitPrice ?? '').trim() || '0'),
-        discount_cents: discountMode === 'lines' && (l.discount ?? '').trim() ? dollarsToCents((l.discount ?? '').trim()) : 0,
-        tax_rate: (l.taxRate ?? '').trim() ? pctToRate(l.taxRate) : undefined,
+        description: String(l.description ?? '').trim(),
+        quantity: String(l.quantity ?? '').trim() || '1',
+        unit_label: String(l.unitLabel ?? '').trim() || 'EA',
+        unit_price_cents: dollarsToCents(String(l.unitPrice ?? '').trim() || '0'),
+        discount_cents: discountMode === 'lines' && String(l.discount ?? '').trim() ? dollarsToCents(String(l.discount ?? '').trim()) : 0,
+        tax_rate: String(l.taxRate ?? '').trim() ? pctToRate(String(l.taxRate ?? '')) : undefined,
       })),
     };
   }, [activeBusiness, customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, template, boardUp, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge, agentName, secondAgentName, propertyAddress]);
@@ -433,23 +433,23 @@ export default function InvoiceEditor() {
       }
       return { errors: errs, invalid };
     }
-    const nonEmpty = lines.filter((l) => l.description.trim() || l.unitPrice.trim());
+    const nonEmpty = lines.filter((l) => String(l.description ?? '').trim() || String(l.unitPrice ?? '').trim());
     if (nonEmpty.length === 0) errs.push('Add at least one line item.');
     lines.forEach((l, i) => {
-      if (!l.description.trim() && !l.unitPrice.trim()) return; // empty row is ignored
-      if (!l.description.trim()) { errs.push(`Line ${i + 1}: description is required.`); invalid.push(`desc-${l.key}`); }
-      if (!/^\d+(\.\d+)?$/.test(l.quantity.trim()) || Number(l.quantity) <= 0) {
+      if (!String(l.description ?? '').trim() && !String(l.unitPrice ?? '').trim()) return; // empty row is ignored
+      if (!String(l.description ?? '').trim()) { errs.push(`Line ${i + 1}: description is required.`); invalid.push(`desc-${l.key}`); }
+      if (!/^\d+(\.\d+)?$/.test(String(l.quantity ?? '').trim()) || Number(l.quantity) <= 0) {
         errs.push(`Line ${i + 1}: quantity must be a positive number.`);
         invalid.push(`qty-${l.key}`);
       }
       try {
-        dollarsToCents(l.unitPrice.trim() || '0');
+        dollarsToCents(String(l.unitPrice ?? '').trim() || '0');
       } catch {
         errs.push(`Line ${i + 1}: unit price must be a valid amount.`);
       }
-      if (discountMode === 'lines' && l.discount.trim()) {
+      if (discountMode === 'lines' && String(l.discount ?? '').trim()) {
         try {
-          dollarsToCents(l.discount.trim());
+          dollarsToCents(String(l.discount ?? '').trim());
         } catch {
           errs.push(`Line ${i + 1}: discount must be a valid amount.`);
         }
@@ -848,8 +848,8 @@ export default function InvoiceEditor() {
 
   /* Live check: a non-empty line needs a positive quantity — flagged red immediately. */
   const qtyNeedsNumber = (l: LineState) => {
-    if (!l.description.trim() && !l.unitPrice.trim()) return false; // empty row is ignored
-    const q = l.quantity.trim();
+    if (!String(l.description ?? '').trim() && !String(l.unitPrice ?? '').trim()) return false; // empty row is ignored
+    const q = String(l.quantity ?? '').trim();
     return !/^\d+(\.\d+)?$/.test(q) || Number(q) <= 0;
   };
 
@@ -1702,7 +1702,7 @@ function StandardPreviewBody({
   totals: ReturnType<typeof previewTotals> | null;
   discountMode: DiscountMode;
 }) {
-  const visible = lines.filter((l) => (l.description ?? '').trim() || (l.unitPrice ?? '').trim());
+  const visible = lines.filter((l) => String(l.description ?? '').trim() || String(l.unitPrice ?? '').trim());
   return (
     <>
       <table className="inv-table">
@@ -1727,7 +1727,7 @@ function StandardPreviewBody({
             let amt = '—';
             try {
               amt = money(
-                multiplyQuantity(dollarsToCents((l.unitPrice ?? '').trim() || '0'), (l.quantity ?? '').trim() || '1'),
+                multiplyQuantity(dollarsToCents(String(l.unitPrice ?? '').trim() || '0'), String(l.quantity ?? '').trim() || '1'),
               );
             } catch {
               amt = '—';
