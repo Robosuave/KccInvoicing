@@ -113,7 +113,7 @@ interface CommissionPreviewData {
 export default function InvoiceEditor() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const { activeBusiness, workspace, notConfigured, setEditorDirty, onSaveDraftRef, loading: businessesLoading, isOwner } = useBusiness();
+  const { activeBusiness, businesses, requestSwitch, workspace, notConfigured, setEditorDirty, onSaveDraftRef, loading: businessesLoading, isOwner } = useBusiness();
   const navigate = useNavigate();
   const isNew = !id || id === 'new';
 
@@ -225,14 +225,28 @@ export default function InvoiceEditor() {
   }, [activeBusiness]);
 
   useEffect(() => {
-    if (isNew || !activeBusiness) return;
+    if (isNew || !activeBusiness || businessesLoading) return;
     setLoading(true);
+    // A stale load error must never stick: switching businesses (or a
+    // successful reload) used to leave "belongs to a different business"
+    // on screen forever, even under the right business.
+    setLoadError(null);
     getDraft(id as string)
       .then(({ invoice, lines: dbLines }) => {
         if (invoice.business_id !== activeBusiness.id) {
+          // The detail page is often opened (or reloaded) while a different
+          // business is active — the saved business in the switcher is the
+          // last one used, not the invoice's. Switch to the invoice's own
+          // business instead of dead-ending on an error.
+          const target = businesses.find((b) => b.id === invoice.business_id);
+          if (target) {
+            void requestSwitch(target.id);
+            return;
+          }
           setLoadError('This draft belongs to a different business.');
           return;
         }
+        setLoadError(null);
         syncDraftId(invoice.id);
         setLoadedInvoice(invoice);
         setInvoiceStatus(invoice.status);
@@ -244,10 +258,12 @@ export default function InvoiceEditor() {
           dbLines.map((l) => ({
             key: l.id,
             itemId: l.item_id,
-            description: l.description,
-            quantity: l.quantity,
-            unitLabel: l.unit_label,
-            unitPrice: centsToDollars(l.unit_price_cents),
+            // A null field from the database must never crash the render:
+            // the preview and totals call .trim() on these values.
+            description: l.description ?? '',
+            quantity: l.quantity ?? '1',
+            unitLabel: l.unit_label ?? 'EA',
+            unitPrice: centsToDollars(l.unit_price_cents ?? 0),
             discount: l.discount_cents ? centsToDollars(l.discount_cents) : '',
             taxRate: l.tax_rate && l.tax_rate !== '0' ? rateToPct(l.tax_rate) : '',
           })),
@@ -276,7 +292,7 @@ export default function InvoiceEditor() {
       .catch((e) => setLoadError(e instanceof Error ? e.message : 'Failed to load draft.'))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, activeBusiness?.id]);
+  }, [id, activeBusiness?.id, businessesLoading]);
 
   /* defaults for a new draft */
   useEffect(() => {
@@ -351,12 +367,12 @@ export default function InvoiceEditor() {
       terms: terms || null,
       lines: isCommission ? [] : lines.map((l) => ({
         item_id: l.itemId,
-        description: l.description.trim(),
-        quantity: l.quantity.trim() || '1',
-        unit_label: l.unitLabel.trim() || 'EA',
-        unit_price_cents: dollarsToCents(l.unitPrice.trim() || '0'),
-        discount_cents: discountMode === 'lines' && l.discount.trim() ? dollarsToCents(l.discount.trim()) : 0,
-        tax_rate: l.taxRate.trim() ? pctToRate(l.taxRate) : undefined,
+        description: (l.description ?? '').trim(),
+        quantity: (l.quantity ?? '').trim() || '1',
+        unit_label: (l.unitLabel ?? '').trim() || 'EA',
+        unit_price_cents: dollarsToCents((l.unitPrice ?? '').trim() || '0'),
+        discount_cents: discountMode === 'lines' && (l.discount ?? '').trim() ? dollarsToCents((l.discount ?? '').trim()) : 0,
+        tax_rate: (l.taxRate ?? '').trim() ? pctToRate(l.taxRate) : undefined,
       })),
     };
   }, [activeBusiness, customerId, invoiceDate, lines, discountMode, invoiceDiscountPct, useTax, invoiceTaxPct, shipping, notes, terms, template, boardUp, salePrice, commissionPct, commissionAmt, processingFee, otherChargeDesc, otherCharge, agentName, secondAgentName, propertyAddress]);
@@ -1686,7 +1702,7 @@ function StandardPreviewBody({
   totals: ReturnType<typeof previewTotals> | null;
   discountMode: DiscountMode;
 }) {
-  const visible = lines.filter((l) => l.description.trim() || l.unitPrice.trim());
+  const visible = lines.filter((l) => (l.description ?? '').trim() || (l.unitPrice ?? '').trim());
   return (
     <>
       <table className="inv-table">
@@ -1711,7 +1727,7 @@ function StandardPreviewBody({
             let amt = '—';
             try {
               amt = money(
-                multiplyQuantity(dollarsToCents(l.unitPrice.trim() || '0'), l.quantity.trim() || '1'),
+                multiplyQuantity(dollarsToCents((l.unitPrice ?? '').trim() || '0'), (l.quantity ?? '').trim() || '1'),
               );
             } catch {
               amt = '—';

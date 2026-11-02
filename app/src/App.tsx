@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { Component, useState, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { BusinessProvider, useBusiness } from './business/BusinessContext';
@@ -195,8 +195,72 @@ function Shell() {
   );
 }
 
+/** A render crash must never blank the whole app again. Without this, one
+ *  bad invoice row unmounts the nav, the header, and everything else with
+ *  no message at all. The fallback keeps the user in the app with a
+ *  readable error and a way back, instead of a white screen. */
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    // eslint-disable-next-line no-console
+    console.error('Invoice Desk crashed:', error);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 40, fontFamily: 'system-ui, sans-serif', maxWidth: 640 }}>
+          <h1 style={{ fontSize: 22 }}>Something went wrong loading this page</h1>
+          <p style={{ color: '#475569' }}>
+            The page hit an error instead of opening. Your invoices were not changed.
+          </p>
+          <p
+            style={{
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: 8,
+              padding: 12,
+              fontSize: 14,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}
+          >
+            {this.state.error.message || 'Unknown render error'}
+          </p>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              style={{ padding: '10px 18px', borderRadius: 8, border: 'none', background: '#4f46e5', color: '#fff', fontWeight: 600, cursor: 'pointer' }}
+            >
+              Reload page
+            </button>
+            <button
+              type="button"
+              onClick={() => window.location.assign('/invoices')}
+              style={{ padding: '10px 18px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', fontWeight: 600, cursor: 'pointer' }}
+            >
+              Back to Invoices
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <AuthProvider>
         <Routes>
@@ -215,5 +279,6 @@ export default function App() {
         </Routes>
       </AuthProvider>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }
