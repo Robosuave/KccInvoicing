@@ -78,6 +78,28 @@ export default function Invoices() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBusiness?.id, filter]);
 
+  // ALL hooks must run before any early return, or React throws
+  // "Rendered more hooks than during the previous render" (#310) on a
+  // cold load: render 1 returns early while loading, render 2 reaches
+  // the hook. This useMemo used to sit after the returns below.
+  const isBoardUp = activeBusiness?.default_template === 'boardup';
+
+  /** Live counters for the board-up job board (Dan's header stats). */
+  const boardUpStats = useMemo(() => {
+    if (!isBoardUp) return null;
+    let jobs = 0;
+    let emergency = 0;
+    let sheets = 0;
+    for (const inv of invoices) {
+      if (inv.template !== 'boardup') continue;
+      jobs++;
+      const d = asBoardUpDetails(inv.boardup_details);
+      if (d.urgency.startsWith('Emergency')) emergency++;
+      sheets += estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors, d.acUnits).sheets;
+    }
+    return { jobs, emergency, sheets };
+  }, [invoices, isBoardUp]);
+
   if (notConfigured) return <SetupRequired what="Invoices" />;
   if (businessesLoading) return <p>Loading…</p>;
   if (!activeBusiness) return <EmptyState title="No business selected" body="Create a business first." />;
@@ -124,24 +146,6 @@ export default function Invoices() {
     if (failed.length > 0) setBulkError(`${failed.length} could not be deleted — ${failed.join('; ')}`);
     await load();
   };
-
-  const isBoardUp = activeBusiness?.default_template === 'boardup';
-
-  /** Live counters for the board-up job board (Dan's header stats). */
-  const boardUpStats = useMemo(() => {
-    if (!isBoardUp) return null;
-    let jobs = 0;
-    let emergency = 0;
-    let sheets = 0;
-    for (const inv of invoices) {
-      if (inv.template !== 'boardup') continue;
-      jobs++;
-      const d = asBoardUpDetails(inv.boardup_details);
-      if (d.urgency.startsWith('Emergency')) emergency++;
-      sheets += estimateBoardUp(d.windows, d.doors, d.sliders, d.garageDoors, d.acUnits).sheets;
-    }
-    return { jobs, emergency, sheets };
-  }, [invoices, isBoardUp]);
 
   const toggleDone = async (d: Invoice) => {
     try {
