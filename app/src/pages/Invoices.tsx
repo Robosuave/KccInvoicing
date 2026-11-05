@@ -2,15 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
 import type { Customer, Invoice } from '../db/types';
-import { deleteDraft, listInvoices, setBoardUpInvoiced, setInvoiceCompleted } from '../data/drafts';
+import { listInvoices, setBoardUpInvoiced, setInvoiceCompleted } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listBusinessMembers } from '../data/team';
-import { isOverdue } from '../data/invoices';
+import { deleteInvoiceDeep, isOverdue } from '../data/invoices';
 import { paymentStatusOf } from '../db/types';
 import { centsToDollars } from '../lib/money';
 import { emailStatusByInvoice, emailStatusLabel } from '../data/email';
 import type { InvoiceEmail } from '../db/types';
-import { Alert, BackButton, Button, EmptyState, SetupRequired, TextField } from '../components/ui';
+import { Alert, BackButton, Button, EmptyState, Modal, SetupRequired, TextField } from '../components/ui';
 import {
   asBoardUpDetails,
   buildBoardUpCsv,
@@ -28,6 +28,18 @@ export default function Invoices() {
   const [emailByInvoice, setEmailByInvoice] = useState<Record<string, InvoiceEmail>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Delete uses an in-app Modal, never window.confirm/alert: the native
+  // browser dialog needs a second press, blocks automation, and pauses
+  // between every delete. One in-app confirm, then the delete runs.
+  const [deleteTarget, setDeleteTarget] = useState<Invoice | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Bulk delete: owner picks invoices, one confirm deletes them all in one
+  // go — no per-invoice dialog, no pause between each one.
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [bulkTarget, setBulkTarget] = useState<Invoice[] | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
 
   const load = async () => {
     if (!activeBusiness) return;
@@ -70,14 +82,47 @@ export default function Invoices() {
   if (businessesLoading) return <p>Loading…</p>;
   if (!activeBusiness) return <EmptyState title="No business selected" body="Create a business first." />;
 
-  const remove = async (id: string) => {
-    if (!window.confirm('Delete this draft? This cannot be undone.')) return;
+  // Owner-only delete, any status. deleteInvoiceDeep (not deleteDraft)
+  // deletes the row plus its stored PDF/photos and logs it. deleteDraft
+  // silently deletes nothing for issued/void invoices — its Supabase delete
+  // is filtered to status='draft', so the button looked broken on those.
+  const confirmDelete = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
     try {
-      await deleteDraft(id);
+      await deleteInvoiceDeep(deleteTarget.id);
+      setSelected((s) => {
+        const next = { ...s };
+        delete next[deleteTarget.id];
+        return next;
+      });
+      setDeleteTarget(null);
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Delete failed.');
+      setDeleteError(e instanceof Error ? e.message : 'Delete failed.');
+    } finally {
+      setDeleting(false);
     }
+  };
+
+  const confirmBulkDelete = async () => {
+    if (!bulkTarget || bulkTarget.length === 0 || bulkDeleting) return;
+    setBulkDeleting(true);
+    setBulkError(null);
+    const failed: string[] = [];
+    for (const inv of bulkTarget) {
+      try {
+        await deleteInvoiceDeep(inv.id);
+      } catch (e) {
+        failed.push(`#${inv.invoice_number ?? inv.draft_key}: ${e instanceof Error ? e.message : 'Delete failed.'}`);
+      }
+    }
+    setSelected({});
+    setBulkTarget(null);
+    setBulkDeleting(false);
+    if (failed.length > 0) setBulkError(`${failed.length} could not be deleted — ${failed.join('; ')}`);
+    await load();
   };
 
   const isBoardUp = activeBusiness?.default_template === 'boardup';
@@ -206,6 +251,41 @@ export default function Invoices() {
       </div>
 
       {error && <Alert kind="error">{error}</Alert>}
+      {deleteError && <Alert kind="error">{deleteError}</Alert>}
+      {bulkError && <Alert kind="error">{bulkError}</Alert>}
+      {isOwner && (
+        <div className="btn-row" style={{ marginBottom: 16, alignItems: 'center' }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              const all = Object.fromEntries(visible.map((d) => [d.id, true]));
+              setSelected(all);
+            }}
+          >
+            Select all visible ({visible.length})
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setSelected({})}
+          >
+            Clear selection
+          </Button>
+          {Object.values(selected).filter(Boolean).length > 0 && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setBulkTarget(visible.filter((d) => selected[d.id]))}
+            >
+              Delete selected ({Object.values(selected).filter(Boolean).length})
+            </Button>
+          )}
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+            One confirm deletes them all — no pause between each one.
+          </span>
+        </div>
+      )}
       {isBoardUp && boardUpStats && (
         <div className="btn-row" style={{ marginBottom: 16, alignItems: 'center' }}>
           <span className="badge">{boardUpStats.jobs} JOBS LOGGED</span>
@@ -247,6 +327,7 @@ export default function Invoices() {
           <table className="grid">
             <thead>
               <tr>
+                {isOwner && <th aria-label="Select"></th>}
                 <th>Invoice</th>
                 <th>Customer</th>
                 <th>Date</th>
@@ -259,6 +340,18 @@ export default function Invoices() {
             <tbody>
               {visible.map((d) => (
                 <tr key={d.id}>
+                  {isOwner && (
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select invoice #${d.invoice_number ?? d.draft_key}`}
+                        checked={!!selected[d.id]}
+                        onChange={(e) =>
+                          setSelected((s) => ({ ...s, [d.id]: e.target.checked }))
+                        }
+                      />
+                    </td>
+                  )}
                   <td>
                     {d.template === 'commission' && d.property_address ? (
                       <strong>{d.property_address}</strong>
@@ -357,8 +450,8 @@ export default function Invoices() {
                         {asBoardUpDetails(d.boardup_details).invoiced ? '✓ Invoiced' : 'Mark invoiced'}
                       </Button>
                     )}{' '}
-                    {d.status === 'draft' && (
-                      <Button variant="ghost" size="sm" onClick={() => remove(d.id)}>
+                    {isOwner && (
+                      <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(d)}>
                         Delete
                       </Button>
                     )}
@@ -368,6 +461,46 @@ export default function Invoices() {
             </tbody>
           </table>
         </div>
+      )}
+      {deleteTarget && (
+        <Modal title={`Delete invoice #${deleteTarget.invoice_number ?? deleteTarget.draft_key}?`} onClose={() => !deleting && setDeleteTarget(null)}>
+          <p>
+            {deleteTarget.status === 'issued'
+              ? `This invoice is issued${deleteTarget.amount_paid_cents > 0 ? ` and $${centsToDollars(deleteTarget.amount_paid_cents)} has been paid on it` : ''} — `
+              : deleteTarget.status === 'void'
+                ? 'This invoice is void — '
+                : ''}
+            Delete invoice #{deleteTarget.invoice_number ?? deleteTarget.draft_key} (
+            {deleteTarget.customer_id ? customers[deleteTarget.customer_id]?.name ?? deleteTarget.property_address ?? '—' : deleteTarget.property_address ?? '—'}
+            , ${centsToDollars(deleteTarget.total_cents)}) permanently? Its stored PDF and photos go with it. This cannot be undone.
+          </p>
+          <div className="btn-row">
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button onClick={confirmDelete} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Delete permanently'}
+            </Button>
+          </div>
+        </Modal>
+      )}
+      {bulkTarget && (
+        <Modal title={`Delete ${bulkTarget.length} invoices?`} onClose={() => !bulkDeleting && setBulkTarget(null)}>
+          <p>
+            Delete these invoices permanently? Their stored PDFs and photos go with them. This cannot be undone.
+          </p>
+          <p style={{ fontSize: 14 }}>
+            {bulkTarget.map((d) => `#${d.invoice_number ?? d.draft_key} — ${d.status} — $${centsToDollars(d.total_cents)}`).join(', ')}
+          </p>
+          <div className="btn-row">
+            <Button variant="secondary" onClick={() => setBulkTarget(null)} disabled={bulkDeleting}>
+              Cancel
+            </Button>
+            <Button onClick={confirmBulkDelete} disabled={bulkDeleting}>
+              {bulkDeleting ? 'Deleting…' : `Delete ${bulkTarget.length} invoices`}
+            </Button>
+          </div>
+        </Modal>
       )}
     </div>
   );

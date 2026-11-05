@@ -451,6 +451,9 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
   const [shareDone, setShareDone] = useState<string | null>(null);
   /** Which file-share action is currently preparing its files. */
   const [shareBusy, setShareBusy] = useState<'condensed' | 'pictures' | 'emailpdf' | 'delete' | null>(null);
+  // In-app delete confirm — never window.confirm: the native browser dialog
+  // needs a second press and pauses between deletes.
+  const [deleteJobConfirm, setDeleteJobConfirm] = useState(false);
   /** Cities added via "Other", remembered per device. */
   const [customCityNames, setCustomCityNames] = useState<string[]>(() =>
     loadCustomCities(BOARDUP_CUSTOM_CITY_NAMES_KEY),
@@ -1062,15 +1065,22 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     }
   };
 
-  /** Delete job: owner-only, permanent, confirmed first. */
-  const deleteJob = async () => {
+  /** Delete job: owner-only, permanent, confirmed in-app first. */
+  const deleteJob = () => {
     if (shareBusy) return;
     const id = getDraftId();
     if (!id) {
       setShareError('Nothing to delete — the job hasn’t been saved yet.');
       return;
     }
-    if (!window.confirm('Delete this job permanently? Photos and the PDF go with it. This cannot be undone.')) return;
+    setDeleteJobConfirm(true);
+  };
+
+  const confirmDeleteJob = async () => {
+    if (shareBusy) return;
+    const id = getDraftId();
+    if (!id) return;
+    setDeleteJobConfirm(false);
     setShareError(null);
     setShareBusy('delete');
     try {
@@ -1950,6 +1960,19 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         <div style={{ marginBottom: 12, color: '#15803d', fontSize: 14, fontWeight: 600 }}>
           {shareDone}
         </div>
+      )}
+      {deleteJobConfirm && (
+        <Modal title="Delete this job permanently?" onClose={() => setDeleteJobConfirm(false)}>
+          <p>Delete this job permanently? Photos and the PDF go with it. This cannot be undone.</p>
+          <div className="btn-row">
+            <Button variant="secondary" onClick={() => setDeleteJobConfirm(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={confirmDeleteJob}>
+              Delete permanently
+            </Button>
+          </div>
+        </Modal>
       )}
     </div>
   );
