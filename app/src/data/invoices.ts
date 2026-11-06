@@ -143,6 +143,19 @@ export async function deleteInvoiceDeep(id: string): Promise<void> {
     issued_pdf_path: string | null; template: string; boardup_details: unknown;
   };
 
+  // Audit FIRST, while the invoice still exists: logging after the delete
+  // fails (the audit row references the now-deleted invoice id) and the
+  // UI then wrongly reports "Delete failed." even though the delete worked.
+  // Best-effort — a failed audit write must never block a confirmed delete.
+  try {
+    await logAuditEvent(inv.business_id, id, 'deleted', {
+      invoice_number: inv.invoice_number,
+      template: inv.template,
+    });
+  } catch {
+    /* ignore — delete still proceeds */
+  }
+
   // Best-effort file cleanup: a missing file must not block the delete.
   const photoPaths: string[] = [];
   if (inv.template === 'boardup' && inv.boardup_details && typeof inv.boardup_details === 'object') {
@@ -168,11 +181,6 @@ export async function deleteInvoiceDeep(id: string): Promise<void> {
 
   const { error: dErr } = await sb.from('invoices').delete().eq('id', id);
   if (dErr) throw dErr;
-
-  await logAuditEvent(inv.business_id, id, 'deleted', {
-    invoice_number: inv.invoice_number,
-    template: inv.template,
-  });
 }
 
 /**
