@@ -1016,6 +1016,25 @@ export default function InvoiceEditor() {
         <SaveStatusIndicator status={saveStatus} message={saveMessage} />
       </div>
 
+      {activeBusiness.header_line && (
+        <div
+          className="no-print"
+          role="note"
+          style={{
+            marginBottom: 16,
+            padding: '10px 16px',
+            borderRadius: 8,
+            background: '#ede9fe',
+            color: '#5b21b6',
+            fontSize: 18,
+            fontWeight: 700,
+            textAlign: 'center',
+          }}
+        >
+          &ldquo;{activeBusiness.header_line}&rdquo;
+        </div>
+      )}
+
       {toast && (
         <div
           role="status"
