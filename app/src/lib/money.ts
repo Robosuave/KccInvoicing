@@ -8,9 +8,12 @@
  */
 
 /** Parse a decimal string like "33.3" or "-12.50" into { num, den } with den > 0. */
-export function parseDecimal(s: string): { num: bigint; den: bigint } {
-  // Forgiving input: "225,000.00" and "$1,234.56" are common when typing money.
-  const t = s.trim().replace(/,/g, '').replace(/^\$/, '');
+export function parseDecimal(s: string | number): { num: bigint; den: bigint } {
+  // Postgres numeric columns come back as JS numbers, not strings — a
+  // quantity like 4.5833 hits .trim() and crashes ("e.trim is not a
+  // function"). Coerce first; this is the same class of bug as the Nov 2
+  // invoice blank-screen fix, in the revision path.
+  const t = String(s ?? '').trim().replace(/,/g, '').replace(/^\$/, '');
   if (!/^-?\d+(\.\d+)?$/.test(t)) throw new Error(`Invalid decimal: ${s}`);
   const negative = t.startsWith('-');
   const digits = negative ? t.slice(1) : t;
@@ -46,7 +49,7 @@ export function centsToDollars(cents: number): string {
 }
 
 /** unit_price_cents * quantity(decimal string) -> line cents, half-up. */
-export function multiplyQuantity(unitCents: number, quantity: string): number {
+export function multiplyQuantity(unitCents: number, quantity: string | number): number {
   if (!Number.isInteger(unitCents) || unitCents < 0) throw new Error('unitCents must be a non-negative integer');
   const { num, den } = parseDecimal(quantity);
   if (num <= 0n) throw new Error('quantity must be positive');
@@ -57,7 +60,7 @@ export function multiplyQuantity(unitCents: number, quantity: string): number {
 }
 
 /** amount_cents * rate(decimal string, e.g. "0.10" for 10%) -> cents, half-up. */
-export function percentOf(amountCents: number, rate: string): number {
+export function percentOf(amountCents: number, rate: string | number): number {
   if (!Number.isInteger(amountCents) || amountCents < 0) throw new Error('amountCents must be a non-negative integer');
   const { num, den } = parseDecimal(rate);
   if (num < 0n) throw new Error('rate must be non-negative');
@@ -76,7 +79,7 @@ function multiplyFraction(amountCents: number, num: bigint, den: bigint): number
 }
 
 export interface CalcLine {
-  quantity: string; // decimal string
+  quantity: string | number; // decimal string (or JS number from Postgres)
   unitPriceCents: number;
   discountCents?: number; // line-level discount (mutually exclusive with invoice discount)
   taxRate?: string; // decimal string, e.g. "0.06"
@@ -163,8 +166,8 @@ export function calculateInvoiceTotals(
 
 /** Remaining balance after payments. */
 /** Convert a percent string like "3" or "2.5" to a rate string like "0.03" / "0.025". */
-export function pctToRate(pct: string): string {
-  const t = pct.trim();
+export function pctToRate(pct: string | number): string {
+  const t = String(pct ?? '').trim();
   if (!t) return '0';
   if (!/^\d+(\.\d+)?$/.test(t)) throw new Error('percent must be a non-negative decimal');
   return String(Number(t) / 100);

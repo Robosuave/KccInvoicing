@@ -45,6 +45,12 @@ describe('multiplyQuantity', () => {
     expect(() => multiplyQuantity(100, '0')).toThrow();
     expect(() => multiplyQuantity(100, '-2')).toThrow();
   });
+  it('accepts a JS number quantity (Postgres numeric comes back as a number, not a string)', () => {
+    // Nov 5, 2026: revising invoice #2057 crashed with "e.trim is not a function"
+    // because its quantity arrived as a number and parseDecimal called .trim() on it.
+    expect(multiplyQuantity(15000, 4.5833 as unknown as string)).toBe(68750);
+    expect(multiplyQuantity(15000, 39.1 as unknown as string)).toBe(586500);
+  });
 });
 
 describe('percentOf', () => {

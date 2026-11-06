@@ -233,7 +233,7 @@ function StandardTotals({ snap }: { snap: InvoiceSnapshot }) {
 function CommissionBody({ snap }: { snap: InvoiceSnapshot }) {
   const c = snap.commission;
   const t = snap.totals;
-  const pctStr = (c.commission_pct ?? '').trim();
+  const pctStr = String(c.commission_pct ?? '').trim();
   const otherDesc = (c.other_charge_desc ?? '').trim();
   const showOther = otherDesc !== '' || c.other_charge_cents > 0;
   const wire = snap.payment_instructions ?? '';

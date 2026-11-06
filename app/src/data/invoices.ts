@@ -220,12 +220,14 @@ export async function createRevision(issuedId: string, reason: string): Promise<
     boardup_details: (original as { boardup_details?: Record<string, unknown> | null }).boardup_details ?? null,
     lines: lines.map((l) => ({
       item_id: l.item_id,
-      description: l.description,
-      quantity: l.quantity,
-      unit_label: l.unit_label,
+      description: String(l.description ?? ''),
+      // Postgres returns quantity/tax_rate as JS numbers — coerce to the
+      // strings createDraft/totals expect, or the revision crashes on .trim().
+      quantity: String(l.quantity ?? ''),
+      unit_label: String(l.unit_label ?? ''),
       unit_price_cents: l.unit_price_cents,
       discount_cents: l.discount_cents,
-      tax_rate: l.tax_rate,
+      tax_rate: l.tax_rate == null ? undefined : String(l.tax_rate),
     })),
   });
 
