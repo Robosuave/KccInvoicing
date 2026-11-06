@@ -35,7 +35,7 @@ import {
   type TwoByFourLine,
 } from '../lib/boardup';
 import { boardUpPhotoUrl, removeBoardUpPhoto, uploadBoardUpPhoto } from '../data/attachments';
-import { deleteInvoiceDeep } from '../data/invoices';
+import { moveToTrash } from '../data/invoices';
 import { listCrewContacts, saveCrewContacts } from '../data/crew';
 import {
   exifRawToInput,
@@ -1065,7 +1065,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     }
   };
 
-  /** Delete job: owner-only, permanent, confirmed in-app first. */
+  /** Delete job: owner-only, moves to Trash (recoverable), confirmed in-app. */
   const deleteJob = () => {
     if (shareBusy) return;
     const id = getDraftId();
@@ -1084,7 +1084,7 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
     setShareError(null);
     setShareBusy('delete');
     try {
-      await deleteInvoiceDeep(id);
+      await moveToTrash(id);
       onDeleted();
     } catch (e) {
       setShareError(e instanceof Error ? e.message : 'Delete failed.');
@@ -1962,14 +1962,14 @@ const BoardUpForm = forwardRef<BoardUpFormHandle, Props>(function BoardUpForm(
         </div>
       )}
       {deleteJobConfirm && (
-        <Modal title="Delete this job permanently?" onClose={() => setDeleteJobConfirm(false)}>
-          <p>Delete this job permanently? Photos and the PDF go with it. This cannot be undone.</p>
+        <Modal title="Move this job to Trash?" onClose={() => setDeleteJobConfirm(false)}>
+          <p>Move this job to Trash? Nothing is removed — you can restore it from the Invoices Trash for 30 days.</p>
           <div className="btn-row">
             <Button variant="secondary" onClick={() => setDeleteJobConfirm(false)}>
               Cancel
             </Button>
             <Button variant="danger" onClick={confirmDeleteJob}>
-              Delete permanently
+              Move to Trash
             </Button>
           </div>
         </Modal>

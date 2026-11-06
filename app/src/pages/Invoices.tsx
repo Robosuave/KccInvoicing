@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useBusiness } from '../business/BusinessContext';
 import type { Customer, Invoice } from '../db/types';
-import { listInvoices, setBoardUpInvoiced, setInvoiceCompleted } from '../data/drafts';
+import { listInvoices, listTrashedInvoices, setBoardUpInvoiced, setInvoiceCompleted } from '../data/drafts';
 import { listCustomers } from '../data/customers';
 import { listBusinessMembers } from '../data/team';
-import { deleteInvoiceDeep, isOverdue } from '../data/invoices';
+import { deleteInvoiceDeep, isOverdue, moveToTrash, restoreFromTrash } from '../data/invoices';
 import { paymentStatusOf } from '../db/types';
 import { centsToDollars } from '../lib/money';
 import { emailStatusByInvoice, emailStatusLabel } from '../data/email';
@@ -20,7 +20,7 @@ import {
 export default function Invoices() {
   const { activeBusiness, notConfigured, isOwner, loading: businessesLoading } = useBusiness();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [filter, setFilter] = useState<'all' | 'draft' | 'issued' | 'void'>('all');
+  const [filter, setFilter] = useState<'all' | 'draft' | 'issued' | 'void' | 'trash'>('all');
   const [search, setSearch] = useState('');
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [customers, setCustomers] = useState<Record<string, Customer>>({});
@@ -31,9 +31,14 @@ export default function Invoices() {
   // Delete uses an in-app Modal, never window.confirm/alert: the native
   // browser dialog needs a second press, blocks automation, and pauses
   // between every delete. One in-app confirm, then the delete runs.
+  // Trash (migration 0033): Delete moves an invoice to Trash — nothing is
+  // removed, and Restore brings it back. Only Delete permanently, from
+  // the Trash, removes it for good (deleteInvoiceDeep).
   const [deleteTarget, setDeleteTarget] = useState<Invoice | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [permanentTarget, setPermanentTarget] = useState<Invoice | null>(null);
+  const [permanentDeleting, setPermanentDeleting] = useState(false);
   // Bulk delete: owner picks invoices, one confirm deletes them all in one
   // go — no per-invoice dialog, no pause between each one.
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -46,7 +51,9 @@ export default function Invoices() {
     setLoading(true);
     try {
       const [inv, c] = await Promise.all([
-        listInvoices(activeBusiness.id, filter === 'all' ? undefined : filter),
+        filter === 'trash'
+          ? listTrashedInvoices(activeBusiness.id)
+          : listInvoices(activeBusiness.id, filter === 'all' ? undefined : filter),
         listCustomers(activeBusiness.id),
       ]);
       setInvoices(inv);
@@ -104,16 +111,14 @@ export default function Invoices() {
   if (businessesLoading) return <p>Loading…</p>;
   if (!activeBusiness) return <EmptyState title="No business selected" body="Create a business first." />;
 
-  // Owner-only delete, any status. deleteInvoiceDeep (not deleteDraft)
-  // deletes the row plus its stored PDF/photos and logs it. deleteDraft
-  // silently deletes nothing for issued/void invoices — its Supabase delete
-  // is filtered to status='draft', so the button looked broken on those.
+  // Owner-only, any status. Delete moves to Trash (recoverable) — it does
+  // NOT permanently remove anything. Permanent delete lives in the Trash.
   const confirmDelete = async () => {
     if (!deleteTarget || deleting) return;
     setDeleting(true);
     setDeleteError(null);
     try {
-      await deleteInvoiceDeep(deleteTarget.id);
+      await moveToTrash(deleteTarget.id);
       setSelected((s) => {
         const next = { ...s };
         delete next[deleteTarget.id];
@@ -122,7 +127,7 @@ export default function Invoices() {
       setDeleteTarget(null);
       await load();
     } catch (e) {
-      setDeleteError(e instanceof Error ? e.message : 'Delete failed.');
+      setDeleteError(e instanceof Error ? e.message : 'Move to Trash failed.');
     } finally {
       setDeleting(false);
     }
@@ -133,9 +138,11 @@ export default function Invoices() {
     setBulkDeleting(true);
     setBulkError(null);
     const failed: string[] = [];
+    // In the Trash, bulk delete is permanent; everywhere else it moves to Trash.
+    const action = filter === 'trash' ? deleteInvoiceDeep : moveToTrash;
     for (const inv of bulkTarget) {
       try {
-        await deleteInvoiceDeep(inv.id);
+        await action(inv.id);
       } catch (e) {
         failed.push(`#${inv.invoice_number ?? inv.draft_key}: ${e instanceof Error ? e.message : 'Delete failed.'}`);
       }
@@ -145,6 +152,50 @@ export default function Invoices() {
     setBulkDeleting(false);
     if (failed.length > 0) setBulkError(`${failed.length} could not be deleted — ${failed.join('; ')}`);
     await load();
+  };
+
+  /** Permanent delete, Trash only. Cannot be undone. */
+  const confirmPermanentDelete = async () => {
+    if (!permanentTarget || permanentDeleting) return;
+    setPermanentDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteInvoiceDeep(permanentTarget.id);
+      setSelected((s) => {
+        const next = { ...s };
+        delete next[permanentTarget.id];
+        return next;
+      });
+      setPermanentTarget(null);
+      await load();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'Delete failed.');
+    } finally {
+      setPermanentDeleting(false);
+    }
+  };
+
+  const restoreOne = async (inv: Invoice) => {
+    setDeleteError(null);
+    try {
+      await restoreFromTrash(inv.id);
+      await load();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'Restore failed.');
+    }
+  };
+
+  const restoreSelected = async () => {
+    const ids = visible.filter((d) => selected[d.id]);
+    if (ids.length === 0) return;
+    setDeleteError(null);
+    try {
+      for (const inv of ids) await restoreFromTrash(inv.id);
+      setSelected({});
+      await load();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'Restore failed.');
+    }
   };
 
   const toggleDone = async (d: Invoice) => {
@@ -242,17 +293,23 @@ export default function Invoices() {
       </div>
 
       <div className="btn-row" style={{ marginBottom: 20 }} role="tablist" aria-label="Filter invoices">
-        {(['all', 'draft', 'issued', 'void'] as const).map((f) => (
+        {(['all', 'draft', 'issued', 'void', 'trash'] as const).map((f) => (
           <Button
             key={f}
             variant={filter === f ? 'primary' : 'secondary'}
             size="sm"
-            onClick={() => setFilter(f)}
+            onClick={() => { setFilter(f); setSelected({}); }}
           >
-            {f === 'all' ? 'All' : f === 'draft' ? 'Drafts' : f === 'issued' ? 'Issued' : 'Void'}
+            {f === 'all' ? 'All' : f === 'draft' ? 'Drafts' : f === 'issued' ? 'Issued' : f === 'void' ? 'Void' : 'Trash'}
           </Button>
         ))}
       </div>
+
+      {filter === 'trash' && (
+        <Alert kind="info">
+          Trash — deleted invoices stay here for 30 days and can be restored. Only deleting from Trash is permanent.
+        </Alert>
+      )}
 
       {error && <Alert kind="error">{error}</Alert>}
       {deleteError && <Alert kind="error">{deleteError}</Alert>}
@@ -277,16 +334,27 @@ export default function Invoices() {
             Clear selection
           </Button>
           {Object.values(selected).filter(Boolean).length > 0 && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setBulkTarget(visible.filter((d) => selected[d.id]))}
-            >
-              Delete selected ({Object.values(selected).filter(Boolean).length})
-            </Button>
+            <>
+              {filter === 'trash' && (
+                <Button variant="secondary" size="sm" onClick={restoreSelected}>
+                  Restore selected ({Object.values(selected).filter(Boolean).length})
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setBulkTarget(visible.filter((d) => selected[d.id]))}
+              >
+                {filter === 'trash'
+                  ? `Delete permanently selected (${Object.values(selected).filter(Boolean).length})`
+                  : `Delete selected (${Object.values(selected).filter(Boolean).length})`}
+              </Button>
+            </>
           )}
           <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-            One confirm deletes them all — no pause between each one.
+            {filter === 'trash'
+              ? 'Delete from Trash is permanent — restore first if you are unsure.'
+              : 'Delete moves invoices to Trash — they can be restored for 30 days.'}
           </span>
         </div>
       )}
@@ -439,22 +507,41 @@ export default function Invoices() {
                         <span className="badge badge-issued">✓ Invoiced</span>
                       </div>
                     )}
+                    {d.deleted_at && (
+                      <div style={{ marginTop: 4, fontSize: 13, color: 'var(--muted)' }}>
+                        Deleted {new Date(d.deleted_at).toLocaleDateString()}
+                      </div>
+                    )}
                   </td>
                   <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                    <Link className="btn btn-secondary btn-sm" to={`/invoices/${d.id}`}>
-                      Open
-                    </Link>{' '}
-                    {d.template === 'boardup' && (
+                    {filter !== 'trash' && (
+                      <>
+                        <Link className="btn btn-secondary btn-sm" to={`/invoices/${d.id}`}>
+                          Open
+                        </Link>{' '}
+                      </>
+                    )}
+                    {filter !== 'trash' && d.template === 'boardup' && (
                       <Button variant="ghost" size="sm" onClick={() => toggleDone(d)}>
                         {d.completed ? 'Reopen' : 'Mark done'}
                       </Button>
                     )}{' '}
-                    {d.template === 'boardup' && (
+                    {filter !== 'trash' && d.template === 'boardup' && (
                       <Button variant="ghost" size="sm" onClick={() => toggleInvoiced(d)}>
                         {asBoardUpDetails(d.boardup_details).invoiced ? '✓ Invoiced' : 'Mark invoiced'}
                       </Button>
                     )}{' '}
-                    {isOwner && (
+                    {isOwner && filter === 'trash' && (
+                      <>
+                        <Button variant="ghost" size="sm" onClick={() => restoreOne(d)}>
+                          Restore
+                        </Button>{' '}
+                        <Button variant="ghost" size="sm" onClick={() => setPermanentTarget(d)}>
+                          Delete permanently
+                        </Button>
+                      </>
+                    )}
+                    {isOwner && filter !== 'trash' && (
                       <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(d)}>
                         Delete
                       </Button>
@@ -467,31 +554,50 @@ export default function Invoices() {
         </div>
       )}
       {deleteTarget && (
-        <Modal title={`Delete invoice #${deleteTarget.invoice_number ?? deleteTarget.draft_key}?`} onClose={() => !deleting && setDeleteTarget(null)}>
+        <Modal title={`Move invoice #${deleteTarget.invoice_number ?? deleteTarget.draft_key} to Trash?`} onClose={() => !deleting && setDeleteTarget(null)}>
           <p>
             {deleteTarget.status === 'issued'
               ? `This invoice is issued${deleteTarget.amount_paid_cents > 0 ? ` and $${centsToDollars(deleteTarget.amount_paid_cents)} has been paid on it` : ''} — `
               : deleteTarget.status === 'void'
                 ? 'This invoice is void — '
                 : ''}
-            Delete invoice #{deleteTarget.invoice_number ?? deleteTarget.draft_key} (
+            Move invoice #{deleteTarget.invoice_number ?? deleteTarget.draft_key} (
             {deleteTarget.customer_id ? customers[deleteTarget.customer_id]?.name ?? deleteTarget.property_address ?? '—' : deleteTarget.property_address ?? '—'}
-            , ${centsToDollars(deleteTarget.total_cents)}) permanently? Its stored PDF and photos go with it. This cannot be undone.
+            , ${centsToDollars(deleteTarget.total_cents)}) to Trash? Nothing is removed — you can restore it from Trash for 30 days.
           </p>
           <div className="btn-row">
             <Button variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>
               Cancel
             </Button>
             <Button onClick={confirmDelete} disabled={deleting}>
-              {deleting ? 'Deleting…' : 'Delete permanently'}
+              {deleting ? 'Moving…' : 'Move to Trash'}
+            </Button>
+          </div>
+        </Modal>
+      )}
+      {permanentTarget && (
+        <Modal title={`Delete invoice #${permanentTarget.invoice_number ?? permanentTarget.draft_key} permanently?`} onClose={() => !permanentDeleting && setPermanentTarget(null)}>
+          <p>
+            Delete invoice #{permanentTarget.invoice_number ?? permanentTarget.draft_key} (
+            {permanentTarget.customer_id ? customers[permanentTarget.customer_id]?.name ?? permanentTarget.property_address ?? '—' : permanentTarget.property_address ?? '—'}
+            , ${centsToDollars(permanentTarget.total_cents)}) permanently? Its stored PDF and photos go with it. This cannot be undone — there is no way to get it back.
+          </p>
+          <div className="btn-row">
+            <Button variant="secondary" onClick={() => setPermanentTarget(null)} disabled={permanentDeleting}>
+              Cancel
+            </Button>
+            <Button onClick={confirmPermanentDelete} disabled={permanentDeleting}>
+              {permanentDeleting ? 'Deleting…' : 'Delete permanently'}
             </Button>
           </div>
         </Modal>
       )}
       {bulkTarget && (
-        <Modal title={`Delete ${bulkTarget.length} invoices?`} onClose={() => !bulkDeleting && setBulkTarget(null)}>
+        <Modal title={filter === 'trash' ? `Delete ${bulkTarget.length} invoices permanently?` : `Move ${bulkTarget.length} invoices to Trash?`} onClose={() => !bulkDeleting && setBulkTarget(null)}>
           <p>
-            Delete these invoices permanently? Their stored PDFs and photos go with them. This cannot be undone.
+            {filter === 'trash'
+              ? 'Delete these invoices permanently? Their stored PDFs and photos go with them. This cannot be undone — there is no way to get them back.'
+              : 'Move these invoices to Trash? Nothing is removed — you can restore them from Trash for 30 days.'}
           </p>
           <p style={{ fontSize: 14 }}>
             {bulkTarget.map((d) => `#${d.invoice_number ?? d.draft_key} — ${d.status} — $${centsToDollars(d.total_cents)}`).join(', ')}
@@ -501,7 +607,7 @@ export default function Invoices() {
               Cancel
             </Button>
             <Button onClick={confirmBulkDelete} disabled={bulkDeleting}>
-              {bulkDeleting ? 'Deleting…' : `Delete ${bulkTarget.length} invoices`}
+              {bulkDeleting ? 'Deleting…' : filter === 'trash' ? `Delete ${bulkTarget.length} permanently` : `Move ${bulkTarget.length} to Trash`}
             </Button>
           </div>
         </Modal>

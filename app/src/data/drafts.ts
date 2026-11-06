@@ -123,16 +123,31 @@ export async function listDrafts(businessId: string): Promise<Invoice[]> {
   return listInvoices(businessId, 'draft');
 }
 
-/** List invoices for a business, optionally filtered by status. */
+/** List invoices for a business, optionally filtered by status. Trashed
+ *  invoices (deleted_at set, migration 0033) are never listed here. */
 export async function listInvoices(businessId: string, status?: 'draft' | 'issued' | 'void'): Promise<Invoice[]> {
   const sb = requireSupabase();
   let q = sb
     .from('invoices')
     .select('*')
     .eq('business_id', businessId)
+    .is('deleted_at', null)
     .order('updated_at', { ascending: false });
   if (status) q = q.eq('status', status);
   const { data, error } = await q;
+  if (error) throw error;
+  return data as Invoice[];
+}
+
+/** Trash: invoices moved to Trash, newest deleted first. */
+export async function listTrashedInvoices(businessId: string): Promise<Invoice[]> {
+  const sb = requireSupabase();
+  const { data, error } = await sb
+    .from('invoices')
+    .select('*')
+    .eq('business_id', businessId)
+    .not('deleted_at', 'is', null)
+    .order('deleted_at', { ascending: false });
   if (error) throw error;
   return data as Invoice[];
 }

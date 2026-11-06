@@ -32,7 +32,8 @@ export async function listInvoiceHistory(
   let q = sb
     .from('invoices')
     .select('*', { count: 'exact' })
-    .eq('business_id', businessId);
+    .eq('business_id', businessId)
+    .is('deleted_at', null);
 
   if (f.status && f.status !== 'all') q = q.eq('status', f.status);
   if (f.overdue) {
@@ -80,9 +81,54 @@ export async function voidInvoice(id: string, reason: string): Promise<Invoice> 
 }
 
 /**
+ * Move an invoice to Trash (soft delete, migration 0033). Nothing is
+ * removed — the row, lines, payments and stored files stay in place, and
+ * restoreFromTrash brings it back. Owner-only in the UI.
+ */
+export async function moveToTrash(id: string): Promise<void> {
+  const sb = requireSupabase();
+  const { data: current, error: gErr } = await sb
+    .from('invoices')
+    .select('id, business_id, invoice_number, status')
+    .eq('id', id)
+    .single();
+  if (gErr) throw gErr;
+  const inv = current as { id: string; business_id: string; invoice_number: string | null; status: string };
+  const { error } = await sb
+    .from('invoices')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .is('deleted_at', null);
+  if (error) throw error;
+  await logAuditEvent(inv.business_id, id, 'trashed', {
+    invoice_number: inv.invoice_number,
+    status: inv.status,
+  });
+}
+
+/** Restore a trashed invoice to the live list, with its original status. */
+export async function restoreFromTrash(id: string): Promise<void> {
+  const sb = requireSupabase();
+  const { data: current, error: gErr } = await sb
+    .from('invoices')
+    .select('id, business_id, invoice_number, status')
+    .eq('id', id)
+    .single();
+  if (gErr) throw gErr;
+  const inv = current as { id: string; business_id: string; invoice_number: string | null; status: string };
+  const { error } = await sb.from('invoices').update({ deleted_at: null }).eq('id', id);
+  if (error) throw error;
+  await logAuditEvent(inv.business_id, id, 'restored', {
+    invoice_number: inv.invoice_number,
+    status: inv.status,
+  });
+}
+
+/**
  * Permanently deletes an invoice/job and its stored files (issued PDF,
  * board-up photos). Owner-only in the UI; RLS has an invoices member-delete
  * policy. This cannot be undone — callers must confirm first.
+ * Only call this from the Trash: live deletes go through moveToTrash.
  */
 export async function deleteInvoiceDeep(id: string): Promise<void> {
   const sb = requireSupabase();

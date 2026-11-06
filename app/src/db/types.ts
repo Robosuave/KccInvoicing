@@ -132,6 +132,8 @@ export interface Invoice {
   revision_no: number;
   issued_pdf_path: string | null;
   timesheet_path: string | null;
+  /** Trash (migration 0033): set when moved to Trash, null when live. */
+  deleted_at: string | null;
   tax_breakdown: { rate: string; cents: number }[];
   created_at: string;
   updated_at: string;
