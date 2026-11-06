@@ -1022,11 +1022,11 @@ export default function InvoiceEditor() {
           role="note"
           style={{
             marginBottom: 16,
-            padding: '10px 16px',
+            padding: '14px 16px',
             borderRadius: 8,
             background: '#ede9fe',
             color: '#5b21b6',
-            fontSize: 18,
+            fontSize: 22,
             fontWeight: 700,
             textAlign: 'center',
           }}
