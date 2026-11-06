@@ -1031,7 +1031,7 @@ export default function InvoiceEditor() {
             textAlign: 'center',
           }}
         >
-          &ldquo;{activeBusiness.header_line}&rdquo;
+          {activeBusiness.header_line}
         </div>
       )}
 
